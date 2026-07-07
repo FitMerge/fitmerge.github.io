@@ -42,7 +42,7 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
 
       {tab === 'manual' && <AddManualTab date={date} defaultMealType={defaultMealType} onClose={onClose} />}
       {tab === 'photo' && <AddPhotoTab date={date} defaultMealType={defaultMealType} onClose={onClose} />}
-      {tab === 'search' && <AddSearchTab />}
+      {tab === 'search' && <AddSearchTab date={date} defaultMealType={defaultMealType} onClose={onClose} />}
     </Sheet>
   )
 }

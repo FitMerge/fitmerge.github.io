@@ -1,0 +1,121 @@
+// OpenFoodFacts-backed food search. Free, keyless public API.
+
+import type { Macros } from '../../types'
+import { uid } from '../../lib/id'
+
+export type SearchFood = {
+  id: string
+  name: string
+  brand?: string
+  servingText: string
+  per100g: Macros
+  perServing?: Macros
+}
+
+const SEARCH_ENDPOINT = 'https://world.openfoodfacts.org/cgi/search.pl'
+const FIELDS = 'code,product_name,brands,serving_size,nutriments'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function coerceNumber(value: unknown, fallback = 0): number {
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function buildUrl(query: string): string {
+  const params = new URLSearchParams({
+    search_terms: query,
+    search_simple: '1',
+    action: 'process',
+    json: '1',
+    page_size: '20',
+    fields: FIELDS,
+  })
+  return `${SEARCH_ENDPOINT}?${params.toString()}`
+}
+
+function parseProduct(raw: unknown): SearchFood | undefined {
+  if (!isRecord(raw)) return undefined
+
+  const name = typeof raw.product_name === 'string' ? raw.product_name.trim() : ''
+  if (!name) return undefined
+
+  const nutriments = isRecord(raw.nutriments) ? raw.nutriments : undefined
+  if (!nutriments) return undefined
+
+  const calories100 = coerceNumber(nutriments['energy-kcal_100g'], NaN)
+  if (!Number.isFinite(calories100)) return undefined
+
+  const per100g: Macros = {
+    calories: calories100,
+    protein: coerceNumber(nutriments['proteins_100g']),
+    carbs: coerceNumber(nutriments['carbohydrates_100g']),
+    fat: coerceNumber(nutriments['fat_100g']),
+  }
+
+  let perServing: Macros | undefined
+  const caloriesServing = coerceNumber(nutriments['energy-kcal_serving'], NaN)
+  if (Number.isFinite(caloriesServing)) {
+    perServing = {
+      calories: caloriesServing,
+      protein: coerceNumber(nutriments['proteins_serving']),
+      carbs: coerceNumber(nutriments['carbohydrates_serving']),
+      fat: coerceNumber(nutriments['fat_serving']),
+    }
+  }
+
+  const brandsRaw = typeof raw.brands === 'string' ? raw.brands.trim() : ''
+  const brand = brandsRaw ? brandsRaw.split(',')[0]?.trim() || undefined : undefined
+
+  const servingText =
+    typeof raw.serving_size === 'string' && raw.serving_size.trim() ? raw.serving_size.trim() : '100 g'
+
+  const code = typeof raw.code === 'string' && raw.code.trim() ? raw.code.trim() : undefined
+
+  return {
+    id: code ?? uid(),
+    name,
+    brand,
+    servingText,
+    per100g,
+    perServing,
+  }
+}
+
+export async function searchFoods(query: string, signal?: AbortSignal): Promise<SearchFood[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  let res: Response
+  try {
+    res = await fetch(buildUrl(trimmed), { signal })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
+    throw new Error('Network error — check your connection')
+  }
+
+  if (!res.ok) {
+    throw new Error('Food search failed — please try again')
+  }
+
+  let payload: unknown
+  try {
+    payload = await res.json()
+  } catch {
+    throw new Error('Food search returned an unexpected response')
+  }
+
+  if (!isRecord(payload) || !Array.isArray(payload.products)) {
+    return []
+  }
+
+  const results: SearchFood[] = []
+  for (const product of payload.products) {
+    const parsed = parseProduct(product)
+    if (parsed) results.push(parsed)
+  }
+
+  return results
+}
