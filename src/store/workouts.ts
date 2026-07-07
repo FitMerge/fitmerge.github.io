@@ -6,12 +6,16 @@ import type { Routine, WorkoutSession } from '../types'
 type WorkoutsState = {
   routines: Routine[]
   sessions: WorkoutSession[]
+  activeSessionId?: string
   addRoutine: (routine: Omit<Routine, 'id'>) => void
   updateRoutine: (id: string, patch: Partial<Routine>) => void
   removeRoutine: (id: string) => void
   addSession: (session: Omit<WorkoutSession, 'id'>) => void
   updateSession: (id: string, patch: Partial<WorkoutSession>) => void
   removeSession: (id: string) => void
+  setActiveSessionId: (id: string | undefined) => void
+  /** Creates a session, marks it as the active in-progress session, and returns its id. */
+  startSession: (session: Omit<WorkoutSession, 'id'>) => string
 }
 
 export const useWorkoutsStore = create<WorkoutsState>()(
@@ -19,6 +23,7 @@ export const useWorkoutsStore = create<WorkoutsState>()(
     (set, get) => ({
       routines: [],
       sessions: [],
+      activeSessionId: undefined,
       addRoutine: (routine) => {
         set({ routines: [...get().routines, { ...routine, id: uid() }] })
       },
@@ -40,6 +45,14 @@ export const useWorkoutsStore = create<WorkoutsState>()(
       },
       removeSession: (id) => {
         set({ sessions: get().sessions.filter((s) => s.id !== id) })
+      },
+      setActiveSessionId: (id) => {
+        set({ activeSessionId: id })
+      },
+      startSession: (session) => {
+        const id = uid()
+        set({ sessions: [...get().sessions, { ...session, id }], activeSessionId: id })
+        return id
       },
     }),
     { name: 'fm-workouts' },
