@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { getPhotoThumb } from '../../services/photoStore'
 import type { FoodEntry } from '../../types'
 
 type FoodEntryRowProps = {
@@ -6,12 +8,35 @@ type FoodEntryRowProps = {
 }
 
 export default function FoodEntryRow({ entry, onClick }: FoodEntryRowProps) {
+  const [thumbUrl, setThumbUrl] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    if (entry.photoThumbId) {
+      getPhotoThumb(entry.photoThumbId).then((url) => {
+        if (!cancelled) setThumbUrl(url)
+      })
+    } else {
+      setThumbUrl(undefined)
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [entry.photoThumbId])
+
   return (
     <button
       type="button"
       onClick={onClick}
       className="w-full flex items-center justify-between gap-3 py-2.5 text-left"
     >
+      {thumbUrl && (
+        <img
+          src={thumbUrl}
+          alt=""
+          className="w-9 h-9 rounded-lg object-cover shrink-0"
+        />
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-sm text-slate-100 truncate">{entry.name}</p>
         <p className="text-xs text-slate-500">

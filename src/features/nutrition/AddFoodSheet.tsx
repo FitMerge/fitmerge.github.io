@@ -41,7 +41,7 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
       </div>
 
       {tab === 'manual' && <AddManualTab date={date} defaultMealType={defaultMealType} onClose={onClose} />}
-      {tab === 'photo' && <AddPhotoTab />}
+      {tab === 'photo' && <AddPhotoTab date={date} defaultMealType={defaultMealType} onClose={onClose} />}
       {tab === 'search' && <AddSearchTab />}
     </Sheet>
   )
