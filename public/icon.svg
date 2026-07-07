@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <!-- dumbbell bar -->
+  <rect x="96" y="240" width="320" height="32" rx="16" fill="#34d399"/>
+  <!-- left plates -->
+  <rect x="112" y="176" width="40" height="160" rx="14" fill="#34d399"/>
+  <rect x="64" y="200" width="32" height="112" rx="12" fill="#10b981"/>
+  <!-- right plates -->
+  <rect x="360" y="176" width="40" height="160" rx="14" fill="#34d399"/>
+  <rect x="416" y="200" width="32" height="112" rx="12" fill="#10b981"/>
+  <!-- fork tine accent (nutrition) -->
+  <circle cx="256" cy="120" r="34" fill="none" stroke="#38bdf8" stroke-width="16"/>
+  <path d="M256 120 L256 86" stroke="#38bdf8" stroke-width="16" stroke-linecap="round"/>
+</svg>

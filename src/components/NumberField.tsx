@@ -37,7 +37,7 @@ export default function NumberField({
             min={min}
             step={step}
             onChange={(e) => onChange(clamp(Number(e.target.value)))}
-            className="bg-slate-800 rounded-lg text-center w-full py-2"
+            className={`bg-slate-800 rounded-lg text-center w-full py-2 ${suffix ? 'pl-2 pr-9' : ''}`}
           />
           {suffix && (
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
