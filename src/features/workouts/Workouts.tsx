@@ -11,7 +11,7 @@ import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
 import SessionHistory from './SessionHistory'
 import { useWorkoutsStore } from '../../store/workouts'
-import { todayISO } from '../../lib/date'
+import { todayISO, weekdayIndex } from '../../lib/date'
 import { lastWeightForExercise } from './utils'
 import type { Routine, WorkoutSessionEntry } from '../../types'
 
@@ -38,6 +38,7 @@ export default function Workouts() {
 
   const activeSession = activeSessionId ? sessions.find((s) => s.id === activeSessionId) : undefined
   const finishedCount = sessions.filter((s) => s.finishedAt !== undefined).length
+  const todaysRoutine = routines.find((r) => r.scheduleDays?.includes(weekdayIndex(todayISO())))
 
   function startFromRoutine(routine: Routine) {
     const entries: WorkoutSessionEntry[] = routine.items.map((item) => ({
@@ -128,7 +129,7 @@ export default function Workouts() {
         <p className="text-sm text-slate-400">Plan routines and log training sessions.</p>
       </header>
 
-      {activeSession && !activeSession.finishedAt && (
+      {activeSession && !activeSession.finishedAt ? (
         <Card className="border-primary-500/60" onClick={() => setView({ kind: 'session' })}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -139,6 +140,35 @@ export default function Workouts() {
               Resume
             </Button>
           </div>
+        </Card>
+      ) : (
+        // Start-a-workout hero: today's scheduled routine if there is one, else a
+        // one-tap empty workout. Getting into a session should be the first thing.
+        <Card className="bg-gradient-to-br from-emerald-500/15 to-slate-900 border-emerald-500/30 space-y-3">
+          {todaysRoutine ? (
+            <>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400">Today's workout</p>
+                <p className="text-lg font-bold text-slate-100">{todaysRoutine.name}</p>
+                <p className="text-xs text-slate-400">
+                  {todaysRoutine.items.length} exercise{todaysRoutine.items.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <Button variant="primary" full onClick={() => startFromRoutine(todaysRoutine)}>
+                Start workout
+              </Button>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="text-lg font-bold text-slate-100">Ready to train?</p>
+                <p className="text-xs text-slate-400">Start an empty workout, or pick a routine below.</p>
+              </div>
+              <Button variant="primary" full onClick={quickStart}>
+                Start workout
+              </Button>
+            </>
+          )}
         </Card>
       )}
 
@@ -182,7 +212,7 @@ export default function Workouts() {
       )}
 
       <Button variant="ghost" full onClick={quickStart}>
-        Quick start
+        Start empty workout
       </Button>
 
       <Card className="active:bg-slate-800/60 flex items-center gap-3" onClick={() => setView({ kind: 'library' })}>

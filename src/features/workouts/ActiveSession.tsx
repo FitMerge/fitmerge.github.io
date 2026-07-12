@@ -131,17 +131,30 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const elapsedMs = now - session.startedAt
   const setsDone = totalSetsDone(session)
   const volume = totalVolume(session)
+  const totalSets = session.entries.reduce((n, e) => n + e.sets.length, 0)
+  const progressPct = totalSets > 0 ? Math.round((setsDone / totalSets) * 100) : 0
 
   return (
     <div className="p-4 pb-24 space-y-4">
-      <header className="flex items-center justify-between">
-        <div className="min-w-0">
-          <h1 className="text-lg font-bold text-slate-100 truncate">{session.name}</h1>
-          <p className="text-sm text-slate-400 tabular-nums">{formatElapsed(elapsedMs)}</p>
+      <header className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-slate-100 truncate">{session.name}</h1>
+            <p className="text-xs text-slate-400 tabular-nums">
+              {formatElapsed(elapsedMs)} · {setsDone}/{totalSets} sets ·{' '}
+              {Math.round(volume).toLocaleString()} {weightUnitLabel(units)}
+            </p>
+          </div>
+          <Button variant="primary" onClick={() => setFinishOpen(true)}>
+            Finish
+          </Button>
         </div>
-        <Button variant="primary" onClick={() => setFinishOpen(true)}>
-          Finish
-        </Button>
+        <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+          <div
+            className="h-full bg-emerald-500 transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
       </header>
 
       <div className="space-y-3">
@@ -152,9 +165,14 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
             const exercise = getExerciseById(entry.exerciseId)
             return (
               <Card key={entry.exerciseId}>
-                <h3 className="text-sm font-semibold text-slate-100 mb-1">
-                  {exercise?.name ?? 'Unknown exercise'}
-                </h3>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <h3 className="text-sm font-semibold text-slate-100 truncate">
+                    {exercise?.name ?? 'Unknown exercise'}
+                  </h3>
+                  <span className="shrink-0 text-xs text-slate-500 tabular-nums">
+                    {entry.sets.filter((s) => s.done).length}/{entry.sets.length}
+                  </span>
+                </div>
                 <div>
                   {entry.sets.map((set, idx) => (
                     <SetRow
