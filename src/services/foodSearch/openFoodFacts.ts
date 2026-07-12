@@ -61,6 +61,8 @@ function buildUrl(query: string): string {
     json: '1',
     page_size: '20',
     fields: FIELDS,
+    sort_by: 'unique_scans_n',
+    lc: 'en',
   })
   return `${SEARCH_ENDPOINT}?${params.toString()}`
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, ScanBarcode, Search } from 'lucide-react'
 import Button from '../../components/Button'
 import EmptyState from '../../components/EmptyState'
@@ -7,6 +7,7 @@ import FoodDetailPanel from './FoodDetailPanel'
 import SearchResultRow from './SearchResultRow'
 import { searchFoods } from '../../services/foodSearch/openFoodFacts'
 import type { SearchFood } from '../../services/foodSearch/openFoodFacts'
+import { searchCommonFoods } from '../../services/foodSearch/commonFoods'
 import { useNutritionStore } from '../../store/nutrition'
 import type { CustomFood, Macros, MealType } from '../../types'
 
@@ -33,7 +34,7 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
   const customFoods = useNutritionStore((s) => s.customFoods)
 
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchFood[]>([])
+  const [brandedResults, setBrandedResults] = useState<SearchFood[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [retryCount, setRetryCount] = useState(0)
@@ -49,7 +50,7 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
   useEffect(() => {
     const trimmed = query.trim()
     if (!trimmed) {
-      setResults([])
+      setBrandedResults([])
       setError('')
       setLoading(false)
       return
@@ -62,7 +63,7 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
     const timer = setTimeout(() => {
       searchFoods(trimmed, controller.signal)
         .then((foods) => {
-          setResults(foods)
+          setBrandedResults(foods)
           setLoading(false)
         })
         .catch((err: unknown) => {
@@ -77,6 +78,10 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
       controller.abort()
     }
   }, [query, retryCount])
+
+  // Local, synchronous, always available — this is what surfaces "Egg, whole,
+  // cooked" ahead of any packaged/branded OpenFoodFacts noise.
+  const commonResults = useMemo(() => searchCommonFoods(query), [query])
 
   function selectSearchFood(food: SearchFood) {
     setSelected({
@@ -181,38 +186,66 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
         </div>
       )}
 
-      {trimmedQuery && loading && (
-        <div className="flex justify-center py-8">
-          <Loader2 size={28} className="animate-spin text-primary-400" />
-        </div>
-      )}
-
-      {trimmedQuery && !loading && error && (
-        <div className="space-y-3">
-          <EmptyState icon={Search} title="Search failed" subtitle={error} />
-          <Button variant="ghost" full onClick={() => setRetryCount((n) => n + 1)}>
-            Retry
-          </Button>
-        </div>
-      )}
-
-      {trimmedQuery && !loading && !error && results.length === 0 && (
-        <EmptyState icon={Search} title="No foods found" subtitle={`No results for "${trimmedQuery}"`} />
-      )}
-
-      {trimmedQuery && !loading && !error && results.length > 0 && (
+      {trimmedQuery && commonResults.length > 0 && (
         <div className="space-y-2">
-          {results.map((food) => (
-            <SearchResultRow
-              key={food.id}
-              name={food.name}
-              brand={food.brand}
-              subtitle={food.servingText}
-              calorieLabel={`${Math.round(food.per100g.calories)} kcal /100g`}
-              onClick={() => selectSearchFood(food)}
-            />
-          ))}
+          <h3 className="text-sm font-semibold text-slate-300">Common foods</h3>
+          <div className="space-y-2">
+            {commonResults.map((food) => (
+              <SearchResultRow
+                key={food.id}
+                name={food.name}
+                brand={food.brand}
+                subtitle={food.servingText}
+                calorieLabel={`${Math.round((food.perServing ?? food.per100g).calories)} kcal`}
+                onClick={() => selectSearchFood(food)}
+              />
+            ))}
+          </div>
         </div>
+      )}
+
+      {trimmedQuery && (loading || error || brandedResults.length > 0 || commonResults.length > 0) && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-300">Branded (OpenFoodFacts)</h3>
+
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 size={28} className="animate-spin text-primary-400" />
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="space-y-3">
+              <EmptyState icon={Search} title="Search failed" subtitle={error} />
+              <Button variant="ghost" full onClick={() => setRetryCount((n) => n + 1)}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {!loading && !error && brandedResults.length === 0 && commonResults.length > 0 && (
+            <p className="text-sm text-slate-500">No branded results for "{trimmedQuery}"</p>
+          )}
+
+          {!loading && !error && brandedResults.length > 0 && (
+            <div className="space-y-2">
+              {brandedResults.map((food) => (
+                <SearchResultRow
+                  key={food.id}
+                  name={food.name}
+                  brand={food.brand}
+                  subtitle={food.servingText}
+                  calorieLabel={`${Math.round(food.per100g.calories)} kcal /100g`}
+                  onClick={() => selectSearchFood(food)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {trimmedQuery && !loading && !error && commonResults.length === 0 && brandedResults.length === 0 && (
+        <EmptyState icon={Search} title="No foods found" subtitle={`No results for "${trimmedQuery}"`} />
       )}
     </div>
   )
