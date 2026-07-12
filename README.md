@@ -98,6 +98,43 @@ last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schem
 strings. Re-importing the same file is safe — weigh-ins replace same-date entries and
 previously-imported workouts (matched by date + name) are skipped rather than duplicated.
 
+## Sync across devices (Google login)
+
+FitMerge works fully offline with no account — everything is stored locally in the
+browser. If you want the same nutrition, workouts, and body data on more than one
+device, **Settings → Sync across devices** lets you connect your own free Firebase
+project and sign in with Google; this is entirely optional and additive.
+
+One-time setup (a few minutes):
+
+1. Go to the [Firebase console](https://console.firebase.google.com/) and click
+   **Add project** (the free Spark plan is enough).
+2. In **Build → Authentication**, enable the **Google** sign-in provider.
+3. Still in Authentication, under **Settings → Authorized domains**, add
+   `skidude3892.github.io`.
+4. In **Build → Firestore Database**, click **Create database**, then open the
+   **Rules** tab and replace the contents with:
+
+   ```
+   match /users/{uid}/{doc=**} {
+     allow read, write: if request.auth != null && request.auth.uid == uid;
+   }
+   ```
+
+5. In **Project settings → General**, scroll to **Your apps**, add a web app, and
+   copy the `firebaseConfig` snippet it shows you.
+6. Paste that snippet into the Sync card in Settings and tap **Connect Firebase**,
+   then **Sign in with Google** on each device you want to sync.
+
+The pasted config values (`apiKey`, `authDomain`, `projectId`, `appId`, ...) are **not
+secret** — Firebase web apps ship them in the client bundle by design, and they only
+identify your project. Actual access to your data is controlled by the Firestore
+security rule above, which restricts every document to the signed-in user that owns it.
+
+Sync merges each store (nutrition, workouts, body, settings) the first time a device
+signs in, so existing local data on a second device is combined with the cloud copy
+rather than overwritten, then stays live in both directions.
+
 ## Development
 
 ```bash

@@ -1,3 +1,4 @@
+import SyncSection from './SyncSection'
 import ProfileSection from './ProfileSection'
 import UnitsSection from './UnitsSection'
 import GoalsSection from './GoalsSection'
@@ -14,6 +15,7 @@ export default function Settings() {
         <p className="text-sm text-slate-400">Manage your profile, goals, and preferences.</p>
       </header>
 
+      <SyncSection />
       <ProfileSection />
       <UnitsSection />
       <GoalsSection />
