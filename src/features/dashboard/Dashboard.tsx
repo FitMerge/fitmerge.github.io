@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Flame, GlassWater } from 'lucide-react'
+import { Dumbbell, Flame, GlassWater } from 'lucide-react'
 import Card from '../../components/Card'
 import RingChart from '../../components/RingChart'
 import MacroBar from '../../components/MacroBar'
@@ -8,7 +8,8 @@ import Button from '../../components/Button'
 import { useNutritionStore, entriesForDate } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
 import { useBodyStore } from '../../store/body'
-import { addDays, isoToLabel, todayISO } from '../../lib/date'
+import { useWorkoutsStore } from '../../store/workouts'
+import { addDays, isoToLabel, todayISO, weekdayIndex } from '../../lib/date'
 import { macroPct, sumMacros } from '../../lib/macros'
 
 function greeting(): string {
@@ -23,6 +24,8 @@ export default function Dashboard() {
   const entries = useNutritionStore((s) => s.entries)
   const goals = useSettingsStore((s) => s.goals)
   const bodyEntries = useBodyStore((s) => s.entries)
+  const routines = useWorkoutsStore((s) => s.routines)
+  const activeSessionId = useWorkoutsStore((s) => s.activeSessionId)
 
   const today = todayISO()
   const todayWaterMl = useNutritionStore((s) => s.water[today] ?? 0)
@@ -46,6 +49,11 @@ export default function Dashboard() {
   }, [bodyEntries])
 
   const recentMeals = useMemo(() => todayEntries.slice(-3).reverse(), [todayEntries])
+
+  const todaysRoutine = useMemo(() => {
+    const weekday = weekdayIndex(today)
+    return routines.find((r) => r.scheduleDays?.includes(weekday))
+  }, [routines, today])
 
   return (
     <div className="p-4 pb-24 space-y-4">
@@ -92,6 +100,30 @@ export default function Dashboard() {
           <span className="text-sm font-medium">{(todayWaterMl / 1000).toFixed(1)} L</span>
         </div>
       </Card>
+
+      {todaysRoutine && !activeSessionId && (
+        <Card className="border-l-4 border-l-emerald-400 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-400 shrink-0">
+              <Dumbbell size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-slate-400">Today&apos;s workout</p>
+              <p className="text-sm font-semibold text-slate-100 truncate">{todaysRoutine.name}</p>
+              <p className="text-xs text-slate-500">
+                {todaysRoutine.items.length} exercise{todaysRoutine.items.length === 1 ? '' : 's'}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            className="shrink-0 text-sm"
+            onClick={() => navigate('/workouts', { state: { startRoutineId: todaysRoutine.id } })}
+          >
+            Start
+          </Button>
+        </Card>
+      )}
 
       <Card>
         <h2 className="text-sm font-semibold text-slate-100 mb-2">Today&apos;s meals</h2>

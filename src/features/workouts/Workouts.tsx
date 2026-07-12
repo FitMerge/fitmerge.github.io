@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Dumbbell, History, Plus } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
@@ -24,6 +25,9 @@ type ViewState =
 export default function Workouts() {
   const [view, setView] = useState<ViewState>({ kind: 'home' })
   const [previewRoutine, setPreviewRoutine] = useState<Routine | null>(null)
+
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const routines = useWorkoutsStore((s) => s.routines)
   const sessions = useWorkoutsStore((s) => s.sessions)
@@ -54,6 +58,22 @@ export default function Workouts() {
     setPreviewRoutine(null)
     setView({ kind: 'session' })
   }
+
+  useEffect(() => {
+    const state = location.state as { startRoutineId?: string } | null
+    const startRoutineId = state?.startRoutineId
+    if (!startRoutineId) return
+
+    if (!activeSessionId) {
+      const routine = routines.find((r) => r.id === startRoutineId)
+      if (routine) {
+        startFromRoutine(routine)
+      }
+    }
+    navigate('.', { replace: true, state: null })
+    // Only re-run when the incoming navigation state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
 
   function quickStart() {
     startSession({

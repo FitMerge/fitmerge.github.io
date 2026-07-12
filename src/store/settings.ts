@@ -8,11 +8,13 @@ type SettingsState = {
   profile: Profile
   geminiApiKey: string
   waterGoalMl: number
+  onboarded: boolean
   setGoals: (goals: Goals) => void
   setUnits: (units: Units) => void
   setProfile: (patch: Partial<Profile>) => void
   setGeminiApiKey: (key: string) => void
   setWaterGoalMl: (ml: number) => void
+  setOnboarded: (v: boolean) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -23,11 +25,13 @@ export const useSettingsStore = create<SettingsState>()(
       profile: { sex: 'male', activity: 'moderate' },
       geminiApiKey: '',
       waterGoalMl: 2000,
+      onboarded: false,
       setGoals: (goals) => set({ goals }),
       setUnits: (units) => set({ units }),
       setProfile: (patch) => set({ profile: { ...get().profile, ...patch } }),
       setGeminiApiKey: (key) => set({ geminiApiKey: key }),
       setWaterGoalMl: (ml) => set({ waterGoalMl: ml }),
+      setOnboarded: (v) => set({ onboarded: v }),
     }),
     { name: 'fm-settings' },
   ),
