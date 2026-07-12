@@ -49,3 +49,31 @@ const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 export function weekdayLabels(): string[] {
   return WEEKDAY_LABELS
 }
+
+function parseISOLocal(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m ?? 1) - 1, d ?? 1)
+}
+
+/** e.g. "July 2026" — used to group session history rows by month. */
+export function monthYearLabel(iso: string): string {
+  return parseISOLocal(iso).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
+/** Formats a millisecond duration as a rounded minute count, e.g. "42 min". */
+export function formatDurationMin(ms: number): string {
+  const min = Math.max(1, Math.round(ms / 60000))
+  return `${min} min`
+}
+
+/** Ids of exercises that have at least one completed set in a finished session. */
+export function exerciseIdsWithHistory(sessions: WorkoutSession[]): Set<string> {
+  const ids = new Set<string>()
+  for (const session of sessions) {
+    if (!session.finishedAt) continue
+    for (const entry of session.entries) {
+      if (entry.sets.some((s) => s.done)) ids.add(entry.exerciseId)
+    }
+  }
+  return ids
+}

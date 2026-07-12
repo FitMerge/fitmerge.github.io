@@ -1,7 +1,10 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronLeft, Search } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronLeft, Search, TrendingUp } from 'lucide-react'
 import Card from '../../components/Card'
+import ExerciseProgressSheet from './ExerciseProgressSheet'
 import { useExerciseFilter, FILTER_GROUPS } from './useExerciseFilter'
+import { useWorkoutsStore } from '../../store/workouts'
+import { exerciseIdsWithHistory } from './utils'
 
 type ExerciseLibraryProps = {
   onBack: () => void
@@ -10,6 +13,9 @@ type ExerciseLibraryProps = {
 export default function ExerciseLibrary({ onBack }: ExerciseLibraryProps) {
   const { query, setQuery, group, setGroup, filtered } = useExerciseFilter()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [progressExerciseId, setProgressExerciseId] = useState<string | null>(null)
+  const sessions = useWorkoutsStore((s) => s.sessions)
+  const historyIds = useMemo(() => exerciseIdsWithHistory(sessions), [sessions])
 
   return (
     <div className="p-4 pb-24 space-y-4">
@@ -70,10 +76,25 @@ export default function ExerciseLibrary({ onBack }: ExerciseLibraryProps) {
                       {exercise.muscleGroup} · {exercise.equipment}
                     </p>
                   </div>
-                  <ChevronDown
-                    size={16}
-                    className={`shrink-0 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
-                  />
+                  <div className="flex items-center gap-2 shrink-0">
+                    {historyIds.has(exercise.id) && (
+                      <button
+                        type="button"
+                        aria-label="View progress"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setProgressExerciseId(exercise.id)
+                        }}
+                        className="w-8 h-8 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-primary-400"
+                      >
+                        <TrendingUp size={15} />
+                      </button>
+                    )}
+                    <ChevronDown
+                      size={16}
+                      className={`text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                    />
+                  </div>
                 </div>
                 {expanded && exercise.instructions && (
                   <p className="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-400">
@@ -85,6 +106,8 @@ export default function ExerciseLibrary({ onBack }: ExerciseLibraryProps) {
           })
         )}
       </div>
+
+      <ExerciseProgressSheet exerciseId={progressExerciseId} onClose={() => setProgressExerciseId(null)} />
     </div>
   )
 }

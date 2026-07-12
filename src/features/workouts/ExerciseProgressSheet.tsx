@@ -1,0 +1,110 @@
+import { useMemo } from 'react'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import Sheet from '../../components/Sheet'
+import { useWorkoutsStore } from '../../store/workouts'
+import { useSettingsStore } from '../../store/settings'
+import { getExerciseById } from '../../data/exercises'
+import { epley1RM, monthDayLabel } from '../progress/utils'
+import { weightUnitLabel } from './utils'
+import type { WorkoutSession } from '../../types'
+
+type ExerciseProgressSheetProps = {
+  exerciseId: string | null
+  onClose: () => void
+}
+
+type ProgressPoint = { date: string; label: string; est1RM: number; weight: number; reps: number }
+
+/** Best est-1RM done set per finished session containing the exercise, oldest to newest. */
+function progressSeries(sessions: WorkoutSession[], exerciseId: string): ProgressPoint[] {
+  const points: ProgressPoint[] = []
+  for (const session of sessions) {
+    if (!session.finishedAt) continue
+    const entry = session.entries.find((e) => e.exerciseId === exerciseId)
+    if (!entry) continue
+
+    let best: { est1RM: number; weight: number; reps: number } | null = null
+    for (const set of entry.sets) {
+      if (!set.done || set.reps <= 0 || set.weight <= 0) continue
+      const est1RM = epley1RM(set.weight, set.reps)
+      if (!best || est1RM > best.est1RM) best = { est1RM, weight: set.weight, reps: set.reps }
+    }
+    if (best) points.push({ date: session.date, label: monthDayLabel(session.date), ...best })
+  }
+  return points.sort((a, b) => (a.date < b.date ? -1 : 1))
+}
+
+export default function ExerciseProgressSheet({ exerciseId, onClose }: ExerciseProgressSheetProps) {
+  const sessions = useWorkoutsStore((s) => s.sessions)
+  const units = useSettingsStore((s) => s.units)
+  const unitLabel = weightUnitLabel(units)
+  const exercise = exerciseId ? getExerciseById(exerciseId) : undefined
+
+  const points = useMemo(
+    () => (exerciseId ? progressSeries(sessions, exerciseId) : []),
+    [sessions, exerciseId],
+  )
+
+  const best = useMemo(
+    () => points.reduce<ProgressPoint | null>((acc, p) => (!acc || p.est1RM > acc.est1RM ? p : acc), null),
+    [points],
+  )
+
+  return (
+    <Sheet open={exerciseId !== null} onClose={onClose} title={exercise?.name ?? ''}>
+      {exerciseId && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-slate-800/60 py-3">
+              <p className="text-lg font-bold text-slate-100">{best ? best.est1RM.toFixed(1) : '—'}</p>
+              <p className="text-xs text-slate-500">Best est. 1RM ({unitLabel})</p>
+            </div>
+            <div className="rounded-xl bg-slate-800/60 py-3">
+              <p className="text-lg font-bold text-slate-100">
+                {best ? `${best.weight} × ${best.reps}` : '—'}
+              </p>
+              <p className="text-xs text-slate-500">Best set ({unitLabel})</p>
+            </div>
+            <div className="rounded-xl bg-slate-800/60 py-3">
+              <p className="text-lg font-bold text-slate-100">{points.length}</p>
+              <p className="text-xs text-slate-500">Sessions</p>
+            </div>
+          </div>
+
+          {points.length >= 2 ? (
+            <div style={{ height: 180 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    domain={['auto', 'auto']}
+                    width={44}
+                    tickFormatter={(value: number) => value.toFixed(0)}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: '#cbd5e1' }}
+                    formatter={(value: number) => [`${value.toFixed(1)} ${unitLabel}`, 'Est. 1RM']}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="est1RM"
+                    stroke="#34d399"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#34d399' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500 py-2 text-center">Log more sessions to see a trend.</p>
+          )}
+        </div>
+      )}
+    </Sheet>
+  )
+}

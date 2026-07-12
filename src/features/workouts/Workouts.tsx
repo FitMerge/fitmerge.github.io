@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Dumbbell, Plus } from 'lucide-react'
+import { Dumbbell, History, Plus } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import EmptyState from '../../components/EmptyState'
@@ -8,6 +8,7 @@ import RoutinePreviewSheet from './RoutinePreviewSheet'
 import ExerciseLibrary from './ExerciseLibrary'
 import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
+import SessionHistory from './SessionHistory'
 import { useWorkoutsStore } from '../../store/workouts'
 import { todayISO } from '../../lib/date'
 import { lastWeightForExercise } from './utils'
@@ -18,6 +19,7 @@ type ViewState =
   | { kind: 'library' }
   | { kind: 'edit'; routineId?: string }
   | { kind: 'session' }
+  | { kind: 'history' }
 
 export default function Workouts() {
   const [view, setView] = useState<ViewState>({ kind: 'home' })
@@ -31,6 +33,7 @@ export default function Workouts() {
   const activeSessionId = useWorkoutsStore((s) => s.activeSessionId)
 
   const activeSession = activeSessionId ? sessions.find((s) => s.id === activeSessionId) : undefined
+  const finishedCount = sessions.filter((s) => s.finishedAt !== undefined).length
 
   function startFromRoutine(routine: Routine) {
     const entries: WorkoutSessionEntry[] = routine.items.map((item) => ({
@@ -87,6 +90,15 @@ export default function Workouts() {
 
   if (view.kind === 'session') {
     return <ActiveSession sessionId={activeSessionId ?? ''} onExit={() => setView({ kind: 'home' })} />
+  }
+
+  if (view.kind === 'history') {
+    return (
+      <SessionHistory
+        onBack={() => setView({ kind: 'home' })}
+        onRepeated={() => setView({ kind: 'session' })}
+      />
+    )
   }
 
   return (
@@ -160,6 +172,18 @@ export default function Workouts() {
         <div>
           <p className="text-sm font-medium text-slate-100">Exercise library</p>
           <p className="text-xs text-slate-500">Browse exercises by muscle group</p>
+        </div>
+      </Card>
+
+      <Card className="active:bg-slate-800/60 flex items-center gap-3" onClick={() => setView({ kind: 'history' })}>
+        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-primary-400 shrink-0">
+          <History size={18} />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-slate-100">History</p>
+          <p className="text-xs text-slate-500">
+            {finishedCount} finished workout{finishedCount === 1 ? '' : 's'}
+          </p>
         </div>
       </Card>
 
