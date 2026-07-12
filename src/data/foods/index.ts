@@ -10,6 +10,7 @@ import { FOODS as fruits } from './fruits'
 import { FOODS as dairyEggs } from './dairyEggs'
 import { FOODS as grainsLegumesNuts } from './grainsLegumesNuts'
 import { FOODS as preparedPantry } from './preparedPantry'
+import { FOODS as compositeDishes } from './compositeDishes'
 
 /** Remove duplicates by id and by normalized name; earlier entries win, so the
  * hand-verified core (COMMON_FOODS) takes precedence over generated variants. */
@@ -35,4 +36,5 @@ export const ALL_COMMON_FOODS: CommonFood[] = dedupe([
   ...dairyEggs,
   ...grainsLegumesNuts,
   ...preparedPantry,
+  ...compositeDishes,
 ])
