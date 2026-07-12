@@ -208,20 +208,38 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-300">Branded (OpenFoodFacts)</h3>
 
-          {loading && (
-            <div className="flex justify-center py-8">
-              <Loader2 size={28} className="animate-spin text-primary-400" />
-            </div>
-          )}
+          {loading &&
+            (commonResults.length > 0 ? (
+              <p className="text-sm text-slate-500">Searching online database…</p>
+            ) : (
+              <div className="flex justify-center py-8">
+                <Loader2 size={28} className="animate-spin text-primary-400" />
+              </div>
+            ))}
 
-          {!loading && error && (
-            <div className="space-y-3">
-              <EmptyState icon={Search} title="Search failed" subtitle={error} />
-              <Button variant="ghost" full onClick={() => setRetryCount((n) => n + 1)}>
-                Retry
-              </Button>
-            </div>
-          )}
+          {/* When common foods already cover the query, a flaky/slow online
+              database shouldn't shout "failed" — keep it a quiet, retryable note. */}
+          {!loading &&
+            error &&
+            (commonResults.length > 0 ? (
+              <p className="text-sm text-slate-500">
+                Online food database unavailable.{' '}
+                <button
+                  type="button"
+                  onClick={() => setRetryCount((n) => n + 1)}
+                  className="text-emerald-400 underline"
+                >
+                  Retry
+                </button>
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <EmptyState icon={Search} title="Search failed" subtitle={error} />
+                <Button variant="ghost" full onClick={() => setRetryCount((n) => n + 1)}>
+                  Retry
+                </Button>
+              </div>
+            ))}
 
           {!loading && !error && brandedResults.length === 0 && commonResults.length > 0 && (
             <p className="text-sm text-slate-500">No branded results for "{trimmedQuery}"</p>
