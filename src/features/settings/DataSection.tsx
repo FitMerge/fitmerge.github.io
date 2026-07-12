@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Download, RotateCcw } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Download, Upload, RotateCcw } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
@@ -7,9 +7,36 @@ import { useNutritionStore } from '../../store/nutrition'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useBodyStore } from '../../store/body'
 import { useSettingsStore } from '../../store/settings'
+import { applyBackup, parseBackup, type ParsedBackup } from '../../services/dataBackup'
 
 export default function DataSection() {
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<ParsedBackup | null>(null)
+  const [importError, setImportError] = useState('')
+  const [imported, setImported] = useState(false)
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file
+    if (!file) return
+    setImportError('')
+    setImported(false)
+    const text = await file.text()
+    const parsed = parseBackup(text)
+    if (!parsed) {
+      setImportError("That doesn't look like a FitMerge export file.")
+      return
+    }
+    setPreview(parsed)
+  }
+
+  function handleApplyImport() {
+    if (!preview) return
+    applyBackup(preview.raw)
+    setPreview(null)
+    setImported(true)
+  }
 
   function handleExport() {
     const nutrition = useNutritionStore.getState()
@@ -65,6 +92,22 @@ export default function DataSection() {
         </span>
       </Button>
 
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleImportFile}
+      />
+      <Button variant="ghost" full onClick={() => fileRef.current?.click()}>
+        <span className="flex items-center justify-center gap-1.5">
+          <Upload size={16} />
+          Import data
+        </span>
+      </Button>
+      {importError && <p className="text-sm text-red-400">{importError}</p>}
+      {imported && <p className="text-sm text-emerald-400">Data imported.</p>}
+
       <Button variant="danger" full onClick={() => setConfirmOpen(true)}>
         <span className="flex items-center justify-center gap-1.5">
           <RotateCcw size={16} />
@@ -82,6 +125,22 @@ export default function DataSection() {
             Yes, reset everything
           </Button>
           <Button variant="ghost" full onClick={() => setConfirmOpen(false)}>
+            Cancel
+          </Button>
+        </div>
+      </Sheet>
+
+      <Sheet open={preview !== null} onClose={() => setPreview(null)} title="Import backup?">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            Found {preview?.summary.foods ?? 0} food entries, {preview?.summary.workouts ?? 0} workouts, and{' '}
+            {preview?.summary.weighIns ?? 0} weigh-ins. This merges into your current data — nothing is
+            overwritten.
+          </p>
+          <Button variant="primary" full onClick={handleApplyImport}>
+            Import
+          </Button>
+          <Button variant="ghost" full onClick={() => setPreview(null)}>
             Cancel
           </Button>
         </div>
