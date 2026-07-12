@@ -87,7 +87,7 @@ export default function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 overflow-y-auto">
-      <div className="max-w-md mx-auto min-h-full flex flex-col p-6">
+      <div className="max-w-md mx-auto min-h-full flex flex-col safe-screen">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-1.5">
             {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((dot) => (
