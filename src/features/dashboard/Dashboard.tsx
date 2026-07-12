@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Dumbbell, Flame, GlassWater } from 'lucide-react'
+import { Dumbbell, Flame, GlassWater, Settings } from 'lucide-react'
 import Card from '../../components/Card'
 import RingChart from '../../components/RingChart'
 import MacroBar from '../../components/MacroBar'
@@ -59,9 +59,19 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 pb-24 space-y-4">
-      <header>
-        <h1 className="text-xl font-bold text-slate-100">{greeting()}</h1>
-        <p className="text-sm text-slate-400">{isoToLabel(today)}</p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-100">{greeting()}</h1>
+          <p className="text-sm text-slate-400">{isoToLabel(today)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/settings')}
+          aria-label="Settings"
+          className="shrink-0 w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 active:bg-slate-700"
+        >
+          <Settings size={18} />
+        </button>
       </header>
 
       <Card className="flex flex-col items-center gap-4">

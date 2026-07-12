@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, UtensilsCrossed } from 'lucide-react'
 import Card from '../../components/Card'
 import RingChart from '../../components/RingChart'
@@ -65,6 +66,21 @@ export default function Diary() {
     setAddMealType(mealType)
     setAddOpen(true)
   }
+
+  // The nav's center "+" routes here with { openAdd } — open the add screen on the
+  // meal that fits the current time of day (breakfast/lunch/dinner/snack).
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const st = location.state as { openAdd?: boolean } | null
+    if (!st?.openAdd) return
+    const h = new Date().getHours()
+    const meal: MealType = h < 11 ? 'breakfast' : h < 16 ? 'lunch' : h < 21 ? 'dinner' : 'snack'
+    setSelectedDate(todayISO())
+    openAdd(meal)
+    navigate('.', { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
 
   const savingMeal = MEALS.find((m) => m.type === savingMealType)
   const savingEntries = useMemo(

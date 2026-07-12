@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
-import Sheet from '../../components/Sheet'
+import { Camera, ChevronLeft, X } from 'lucide-react'
 import AddManualTab from './AddManualTab'
 import AddPhotoTab from './AddPhotoTab'
 import AddSearchTab from './AddSearchTab'
-import QuickTab from './QuickTab'
-import { useNutritionStore } from '../../store/nutrition'
-import type { MealType, SavedMealItem } from '../../types'
+import type { MealType } from '../../types'
 
-type Tab = 'quick' | 'manual' | 'photo' | 'search'
+const MEALS: { type: MealType; label: string }[] = [
+  { type: 'breakfast', label: 'Breakfast' },
+  { type: 'lunch', label: 'Lunch' },
+  { type: 'dinner', label: 'Dinner' },
+  { type: 'snack', label: 'Snacks' },
+]
 
-const TABS: Tab[] = ['quick', 'manual', 'photo', 'search']
+type View = 'browse' | 'manual' | 'photo'
 
 type AddFoodSheetProps = {
   open: boolean
@@ -19,60 +22,101 @@ type AddFoodSheetProps = {
 }
 
 export default function AddFoodSheet({ open, onClose, date, defaultMealType }: AddFoodSheetProps) {
-  const hasEntries = useNutritionStore((s) => s.entries.length > 0)
-  const [tab, setTab] = useState<Tab>('manual')
-  const [prefill, setPrefill] = useState<SavedMealItem | null>(null)
+  const [mealType, setMealType] = useState<MealType>(defaultMealType)
+  const [view, setView] = useState<View>('browse')
 
-  // Only reconsider the default tab when the sheet transitions open; hasEntries
-  // changing while the sheet is already open shouldn't yank the user to a different tab.
+  // Reset meal + view each time the screen opens.
   useEffect(() => {
     if (open) {
-      setTab(hasEntries ? 'quick' : 'manual')
-      setPrefill(null)
+      setMealType(defaultMealType)
+      setView('browse')
     }
-    // (intentionally omitting hasEntries from deps — see comment above)
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, defaultMealType])
 
-  function selectTab(t: Tab) {
-    setPrefill(null)
-    setTab(t)
-  }
-
-  function handlePrefill(item: SavedMealItem) {
-    setPrefill(item)
-    setTab('manual')
-  }
+  if (!open) return null
 
   return (
-    <Sheet open={open} onClose={onClose} title="Add food">
-      <div className="flex gap-2 mb-4">
-        {TABS.map((t) => (
+    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+      {/* Header: close, title, done, and the meal selector — always visible so you
+          always know (and can change) which meal you're logging into. */}
+      <div className="shrink-0 border-b border-slate-800" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="flex items-center gap-3 px-4 h-14">
           <button
-            key={t}
             type="button"
-            onClick={() => selectTab(t)}
-            className={`flex-1 rounded-lg py-2 text-sm capitalize ${
-              tab === t ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300'
-            }`}
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1.5 -ml-1.5 text-slate-300 active:text-slate-100"
           >
-            {t}
+            <X size={22} />
           </button>
-        ))}
+          <h2 className="text-base font-bold text-slate-100 flex-1">Add Food</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm font-semibold text-emerald-400 active:text-emerald-300"
+          >
+            Done
+          </button>
+        </div>
+        <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto">
+          {MEALS.map((m) => (
+            <button
+              key={m.type}
+              type="button"
+              onClick={() => setMealType(m.type)}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium ${
+                mealType === m.type ? 'bg-primary-500 text-slate-950' : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {tab === 'quick' && (
-        <QuickTab date={date} defaultMealType={defaultMealType} onClose={onClose} onPrefill={handlePrefill} />
-      )}
-      {tab === 'manual' && (
-        <AddManualTab
-          date={date}
-          defaultMealType={defaultMealType}
-          initial={prefill ?? undefined}
-          onClose={onClose}
-        />
-      )}
-      {tab === 'photo' && <AddPhotoTab date={date} defaultMealType={defaultMealType} onClose={onClose} />}
-      {tab === 'search' && <AddSearchTab date={date} defaultMealType={defaultMealType} onClose={onClose} />}
-    </Sheet>
+      <div
+        className="flex-1 overflow-y-auto p-4"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
+      >
+        {view === 'browse' && (
+          <div className="space-y-4">
+            <AddSearchTab date={date} mealType={mealType} onClose={onClose} onManual={() => setView('manual')} />
+            <button
+              type="button"
+              onClick={() => setView('photo')}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-800 py-3 text-sm text-slate-200 active:bg-slate-700"
+            >
+              <Camera size={16} /> Log with a photo
+            </button>
+          </div>
+        )}
+
+        {view === 'manual' && (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setView('browse')}
+              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
+            >
+              <ChevronLeft size={16} /> Back to search
+            </button>
+            <AddManualTab date={date} defaultMealType={mealType} onClose={onClose} />
+          </div>
+        )}
+
+        {view === 'photo' && (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setView('browse')}
+              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
+            >
+              <ChevronLeft size={16} /> Back to search
+            </button>
+            <AddPhotoTab date={date} defaultMealType={mealType} onClose={onClose} />
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
