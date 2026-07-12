@@ -119,13 +119,16 @@ function foodWordStems(food: CommonFood): Set<string> {
 }
 
 /** True if query token `t` matches one of the food's words. Uses stem equality
- * (handles plurals) plus a guarded prefix so "chick" still finds "chicken". */
+ * (handles plurals) plus a one-directional prefix so a partially-typed word like
+ * "chick" still finds "chicken". The prefix only fires when the FOOD word starts
+ * with the query token — never the reverse, so "nutrition" can't match "nut"
+ * (which used to flood "1up nutrition …" with every nut food). */
 function tokenMatches(t: string, stems: Set<string>): boolean {
   const st = stem(t)
   if (stems.has(st)) return true
   if (st.length >= 4) {
     for (const w of stems) {
-      if (w.startsWith(st) || st.startsWith(w)) return true
+      if (w.startsWith(st)) return true
     }
   }
   return false
