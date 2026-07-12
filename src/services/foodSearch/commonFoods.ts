@@ -53,21 +53,29 @@ function escapeRegExp(value: string): string {
 
 /**
  * Match strength for a food against a (already trimmed + lowercased) query:
- *   4 = the food name starts with the query
- *   3 = the query matches at a word boundary within the name
+ *   6 = the food name is exactly the query ("banana" → "Banana")
+ *   5 = the query is a whole word within the name ("taco" → "Beef taco")
+ *   4 = the name starts with the query as a prefix ("chick" → "Chicken…")
+ *   3 = the query matches at a word boundary mid-name (partial word start)
  *   2 = an alias starts with, or word-boundary matches, the query
  *   1 = a plain substring match against name, alias, or category
  *   0 = no match
+ * Higher tiers put the canonical, expected food first so searching "taco" leads
+ * with tacos (not "Taco salad") and "eggs" with eggs — MyFitnessPal-style relevance.
  */
 function matchScore(food: CommonFood, query: string): number {
   const name = food.name.toLowerCase()
   const aliases = (food.aliases ?? []).map((a) => a.toLowerCase())
   const category = food.category.toLowerCase()
-  const boundary = new RegExp(`\\b${escapeRegExp(query)}`, 'i')
+  const escaped = escapeRegExp(query)
+  const wholeWord = new RegExp(`\\b${escaped}\\b`, 'i')
+  const boundary = new RegExp(`\\b${escaped}`, 'i')
 
+  if (name === query) return 6
+  if (wholeWord.test(name)) return 5
   if (name.startsWith(query)) return 4
   if (boundary.test(name)) return 3
-  if (aliases.some((alias) => alias.startsWith(query) || boundary.test(alias))) return 2
+  if (aliases.some((alias) => alias === query || alias.startsWith(query) || boundary.test(alias))) return 2
   if (name.includes(query) || aliases.some((alias) => alias.includes(query)) || category.includes(query)) return 1
   return 0
 }
@@ -92,9 +100,15 @@ export function searchCommonFoods(query: string, limit = 12): SearchFood[] {
   const q = query.trim().toLowerCase()
   if (!q || !cache) return []
 
-  const scored = cache.map((food) => ({ food, score: matchScore(food, q) })).filter((entry) => entry.score > 0)
+  const scored = cache
+    .map((food, index) => ({ food, index, score: matchScore(food, q) }))
+    .filter((entry) => entry.score > 0)
 
-  scored.sort((a, b) => b.score - a.score)
+  // Within a match tier, break ties by original library position. The database is
+  // ordered by canonicalness — hand-verified core foods first, single ingredients
+  // next, composite/prepared dishes last — so plain "Salmon, cooked" leads over
+  // "Salmon jerky", and "Greek yogurt, plain" over "Greek yogurt parfait".
+  scored.sort((a, b) => b.score - a.score || a.index - b.index)
 
   return scored.slice(0, limit).map((entry) => toSearchFood(entry.food))
 }
