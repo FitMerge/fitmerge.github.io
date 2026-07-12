@@ -6,12 +6,28 @@ import { VitePWA } from 'vite-plugin-pwa'
 // service worker must resolve under the /Test/ sub-path.
 const base = '/Test/'
 
+// Human-readable build stamp, surfaced in Settings → About so it's obvious which
+// deployed version is loaded (and that an update actually landed).
+const buildTime = new Date().toISOString().slice(0, 16).replace('T', ' ')
+
 export default defineConfig({
   base,
+  define: {
+    __BUILD_TIME__: JSON.stringify(`${buildTime} UTC`),
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Take over immediately on a new deploy instead of waiting for every tab to
+      // close (an installed PWA rarely fully closes, which is what left old
+      // versions stuck). Combined with the update-check in main.tsx, new builds
+      // activate and reload on their own.
+      workbox: {
+        clientsClaim: true,
+        skipWaiting: true,
+        cleanupOutdatedCaches: true,
+      },
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'FitMerge',
