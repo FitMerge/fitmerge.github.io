@@ -52,10 +52,12 @@ export default function Diary() {
     const fiber = dayEntries.reduce((sum, e) => sum + (e.fiber ?? 0), 0)
     const sugar = dayEntries.reduce((sum, e) => sum + (e.sugar ?? 0), 0)
     const sodium = dayEntries.reduce((sum, e) => sum + (e.sodium ?? 0), 0)
+    // Show a decimal for trace amounts so a real sub-1 value isn't misread as "0".
+    const fmt = (n: number) => (n >= 1 ? String(Math.round(n)) : n.toFixed(1))
     const parts: string[] = []
-    if (fiber > 0) parts.push(`Fiber ${Math.round(fiber)} g`)
-    if (sugar > 0) parts.push(`Sugar ${Math.round(sugar)} g`)
-    if (sodium > 0) parts.push(`Sodium ${Math.round(sodium)} mg`)
+    if (fiber > 0) parts.push(`Fiber ${fmt(fiber)} g`)
+    if (sugar > 0) parts.push(`Sugar ${fmt(sugar)} g`)
+    if (sodium > 0) parts.push(`Sodium ${fmt(sodium)} mg`)
     return parts.join(' · ')
   }, [dayEntries])
 

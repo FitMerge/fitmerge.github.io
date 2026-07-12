@@ -20,8 +20,10 @@ export default function ProfileSection() {
   const setProfile = useSettingsStore((s) => s.setProfile)
 
   const heightLabel = units === 'imperial' ? 'Height (in)' : 'Height (cm)'
+  // Whole inches / whole cm so the +/- stepper round-trips cleanly (a net-zero
+  // tap must not drift the stored height via inch↔cm rounding).
   const heightValue = profile.heightCm
-    ? Math.round((units === 'imperial' ? cmToIn(profile.heightCm) : profile.heightCm) * 10) / 10
+    ? Math.round(units === 'imperial' ? cmToIn(profile.heightCm) : profile.heightCm)
     : 0
 
   function handleHeightChange(value: number) {

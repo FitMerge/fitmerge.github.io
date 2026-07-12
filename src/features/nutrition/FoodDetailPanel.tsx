@@ -94,6 +94,7 @@ export default function FoodDetailPanel({
   }, [unit, qty, extras100g, extrasServing])
 
   function handleAdd() {
+    if (!(qty > 0)) return
     const fiber = extras?.fiber !== undefined && extras.fiber > 0 ? round1(extras.fiber) : undefined
     const sugar = extras?.sugar !== undefined && extras.sugar > 0 ? round1(extras.sugar) : undefined
     const sodium = extras?.sodiumMg !== undefined && extras.sodiumMg > 0 ? Math.round(extras.sodiumMg) : undefined
@@ -117,11 +118,16 @@ export default function FoodDetailPanel({
   }
 
   function handleSaveToMyFoods() {
+    // Save the macros paired with a MATCHING serving label. When only per-100g
+    // data exists (common for branded results), label it "100 g" — otherwise the
+    // per-100g numbers would be charged against the product's smaller serving
+    // string (e.g. "30 g") and re-logging would massively overcount.
+    const hasServing = perServing !== undefined
     addCustomFood({
       name,
       brand,
-      serving: servingText,
-      per: perServing ?? per100g ?? { calories: 0, protein: 0, carbs: 0, fat: 0 },
+      serving: hasServing ? servingText : '100 g',
+      per: hasServing ? perServing : per100g ?? { calories: 0, protein: 0, carbs: 0, fat: 0 },
     })
     setSaved(true)
   }
@@ -190,7 +196,7 @@ export default function FoodDetailPanel({
         </div>
       </div>
 
-      <Button variant="primary" full onClick={handleAdd}>
+      <Button variant="primary" full onClick={handleAdd} disabled={!(qty > 0)}>
         Add to diary
       </Button>
 

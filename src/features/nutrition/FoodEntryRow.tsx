@@ -40,7 +40,13 @@ export default function FoodEntryRow({ entry, onClick }: FoodEntryRowProps) {
       <div className="min-w-0 flex-1">
         <p className="text-sm text-slate-100 truncate">{entry.name}</p>
         <p className="text-xs text-slate-500">
-          {entry.qty} {entry.unit}
+          {/* "g" is a bare unit (200 g); a serving label already describes one
+              serving, so only prefix a "×N" when logging more than one. */}
+          {entry.unit === 'g'
+            ? `${entry.qty} g`
+            : entry.qty === 1
+              ? entry.unit
+              : `${entry.qty} × ${entry.unit}`}
         </p>
       </div>
       <div className="text-right shrink-0">

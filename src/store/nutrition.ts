@@ -37,6 +37,12 @@ export const useNutritionStore = create<NutritionState>()(
         set({ entries: get().entries.filter((e) => e.id !== id) })
       },
       addCustomFood: (food) => {
+        // Skip an exact duplicate (same name/brand/serving) so saving the same
+        // food twice doesn't clutter "My foods".
+        const exists = get().customFoods.some(
+          (f) => f.name === food.name && f.brand === food.brand && f.serving === food.serving,
+        )
+        if (exists) return
         set({ customFoods: [...get().customFoods, { ...food, id: uid() }] })
       },
       addSavedMeal: (meal) => {
