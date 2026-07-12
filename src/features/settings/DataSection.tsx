@@ -19,10 +19,20 @@ export default function DataSection() {
 
     const payload = {
       exportedAt: new Date().toISOString(),
-      nutrition: { entries: nutrition.entries, customFoods: nutrition.customFoods },
+      nutrition: {
+        entries: nutrition.entries,
+        customFoods: nutrition.customFoods,
+        savedMeals: nutrition.savedMeals,
+        water: nutrition.water,
+      },
       workouts: { routines: workouts.routines, sessions: workouts.sessions },
       body: { entries: body.entries },
-      settings: { goals: settings.goals, units: settings.units, profile: settings.profile },
+      settings: {
+        goals: settings.goals,
+        units: settings.units,
+        profile: settings.profile,
+        waterGoalMl: settings.waterGoalMl,
+      },
     }
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -35,14 +45,12 @@ export default function DataSection() {
   }
 
   function handleReset() {
-    useNutritionStore.setState({ entries: [], customFoods: [] })
+    // Clears logged data only (as the confirm copy states) — the user's
+    // preferences (units, goals, profile, Gemini key) are intentionally kept,
+    // so a reset never silently flips units or wipes their setup.
+    useNutritionStore.setState({ entries: [], customFoods: [], savedMeals: [], water: {} })
     useWorkoutsStore.setState({ routines: [], sessions: [], activeSessionId: undefined })
     useBodyStore.setState({ entries: [] })
-    useSettingsStore.setState({
-      goals: { calories: 2200, protein: 150, carbs: 220, fat: 70 },
-      units: 'metric',
-      profile: { sex: 'male', activity: 'moderate' },
-    })
     setConfirmOpen(false)
   }
 
