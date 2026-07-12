@@ -36,7 +36,7 @@ function buildUrl(query: string): string {
   return `${SEARCH_ENDPOINT}?${params.toString()}`
 }
 
-function parseProduct(raw: unknown): SearchFood | undefined {
+export function parseProduct(raw: unknown): SearchFood | undefined {
   if (!isRecord(raw)) return undefined
 
   const name = typeof raw.product_name === 'string' ? raw.product_name.trim() : ''
@@ -118,4 +118,41 @@ export async function searchFoods(query: string, signal?: AbortSignal): Promise<
   }
 
   return results
+}
+
+const PRODUCT_ENDPOINT = 'https://world.openfoodfacts.org/api/v2/product'
+
+/**
+ * Look up a single product by barcode. Resolves to null when the product is
+ * unknown (status 0 or HTTP 404) — that is not an error condition.
+ */
+export async function fetchProductByBarcode(code: string, signal?: AbortSignal): Promise<SearchFood | null> {
+  const trimmed = code.trim()
+  if (!trimmed) return null
+
+  const url = `${PRODUCT_ENDPOINT}/${encodeURIComponent(trimmed)}.json?fields=${FIELDS}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { signal })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
+    throw new Error('Network error — check your connection')
+  }
+
+  if (res.status === 404) return null
+  if (!res.ok) {
+    throw new Error('Barcode lookup failed — please try again')
+  }
+
+  let payload: unknown
+  try {
+    payload = await res.json()
+  } catch {
+    throw new Error('Barcode lookup returned an unexpected response')
+  }
+
+  if (!isRecord(payload) || payload.status !== 1) return null
+
+  return parseProduct(payload.product) ?? null
 }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, ScanBarcode, Search } from 'lucide-react'
 import Button from '../../components/Button'
 import EmptyState from '../../components/EmptyState'
+import BarcodeScanSheet from './BarcodeScanSheet'
 import FoodDetailPanel from './FoodDetailPanel'
 import SearchResultRow from './SearchResultRow'
 import { searchFoods } from '../../services/foodSearch/openFoodFacts'
@@ -35,6 +36,7 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
   const [error, setError] = useState('')
   const [retryCount, setRetryCount] = useState(0)
   const [selected, setSelected] = useState<SelectedFood | null>(null)
+  const [scanning, setScanning] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -113,20 +115,42 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
     )
   }
 
+  if (scanning) {
+    return (
+      <BarcodeScanSheet
+        onBack={() => setScanning(false)}
+        onFound={(food) => {
+          setScanning(false)
+          selectSearchFood(food)
+        }}
+      />
+    )
+  }
+
   const trimmedQuery = query.trim()
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search foods…"
-          className="w-full bg-slate-800 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search foods…"
+            className="w-full bg-slate-800 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setScanning(true)}
+          aria-label="Scan barcode"
+          className="shrink-0 rounded-lg bg-slate-800 px-3 text-slate-300 active:bg-slate-700"
+        >
+          <ScanBarcode size={18} />
+        </button>
       </div>
 
       {!trimmedQuery && (
