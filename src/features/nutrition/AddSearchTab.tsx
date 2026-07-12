@@ -7,7 +7,7 @@ import FoodDetailPanel from './FoodDetailPanel'
 import SearchResultRow from './SearchResultRow'
 import { searchFoods } from '../../services/foodSearch/openFoodFacts'
 import type { SearchFood } from '../../services/foodSearch/openFoodFacts'
-import { searchCommonFoods } from '../../services/foodSearch/commonFoods'
+import { searchCommonFoods, loadCommonFoods, commonFoodsReady } from '../../services/foodSearch/commonFoods'
 import { useNutritionStore } from '../../store/nutrition'
 import type { CustomFood, Macros, MealType } from '../../types'
 
@@ -42,9 +42,21 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
   const [scanning, setScanning] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const [foodsReady, setFoodsReady] = useState(commonFoodsReady())
 
   useEffect(() => {
     inputRef.current?.focus()
+  }, [])
+
+  // Pull the common-foods database (dynamic chunk) as soon as search opens.
+  useEffect(() => {
+    let active = true
+    void loadCommonFoods().then(() => {
+      if (active) setFoodsReady(true)
+    })
+    return () => {
+      active = false
+    }
   }, [])
 
   useEffect(() => {
@@ -81,7 +93,7 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
 
   // Local, synchronous, always available — this is what surfaces "Egg, whole,
   // cooked" ahead of any packaged/branded OpenFoodFacts noise.
-  const commonResults = useMemo(() => searchCommonFoods(query), [query])
+  const commonResults = useMemo(() => searchCommonFoods(query), [query, foodsReady])
 
   function selectSearchFood(food: SearchFood) {
     setSelected({

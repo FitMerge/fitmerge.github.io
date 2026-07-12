@@ -2,10 +2,28 @@
 // ranked ahead of branded OpenFoodFacts results in the UI — this is what makes
 // searching "eggs" return eggs instead of French mayonnaise.
 
-import { COMMON_FOODS } from '../../data/commonFoods'
 import type { CommonFood, CommonFoodExtras, CommonFoodMacros } from '../../data/commonFoods'
 import type { Extras, SearchFood } from './openFoodFacts'
 import type { Macros } from '../../types'
+
+// The full ~1500-food database lives in a dynamically-imported chunk so it never
+// weighs on app startup; it's fetched the first time the search tab mounts.
+let cache: CommonFood[] | null = null
+let loading: Promise<void> | null = null
+
+export function commonFoodsReady(): boolean {
+  return cache !== null
+}
+
+export function loadCommonFoods(): Promise<void> {
+  if (cache) return Promise.resolve()
+  if (!loading) {
+    loading = import('../../data/foods').then((m) => {
+      cache = m.ALL_COMMON_FOODS
+    })
+  }
+  return loading
+}
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10
@@ -68,12 +86,13 @@ function toSearchFood(food: CommonFood): SearchFood {
   }
 }
 
-/** Searches the local common-foods database. Synchronous — no network involved. */
+/** Searches the local common-foods database. Synchronous — no network involved.
+ * Returns [] until loadCommonFoods() has resolved (the search tab triggers it on mount). */
 export function searchCommonFoods(query: string, limit = 12): SearchFood[] {
   const q = query.trim().toLowerCase()
-  if (!q) return []
+  if (!q || !cache) return []
 
-  const scored = COMMON_FOODS.map((food) => ({ food, score: matchScore(food, q) })).filter((entry) => entry.score > 0)
+  const scored = cache.map((food) => ({ food, score: matchScore(food, q) })).filter((entry) => entry.score > 0)
 
   scored.sort((a, b) => b.score - a.score)
 
