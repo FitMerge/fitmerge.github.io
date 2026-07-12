@@ -64,9 +64,12 @@ export default function FoodDetailPanel({
   const addEntry = useNutritionStore((s) => s.addEntry)
   const addCustomFood = useNutritionStore((s) => s.addCustomFood)
 
+  // Serving is listed first so it's the default: logging "1" should mean one
+  // natural serving (e.g. 1 large egg), not 1 gram. Grams stays as a secondary
+  // option for when someone wants to weigh a portion precisely.
   const unitOptions: { mode: UnitMode; label: string }[] = []
-  if (per100g) unitOptions.push({ mode: 'g', label: '100 g' })
   if (perServing) unitOptions.push({ mode: 'serving', label: 'serving' })
+  if (per100g) unitOptions.push({ mode: 'g', label: '100 g' })
 
   const [unit, setUnit] = useState<UnitMode>(unitOptions[0]?.mode ?? 'serving')
   const [qty, setQty] = useState(unit === 'g' ? 100 : 1)
