@@ -9,6 +9,7 @@ import Sheet from '../../components/Sheet'
 import MealSection from './MealSection'
 import AddFoodSheet from './AddFoodSheet'
 import AddManualTab from './AddManualTab'
+import SaveMealSheet from './SaveMealSheet'
 import { useNutritionStore, entriesForDate } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
 import { addDays, isoToLabel, todayISO } from '../../lib/date'
@@ -22,11 +23,20 @@ const MEALS: { type: MealType; label: string }[] = [
   { type: 'snack', label: 'Snack' },
 ]
 
+// Short "Mon DD" label for default saved-meal names, kept local to avoid
+// touching lib/date.ts (out of scope for this phase).
+function shortDateLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, (m ?? 1) - 1, d ?? 1)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 export default function Diary() {
   const [selectedDate, setSelectedDate] = useState(todayISO())
   const [addOpen, setAddOpen] = useState(false)
   const [addMealType, setAddMealType] = useState<MealType>('breakfast')
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null)
+  const [savingMealType, setSavingMealType] = useState<MealType | null>(null)
 
   const allEntries = useNutritionStore((s) => s.entries)
   const addEntry = useNutritionStore((s) => s.addEntry)
@@ -42,6 +52,12 @@ export default function Diary() {
     setAddMealType(mealType)
     setAddOpen(true)
   }
+
+  const savingMeal = MEALS.find((m) => m.type === savingMealType)
+  const savingEntries = useMemo(
+    () => (savingMealType ? dayEntries.filter((e) => e.mealType === savingMealType) : []),
+    [dayEntries, savingMealType],
+  )
 
   function copyYesterday() {
     for (const e of yesterdayEntries) {
@@ -125,6 +141,7 @@ export default function Diary() {
               entries={dayEntries.filter((e) => e.mealType === type)}
               onAdd={() => openAdd(type)}
               onSelectEntry={(entry) => setEditingEntry(entry)}
+              onSaveMeal={() => setSavingMealType(type)}
             />
           ))}
         </div>
@@ -142,6 +159,14 @@ export default function Diary() {
           <AddManualTab date={selectedDate} entry={editingEntry} onClose={() => setEditingEntry(null)} />
         )}
       </Sheet>
+
+      <SaveMealSheet
+        open={savingMealType !== null}
+        onClose={() => setSavingMealType(null)}
+        mealLabel={savingMeal?.label ?? ''}
+        dateLabel={shortDateLabel(selectedDate)}
+        entries={savingEntries}
+      />
     </div>
   )
 }

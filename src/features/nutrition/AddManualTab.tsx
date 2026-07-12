@@ -2,29 +2,31 @@ import { useState } from 'react'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
 import { useNutritionStore } from '../../store/nutrition'
-import type { FoodEntry, MealType } from '../../types'
+import type { FoodEntry, MealType, SavedMealItem } from '../../types'
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
 
 type AddManualTabProps = {
   date: string
   entry?: FoodEntry
+  /** Prefill values for a fresh (non-edit) entry, e.g. from Quick re-log. Save still adds a new entry. */
+  initial?: SavedMealItem
   defaultMealType?: MealType
   onClose: () => void
 }
 
-export default function AddManualTab({ date, entry, defaultMealType, onClose }: AddManualTabProps) {
+export default function AddManualTab({ date, entry, initial, defaultMealType, onClose }: AddManualTabProps) {
   const addEntry = useNutritionStore((s) => s.addEntry)
   const updateEntry = useNutritionStore((s) => s.updateEntry)
   const removeEntry = useNutritionStore((s) => s.removeEntry)
 
-  const [name, setName] = useState(entry?.name ?? '')
-  const [qty, setQty] = useState(entry?.qty ?? 1)
-  const [unit, setUnit] = useState(entry?.unit ?? 'serving')
-  const [calories, setCalories] = useState(entry?.calories ?? 0)
-  const [protein, setProtein] = useState(entry?.protein ?? 0)
-  const [carbs, setCarbs] = useState(entry?.carbs ?? 0)
-  const [fat, setFat] = useState(entry?.fat ?? 0)
+  const [name, setName] = useState(entry?.name ?? initial?.name ?? '')
+  const [qty, setQty] = useState(entry?.qty ?? initial?.qty ?? 1)
+  const [unit, setUnit] = useState(entry?.unit ?? initial?.unit ?? 'serving')
+  const [calories, setCalories] = useState(entry?.calories ?? initial?.calories ?? 0)
+  const [protein, setProtein] = useState(entry?.protein ?? initial?.protein ?? 0)
+  const [carbs, setCarbs] = useState(entry?.carbs ?? initial?.carbs ?? 0)
+  const [fat, setFat] = useState(entry?.fat ?? initial?.fat ?? 0)
   const [mealType, setMealType] = useState<MealType>(entry?.mealType ?? defaultMealType ?? 'breakfast')
 
   const canSave = name.trim().length > 0 && calories >= 0

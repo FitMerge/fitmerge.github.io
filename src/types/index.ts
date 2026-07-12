@@ -94,3 +94,15 @@ export type Profile = {
   activity: Activity
   goalType?: 'lose' | 'maintain' | 'gain'
 }
+
+export type SavedMealItem = {
+  name: string
+  qty: number
+  unit: string
+} & Macros
+
+export type SavedMeal = {
+  id: string
+  name: string
+  items: SavedMealItem[]
+}

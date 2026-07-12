@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { BookmarkPlus, Plus } from 'lucide-react'
 import Card from '../../components/Card'
 import FoodEntryRow from './FoodEntryRow'
 import { sumMacros } from '../../lib/macros'
@@ -9,9 +9,10 @@ type MealSectionProps = {
   entries: FoodEntry[]
   onAdd: () => void
   onSelectEntry: (entry: FoodEntry) => void
+  onSaveMeal: () => void
 }
 
-export default function MealSection({ label, entries, onAdd, onSelectEntry }: MealSectionProps) {
+export default function MealSection({ label, entries, onAdd, onSelectEntry, onSaveMeal }: MealSectionProps) {
   const totals = sumMacros(entries)
 
   return (
@@ -21,14 +22,26 @@ export default function MealSection({ label, entries, onAdd, onSelectEntry }: Me
           <h3 className="text-sm font-semibold text-slate-100">{label}</h3>
           <p className="text-xs text-slate-500">{Math.round(totals.calories)} kcal</p>
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          aria-label={`Add food to ${label}`}
-          className="w-8 h-8 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-primary-400"
-        >
-          <Plus size={16} />
-        </button>
+        <div className="flex items-center gap-2">
+          {entries.length > 0 && (
+            <button
+              type="button"
+              onClick={onSaveMeal}
+              aria-label={`Save ${label} as meal`}
+              className="w-8 h-8 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-300"
+            >
+              <BookmarkPlus size={16} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onAdd}
+            aria-label={`Add food to ${label}`}
+            className="w-8 h-8 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-primary-400"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
       </div>
 
       {entries.length === 0 ? (
