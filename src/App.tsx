@@ -1,10 +1,14 @@
+import { lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import AppShell from './components/AppShell'
-import Dashboard from './features/dashboard/Dashboard'
-import Diary from './features/nutrition/Diary'
-import Workouts from './features/workouts/Workouts'
-import Progress from './features/progress/Progress'
-import Settings from './features/settings/Settings'
+
+// Route-level code splitting: heavy dependencies (Recharts on Progress and the
+// workout progression sheet) load on demand instead of bloating first paint.
+const Dashboard = lazy(() => import('./features/dashboard/Dashboard'))
+const Diary = lazy(() => import('./features/nutrition/Diary'))
+const Workouts = lazy(() => import('./features/workouts/Workouts'))
+const Progress = lazy(() => import('./features/progress/Progress'))
+const Settings = lazy(() => import('./features/settings/Settings'))
 import OnboardingWizard from './features/onboarding/OnboardingWizard'
 import { useSettingsStore } from './store/settings'
 

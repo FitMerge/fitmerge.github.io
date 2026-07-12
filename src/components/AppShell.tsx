@@ -1,5 +1,6 @@
+import { Suspense } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Home, UtensilsCrossed, Dumbbell, TrendingUp, Settings } from 'lucide-react'
+import { Home, UtensilsCrossed, Dumbbell, TrendingUp, Settings, Loader2 } from 'lucide-react'
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -14,7 +15,15 @@ export default function AppShell() {
     <div className="h-dvh flex flex-col">
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto w-full">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-20">
+                <Loader2 size={28} className="animate-spin text-emerald-400" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </div>
       </main>
       <nav className="border-t border-slate-800 bg-slate-950/90 backdrop-blur safe-bottom">
