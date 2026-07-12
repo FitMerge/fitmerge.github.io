@@ -199,6 +199,7 @@ export default function BarcodeScanSheet({ onBack, onFound }: BarcodeScanSheetPr
           inputMode="numeric"
           value={manualCode}
           onChange={(e) => setManualCode(e.target.value.replace(/\D/g, ''))}
+          onFocus={(e) => e.currentTarget.select()}
           placeholder="Or type barcode digits"
           className="min-w-0 flex-1 bg-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
         />

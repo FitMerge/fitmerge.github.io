@@ -1,6 +1,9 @@
 import { addDays, lastNDays, todayISO } from '../../lib/date'
 import { totalSetsDone, totalVolume } from '../workouts/utils'
+import { convertWeight } from '../../lib/units'
 import type { BodyEntry, Units, WorkoutSession } from '../../types'
+
+export { kgToLb, lbToKg, convertWeight, weightUnit } from '../../lib/units'
 
 export type RangeKey = '7d' | '30d' | '90d'
 
@@ -20,24 +23,6 @@ export function rangeStartDate(range: RangeKey): string {
 
 export function inRange(date: string, range: RangeKey): boolean {
   return date >= rangeStartDate(range) && date <= todayISO()
-}
-
-const KG_PER_LB = 0.45359237
-
-export function kgToLb(kg: number): number {
-  return kg / KG_PER_LB
-}
-
-export function lbToKg(lb: number): number {
-  return lb * KG_PER_LB
-}
-
-export function convertWeight(kg: number, units: Units): number {
-  return units === 'imperial' ? kgToLb(kg) : kg
-}
-
-export function weightUnit(units: Units): string {
-  return units === 'imperial' ? 'lb' : 'kg'
 }
 
 /** Epley formula: estimated 1-rep max from a weight × reps set. */

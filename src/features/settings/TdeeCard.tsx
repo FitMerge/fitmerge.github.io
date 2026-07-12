@@ -4,6 +4,7 @@ import { useBodyStore } from '../../store/body'
 import { useSettingsStore } from '../../store/settings'
 import { bmr, suggestGoals, tdee } from '../../lib/tdee'
 import { lastNEntries } from '../progress/utils'
+import { convertWeight, weightUnit } from '../../lib/units'
 import type { Goals, Profile } from '../../types'
 
 type GoalType = NonNullable<Profile['goalType']>
@@ -23,6 +24,7 @@ type TdeeCardProps = {
 export default function TdeeCard({ onApply }: TdeeCardProps) {
   const profile = useSettingsStore((s) => s.profile)
   const setProfile = useSettingsStore((s) => s.setProfile)
+  const units = useSettingsStore((s) => s.units)
   const bodyEntries = useBodyStore((s) => s.entries)
 
   const [goalType, setGoalType] = useState<GoalType>(profile.goalType ?? 'maintain')
@@ -44,7 +46,10 @@ export default function TdeeCard({ onApply }: TdeeCardProps) {
       <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide">TDEE calculator</h3>
 
       {!latestEntry && (
-        <p className="text-xs text-amber-400">using default 75 kg — log a weigh-in for a more accurate estimate</p>
+        <p className="text-xs text-amber-400">
+          using default {convertWeight(DEFAULT_WEIGHT_KG, units).toFixed(0)} {weightUnit(units)} — log a weigh-in for
+          a more accurate estimate
+        </p>
       )}
 
       <div className="grid grid-cols-2 gap-3">

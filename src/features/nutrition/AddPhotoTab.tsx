@@ -311,6 +311,7 @@ function MiniMacroInput({ label, value, onChange }: MiniMacroInputProps) {
         min={0}
         value={value}
         onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
+        onFocus={(e) => e.currentTarget.select()}
         className="w-full bg-slate-800 rounded-lg px-2 py-2 text-sm text-center text-slate-100 outline-none focus:ring-2 focus:ring-primary-500 min-h-[40px]"
       />
     </div>

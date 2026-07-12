@@ -2,6 +2,7 @@ import { GlassWater } from 'lucide-react'
 import Card from '../../components/Card'
 import { useNutritionStore } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
+import { mlToFloz } from '../../lib/units'
 
 const CUPS = 8
 const CUP_ML = 250
@@ -14,8 +15,13 @@ export default function WaterCard({ date }: WaterCardProps) {
   const water = useNutritionStore((s) => s.water[date] ?? 0)
   const addWater = useNutritionStore((s) => s.addWater)
   const waterGoalMl = useSettingsStore((s) => s.waterGoalMl)
+  const units = useSettingsStore((s) => s.units)
 
   const filledCups = Math.min(CUPS, Math.round(water / CUP_ML))
+  const waterLabel =
+    units === 'imperial'
+      ? `${Math.round(mlToFloz(water))} / ${Math.round(mlToFloz(waterGoalMl))} oz`
+      : `${water} / ${waterGoalMl} ml`
 
   function handleTap(cupIndex: number) {
     // Tapping the highest filled cup removes it; otherwise fill up to that cup.
@@ -27,9 +33,7 @@ export default function WaterCard({ date }: WaterCardProps) {
     <Card className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-100">Water</h2>
-        <p className="text-sm text-slate-400">
-          {water} / {waterGoalMl} ml
-        </p>
+        <p className="text-sm text-slate-400">{waterLabel}</p>
       </div>
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: CUPS }, (_, i) => i + 1).map((cupIndex) => (

@@ -11,6 +11,7 @@ import { useBodyStore } from '../../store/body'
 import { useWorkoutsStore } from '../../store/workouts'
 import { addDays, isoToLabel, todayISO, weekdayIndex } from '../../lib/date'
 import { macroPct, sumMacros } from '../../lib/macros'
+import { convertWeight, mlToFloz, weightUnit } from '../../lib/units'
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const entries = useNutritionStore((s) => s.entries)
   const goals = useSettingsStore((s) => s.goals)
+  const units = useSettingsStore((s) => s.units)
   const bodyEntries = useBodyStore((s) => s.entries)
   const routines = useWorkoutsStore((s) => s.routines)
   const activeSessionId = useWorkoutsStore((s) => s.activeSessionId)
@@ -97,7 +99,9 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-1.5 text-sky-400 shrink-0">
           <GlassWater size={16} />
-          <span className="text-sm font-medium">{(todayWaterMl / 1000).toFixed(1)} L</span>
+          <span className="text-sm font-medium">
+            {units === 'imperial' ? `${Math.round(mlToFloz(todayWaterMl))} oz` : `${(todayWaterMl / 1000).toFixed(1)} L`}
+          </span>
         </div>
       </Card>
 
@@ -145,7 +149,8 @@ export default function Dashboard() {
         <h2 className="text-sm font-semibold text-slate-100 mb-1">Weight</h2>
         {latestWeight ? (
           <p className="text-sm text-slate-200">
-            {latestWeight.weightKg} kg <span className="text-slate-500">· {isoToLabel(latestWeight.date)}</span>
+            {convertWeight(latestWeight.weightKg, units).toFixed(1)} {weightUnit(units)}{' '}
+            <span className="text-slate-500">· {isoToLabel(latestWeight.date)}</span>
           </p>
         ) : (
           <p className="text-xs text-slate-500">No weight logged yet</p>

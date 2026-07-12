@@ -37,6 +37,7 @@ export default function NumberField({
             min={min}
             step={step}
             onChange={(e) => onChange(clamp(Number(e.target.value)))}
+            onFocus={(e) => e.currentTarget.select()}
             className={`bg-slate-800 rounded-lg text-center w-full py-2 ${suffix ? 'pl-2 pr-9' : ''}`}
           />
           {suffix && (

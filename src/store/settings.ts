@@ -21,7 +21,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       goals: { calories: 2200, protein: 150, carbs: 220, fat: 70 },
-      units: 'metric',
+      units: 'imperial',
       profile: { sex: 'male', activity: 'moderate' },
       geminiApiKey: '',
       waterGoalMl: 2000,

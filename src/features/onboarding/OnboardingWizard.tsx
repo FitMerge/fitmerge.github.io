@@ -7,6 +7,7 @@ import { useSettingsStore } from '../../store/settings'
 import { useBodyStore } from '../../store/body'
 import { bmr, suggestGoals, tdee } from '../../lib/tdee'
 import { todayISO } from '../../lib/date'
+import { cmToInch, inchToCm, kgToLb, lbToKg, weightUnit } from '../../lib/units'
 import type { Activity, Sex } from '../../types'
 
 const SEX_OPTIONS: Sex[] = ['male', 'female']
@@ -34,6 +35,7 @@ export default function OnboardingWizard() {
   const setProfile = useSettingsStore((s) => s.setProfile)
   const setGoals = useSettingsStore((s) => s.setGoals)
   const setOnboarded = useSettingsStore((s) => s.setOnboarded)
+  const units = useSettingsStore((s) => s.units)
   const upsertEntry = useBodyStore((s) => s.upsertEntry)
 
   const [step, setStep] = useState(1)
@@ -170,10 +172,22 @@ export default function OnboardingWizard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <NumberField label="Age" value={age} onChange={setAge} step={1} min={0} />
-                <NumberField label="Height (cm)" value={heightCm} onChange={setHeightCm} step={1} min={0} />
+                <NumberField
+                  label={units === 'imperial' ? 'Height (in)' : 'Height (cm)'}
+                  value={units === 'imperial' ? Math.round(cmToInch(heightCm)) : heightCm}
+                  onChange={(v) => setHeightCm(units === 'imperial' ? inchToCm(v) : v)}
+                  step={1}
+                  min={0}
+                />
               </div>
 
-              <NumberField label="Weight (kg)" value={weightKg} onChange={setWeightKg} step={0.5} min={0} />
+              <NumberField
+                label={`Weight (${weightUnit(units)})`}
+                value={units === 'imperial' ? Math.round(kgToLb(weightKg) * 10) / 10 : weightKg}
+                onChange={(v) => setWeightKg(units === 'imperial' ? lbToKg(v) : v)}
+                step={0.5}
+                min={0}
+              />
 
               <div className="flex-1" />
               <Button variant="primary" full disabled={!(weightKg > 0)} onClick={() => setStep(3)}>
