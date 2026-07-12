@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
 import { useNutritionStore } from '../../store/nutrition'
@@ -29,10 +30,20 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
   const [fat, setFat] = useState(entry?.fat ?? initial?.fat ?? 0)
   const [mealType, setMealType] = useState<MealType>(entry?.mealType ?? defaultMealType ?? 'breakfast')
 
+  const [fiber, setFiber] = useState(entry?.fiber ?? 0)
+  const [sugar, setSugar] = useState(entry?.sugar ?? 0)
+  const [sodium, setSodium] = useState(entry?.sodium ?? 0)
+  const [showMore, setShowMore] = useState(
+    Boolean(entry?.fiber || entry?.sugar || entry?.sodium),
+  )
+
   const canSave = name.trim().length > 0 && calories >= 0
 
   function handleSave() {
     if (!canSave) return
+    const fiberValue = fiber > 0 ? fiber : undefined
+    const sugarValue = sugar > 0 ? sugar : undefined
+    const sodiumValue = sodium > 0 ? sodium : undefined
     if (entry) {
       updateEntry(entry.id, {
         name: name.trim(),
@@ -43,6 +54,9 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
         carbs,
         fat,
         mealType,
+        fiber: fiberValue,
+        sugar: sugarValue,
+        sodium: sodiumValue,
       })
     } else {
       addEntry({
@@ -55,6 +69,9 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
         protein,
         carbs,
         fat,
+        fiber: fiberValue,
+        sugar: sugarValue,
+        sodium: sodiumValue,
         source: 'manual',
       })
     }
@@ -98,6 +115,24 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
         <NumberField label="Protein" value={protein} onChange={setProtein} step={1} min={0} suffix="g" />
         <NumberField label="Carbs" value={carbs} onChange={setCarbs} step={1} min={0} suffix="g" />
         <NumberField label="Fat" value={fat} onChange={setFat} step={1} min={0} suffix="g" />
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowMore((v) => !v)}
+          className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
+        >
+          More nutrients
+          {showMore ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {showMore && (
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            <NumberField label="Fiber" value={fiber} onChange={setFiber} step={1} min={0} suffix="g" />
+            <NumberField label="Sugar" value={sugar} onChange={setSugar} step={1} min={0} suffix="g" />
+            <NumberField label="Sodium" value={sodium} onChange={setSodium} step={50} min={0} suffix="mg" />
+          </div>
+        )}
       </div>
 
       <div>

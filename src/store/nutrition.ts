@@ -7,12 +7,15 @@ type NutritionState = {
   entries: FoodEntry[]
   customFoods: CustomFood[]
   savedMeals: SavedMeal[]
+  /** dateISO -> total water logged that day, in ml. */
+  water: Record<string, number>
   addEntry: (entry: Omit<FoodEntry, 'id'>) => void
   updateEntry: (id: string, patch: Partial<FoodEntry>) => void
   removeEntry: (id: string) => void
   addCustomFood: (food: Omit<CustomFood, 'id'>) => void
   addSavedMeal: (meal: Omit<SavedMeal, 'id'>) => void
   removeSavedMeal: (id: string) => void
+  addWater: (date: string, deltaMl: number) => void
 }
 
 export const useNutritionStore = create<NutritionState>()(
@@ -21,6 +24,7 @@ export const useNutritionStore = create<NutritionState>()(
       entries: [],
       customFoods: [],
       savedMeals: [],
+      water: {},
       addEntry: (entry) => {
         set({ entries: [...get().entries, { ...entry, id: uid() }] })
       },
@@ -40,6 +44,17 @@ export const useNutritionStore = create<NutritionState>()(
       },
       removeSavedMeal: (id) => {
         set({ savedMeals: get().savedMeals.filter((m) => m.id !== id) })
+      },
+      addWater: (date, deltaMl) => {
+        const current = get().water[date] ?? 0
+        const next = Math.max(0, current + deltaMl)
+        const water = { ...get().water }
+        if (next === 0) {
+          delete water[date]
+        } else {
+          water[date] = next
+        }
+        set({ water })
       },
     }),
     { name: 'fm-nutrition' },

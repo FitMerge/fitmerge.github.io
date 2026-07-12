@@ -19,6 +19,12 @@ export type FoodEntry = {
   unit: string
   photoThumbId?: string
   source?: 'manual' | 'photo' | 'search'
+  /** Grams. */
+  fiber?: number
+  /** Grams. */
+  sugar?: number
+  /** Milligrams. */
+  sodium?: number
 } & Macros
 
 export type CustomFood = {

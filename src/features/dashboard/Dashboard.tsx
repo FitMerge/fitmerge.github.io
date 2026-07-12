@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Flame } from 'lucide-react'
+import { Flame, GlassWater } from 'lucide-react'
 import Card from '../../components/Card'
 import RingChart from '../../components/RingChart'
 import MacroBar from '../../components/MacroBar'
@@ -25,6 +25,7 @@ export default function Dashboard() {
   const bodyEntries = useBodyStore((s) => s.entries)
 
   const today = todayISO()
+  const todayWaterMl = useNutritionStore((s) => s.water[today] ?? 0)
   const todayEntries = useMemo(() => entriesForDate(entries, today), [entries, today])
   const totals = useMemo(() => sumMacros(todayEntries), [todayEntries])
   const remaining = Math.max(0, goals.calories - totals.calories)
@@ -77,13 +78,19 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      <Card className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-400">
-          <Flame size={20} />
+      <Card className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-400">
+            <Flame size={20} />
+          </div>
+          <p className="text-sm text-slate-200">
+            {streak > 0 ? `${streak}-day logging streak` : 'Start your streak today'}
+          </p>
         </div>
-        <p className="text-sm text-slate-200">
-          {streak > 0 ? `${streak}-day logging streak` : 'Start your streak today'}
-        </p>
+        <div className="flex items-center gap-1.5 text-sky-400 shrink-0">
+          <GlassWater size={16} />
+          <span className="text-sm font-medium">{(todayWaterMl / 1000).toFixed(1)} L</span>
+        </div>
       </Card>
 
       <Card>

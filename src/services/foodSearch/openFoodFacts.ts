@@ -3,6 +3,12 @@
 import type { Macros } from '../../types'
 import { uid } from '../../lib/id'
 
+export type Extras = {
+  fiber?: number
+  sugar?: number
+  sodiumMg?: number
+}
+
 export type SearchFood = {
   id: string
   name: string
@@ -10,6 +16,8 @@ export type SearchFood = {
   servingText: string
   per100g: Macros
   perServing?: Macros
+  extras100g?: Extras
+  extrasServing?: Extras
 }
 
 const SEARCH_ENDPOINT = 'https://world.openfoodfacts.org/cgi/search.pl'
@@ -22,6 +30,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function coerceNumber(value: unknown, fallback = 0): number {
   const n = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(n) ? n : fallback
+}
+
+function coerceOptionalNumber(value: unknown): number | undefined {
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : undefined
+}
+
+/** Builds the fiber/sugar/sodium extras for a given OFF nutriments suffix ('100g' | 'serving'). */
+function buildExtras(nutriments: Record<string, unknown>, suffix: '100g' | 'serving'): Extras | undefined {
+  const fiber = coerceOptionalNumber(nutriments[`fiber_${suffix}`])
+  const sugar = coerceOptionalNumber(nutriments[`sugars_${suffix}`])
+  const sodiumG = coerceOptionalNumber(nutriments[`sodium_${suffix}`])
+  const sodiumMg = sodiumG !== undefined ? sodiumG * 1000 : undefined
+
+  if (fiber === undefined && sugar === undefined && sodiumMg === undefined) return undefined
+
+  const extras: Extras = {}
+  if (fiber !== undefined) extras.fiber = fiber
+  if (sugar !== undefined) extras.sugar = sugar
+  if (sodiumMg !== undefined) extras.sodiumMg = sodiumMg
+  return extras
 }
 
 function buildUrl(query: string): string {
@@ -55,7 +84,10 @@ export function parseProduct(raw: unknown): SearchFood | undefined {
     fat: coerceNumber(nutriments['fat_100g']),
   }
 
+  const extras100g = buildExtras(nutriments, '100g')
+
   let perServing: Macros | undefined
+  let extrasServing: Extras | undefined
   const caloriesServing = coerceNumber(nutriments['energy-kcal_serving'], NaN)
   if (Number.isFinite(caloriesServing)) {
     perServing = {
@@ -64,6 +96,7 @@ export function parseProduct(raw: unknown): SearchFood | undefined {
       carbs: coerceNumber(nutriments['carbohydrates_serving']),
       fat: coerceNumber(nutriments['fat_serving']),
     }
+    extrasServing = buildExtras(nutriments, 'serving')
   }
 
   const brandsRaw = typeof raw.brands === 'string' ? raw.brands.trim() : ''
@@ -81,6 +114,8 @@ export function parseProduct(raw: unknown): SearchFood | undefined {
     servingText,
     per100g,
     perServing,
+    extras100g,
+    extrasServing,
   }
 }
 

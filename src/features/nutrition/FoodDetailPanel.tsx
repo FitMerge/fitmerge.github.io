@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
 import { useNutritionStore } from '../../store/nutrition'
+import type { Extras } from '../../services/foodSearch/openFoodFacts'
 import type { Macros, MealType } from '../../types'
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -15,6 +16,8 @@ type FoodDetailPanelProps = {
   servingText: string
   per100g?: Macros
   perServing?: Macros
+  extras100g?: Extras
+  extrasServing?: Extras
   date: string
   defaultMealType?: MealType
   allowSaveToMyFoods: boolean
@@ -35,12 +38,23 @@ function scale(basis: Macros, factor: number): Macros {
   }
 }
 
+function scaleExtras(basis: Extras | undefined, factor: number): Extras | undefined {
+  if (!basis) return undefined
+  const extras: Extras = {}
+  if (basis.fiber !== undefined) extras.fiber = basis.fiber * factor
+  if (basis.sugar !== undefined) extras.sugar = basis.sugar * factor
+  if (basis.sodiumMg !== undefined) extras.sodiumMg = basis.sodiumMg * factor
+  return extras
+}
+
 export default function FoodDetailPanel({
   name,
   brand,
   servingText,
   per100g,
   perServing,
+  extras100g,
+  extrasServing,
   date,
   defaultMealType,
   allowSaveToMyFoods,
@@ -70,7 +84,17 @@ export default function FoodDetailPanel({
     return { calories: 0, protein: 0, carbs: 0, fat: 0 }
   }, [unit, qty, per100g, perServing])
 
+  const extras = useMemo<Extras | undefined>(() => {
+    if (unit === 'g') return scaleExtras(extras100g, qty / 100)
+    if (unit === 'serving') return scaleExtras(extrasServing, qty)
+    return undefined
+  }, [unit, qty, extras100g, extrasServing])
+
   function handleAdd() {
+    const fiber = extras?.fiber !== undefined && extras.fiber > 0 ? round1(extras.fiber) : undefined
+    const sugar = extras?.sugar !== undefined && extras.sugar > 0 ? round1(extras.sugar) : undefined
+    const sodium = extras?.sodiumMg !== undefined && extras.sodiumMg > 0 ? Math.round(extras.sodiumMg) : undefined
+
     addEntry({
       date,
       mealType,
@@ -81,6 +105,9 @@ export default function FoodDetailPanel({
       protein: round1(macros.protein),
       carbs: round1(macros.carbs),
       fat: round1(macros.fat),
+      fiber,
+      sugar,
+      sodium,
       source: 'search',
     })
     onClose()

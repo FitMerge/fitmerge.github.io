@@ -18,6 +18,8 @@ type SelectedFood = {
   servingText: string
   per100g?: Macros
   perServing?: Macros
+  extras100g?: SearchFood['extras100g']
+  extrasServing?: SearchFood['extrasServing']
   isCustom: boolean
 }
 
@@ -83,6 +85,8 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
       servingText: food.servingText,
       per100g: food.per100g,
       perServing: food.perServing,
+      extras100g: food.extras100g,
+      extrasServing: food.extrasServing,
       isCustom: false,
     })
   }
@@ -106,6 +110,8 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
         servingText={selected.servingText}
         per100g={selected.per100g}
         perServing={selected.perServing}
+        extras100g={selected.extras100g}
+        extrasServing={selected.extrasServing}
         date={date}
         defaultMealType={defaultMealType}
         allowSaveToMyFoods={!selected.isCustom}

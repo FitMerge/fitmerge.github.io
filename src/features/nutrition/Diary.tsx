@@ -10,6 +10,7 @@ import MealSection from './MealSection'
 import AddFoodSheet from './AddFoodSheet'
 import AddManualTab from './AddManualTab'
 import SaveMealSheet from './SaveMealSheet'
+import WaterCard from './WaterCard'
 import { useNutritionStore, entriesForDate } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
 import { addDays, isoToLabel, todayISO } from '../../lib/date'
@@ -47,6 +48,16 @@ export default function Diary() {
   const yesterdayEntries = useMemo(() => entriesForDate(allEntries, yesterdayISO), [allEntries, yesterdayISO])
 
   const totals = useMemo(() => sumMacros(dayEntries), [dayEntries])
+  const extrasSummary = useMemo(() => {
+    const fiber = dayEntries.reduce((sum, e) => sum + (e.fiber ?? 0), 0)
+    const sugar = dayEntries.reduce((sum, e) => sum + (e.sugar ?? 0), 0)
+    const sodium = dayEntries.reduce((sum, e) => sum + (e.sodium ?? 0), 0)
+    const parts: string[] = []
+    if (fiber > 0) parts.push(`Fiber ${Math.round(fiber)} g`)
+    if (sugar > 0) parts.push(`Sugar ${Math.round(sugar)} g`)
+    if (sodium > 0) parts.push(`Sodium ${Math.round(sodium)} mg`)
+    return parts.join(' · ')
+  }, [dayEntries])
 
   function openAdd(mealType: MealType) {
     setAddMealType(mealType)
@@ -112,7 +123,10 @@ export default function Diary() {
           <MacroBar label="Carbs" value={totals.carbs} goal={goals.carbs} color="bg-sky-400" />
           <MacroBar label="Fat" value={totals.fat} goal={goals.fat} color="bg-amber-400" />
         </div>
+        {extrasSummary && <p className="text-xs text-slate-500">{extrasSummary}</p>}
       </Card>
+
+      <WaterCard date={selectedDate} />
 
       {dayEntries.length === 0 ? (
         <EmptyState
