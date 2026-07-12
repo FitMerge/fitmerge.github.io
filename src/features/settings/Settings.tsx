@@ -3,6 +3,7 @@ import ProfileSection from './ProfileSection'
 import UnitsSection from './UnitsSection'
 import GoalsSection from './GoalsSection'
 import AiSection from './AiSection'
+import FoodSearchSection from './FoodSearchSection'
 import DataSection from './DataSection'
 import HealthConnectSection from './HealthConnectSection'
 import AboutSection from './AboutSection'
@@ -20,6 +21,7 @@ export default function Settings() {
       <UnitsSection />
       <GoalsSection />
       <AiSection />
+      <FoodSearchSection />
       <DataSection />
       <HealthConnectSection />
       <AboutSection />

@@ -8,7 +8,9 @@ import SearchResultRow from './SearchResultRow'
 import { searchFoods } from '../../services/foodSearch/openFoodFacts'
 import type { SearchFood } from '../../services/foodSearch/openFoodFacts'
 import { searchCommonFoods, loadCommonFoods, commonFoodsReady } from '../../services/foodSearch/commonFoods'
+import { searchUsdaFoods, UsdaRateLimitError } from '../../services/foodSearch/usda'
 import { useNutritionStore } from '../../store/nutrition'
+import { useSettingsStore } from '../../store/settings'
 import type { CustomFood, Macros, MealType } from '../../types'
 
 const DEBOUNCE_MS = 400
@@ -32,9 +34,12 @@ type AddSearchTabProps = {
 
 export default function AddSearchTab({ date, defaultMealType, onClose }: AddSearchTabProps) {
   const customFoods = useNutritionStore((s) => s.customFoods)
+  const usdaApiKey = useSettingsStore((s) => s.usdaApiKey)
 
   const [query, setQuery] = useState('')
   const [brandedResults, setBrandedResults] = useState<SearchFood[]>([])
+  const [usdaResults, setUsdaResults] = useState<SearchFood[]>([])
+  const [usdaRateLimited, setUsdaRateLimited] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [retryCount, setRetryCount] = useState(0)
@@ -63,6 +68,8 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
     const trimmed = query.trim()
     if (!trimmed) {
       setBrandedResults([])
+      setUsdaResults([])
+      setUsdaRateLimited(false)
       setError('')
       setLoading(false)
       return
@@ -73,6 +80,19 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
     setError('')
 
     const timer = setTimeout(() => {
+      // Generic (USDA) and branded (OpenFoodFacts) run in parallel; the local
+      // common-foods list already rendered synchronously above both.
+      searchUsdaFoods(trimmed, controller.signal, usdaApiKey)
+        .then((foods) => {
+          setUsdaResults(foods)
+          setUsdaRateLimited(false)
+        })
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === 'AbortError') return
+          setUsdaResults([])
+          setUsdaRateLimited(err instanceof UsdaRateLimitError)
+        })
+
       searchFoods(trimmed, controller.signal)
         .then((foods) => {
           setBrandedResults(foods)
@@ -89,7 +109,7 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
       clearTimeout(timer)
       controller.abort()
     }
-  }, [query, retryCount])
+  }, [query, retryCount, usdaApiKey])
 
   // Local, synchronous, always available — this is what surfaces "Egg, whole,
   // cooked" ahead of any packaged/branded OpenFoodFacts noise.
@@ -216,6 +236,30 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
         </div>
       )}
 
+      {trimmedQuery && usdaResults.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-300">Generic foods (USDA)</h3>
+          <div className="space-y-2">
+            {usdaResults.map((food) => (
+              <SearchResultRow
+                key={food.id}
+                name={food.name}
+                subtitle={food.servingText}
+                calorieLabel={`${Math.round((food.perServing ?? food.per100g).calories)} kcal`}
+                onClick={() => selectSearchFood(food)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {trimmedQuery && usdaRateLimited && usdaResults.length === 0 && (
+        <p className="text-xs text-slate-500">
+          USDA search is temporarily rate-limited. Add a free USDA key in Settings for unlimited
+          generic-food search.
+        </p>
+      )}
+
       {trimmedQuery && (loading || error || brandedResults.length > 0 || commonResults.length > 0) && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-300">Branded (OpenFoodFacts)</h3>
@@ -274,9 +318,14 @@ export default function AddSearchTab({ date, defaultMealType, onClose }: AddSear
         </div>
       )}
 
-      {trimmedQuery && !loading && !error && commonResults.length === 0 && brandedResults.length === 0 && (
-        <EmptyState icon={Search} title="No foods found" subtitle={`No results for "${trimmedQuery}"`} />
-      )}
+      {trimmedQuery &&
+        !loading &&
+        !error &&
+        commonResults.length === 0 &&
+        usdaResults.length === 0 &&
+        brandedResults.length === 0 && (
+          <EmptyState icon={Search} title="No foods found" subtitle={`No results for "${trimmedQuery}"`} />
+        )}
     </div>
   )
 }
