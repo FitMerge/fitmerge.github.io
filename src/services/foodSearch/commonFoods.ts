@@ -94,21 +94,87 @@ function toSearchFood(food: CommonFood): SearchFood {
   }
 }
 
-/** Searches the local common-foods database. Synchronous — no network involved.
- * Returns [] until loadCommonFoods() has resolved (the search tab triggers it on mount). */
+// Filler words that shouldn't drive matching in a natural-language query like
+// "a bowl of oatmeal with berries".
+const STOPWORDS = new Set(['a', 'an', 'and', 'the', 'of', 'with', 'in', 'on', 'or', 'for', 'my', 'some'])
+
+/** Light singularization so "potatoes" matches "potato" and "berries" → "berrie". */
+function stem(word: string): string {
+  if (word.length > 4 && word.endsWith('es')) return word.slice(0, -2)
+  if (word.length > 3 && word.endsWith('s')) return word.slice(0, -1)
+  return word
+}
+
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t))
+}
+
+/** Stemmed words of a food's name + aliases — what query tokens are matched against. */
+function foodWordStems(food: CommonFood): Set<string> {
+  const text = `${food.name} ${(food.aliases ?? []).join(' ')}`
+  return new Set(tokenize(text).map(stem))
+}
+
+/** True if query token `t` matches one of the food's words. Uses stem equality
+ * (handles plurals) plus a guarded prefix so "chick" still finds "chicken". */
+function tokenMatches(t: string, stems: Set<string>): boolean {
+  const st = stem(t)
+  if (stems.has(st)) return true
+  if (st.length >= 4) {
+    for (const w of stems) {
+      if (w.startsWith(st) || st.startsWith(w)) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Searches the local common-foods database. Synchronous — no network involved.
+ * MyFitnessPal-style: a whole-phrase match (matchScore) ranks highest, but a
+ * multi-word natural query also matches on its individual words, so "air fried
+ * cubed potatoes" still surfaces every potato food. Returns [] until
+ * loadCommonFoods() has resolved (the search tab triggers it on mount).
+ */
 export function searchCommonFoods(query: string, limit = 12): SearchFood[] {
   const q = query.trim().toLowerCase()
   if (!q || !cache) return []
 
-  const scored = cache
-    .map((food, index) => ({ food, index, score: matchScore(food, q) }))
-    .filter((entry) => entry.score > 0)
+  const tokens = tokenize(q)
+  if (tokens.length === 0) return []
 
-  // Within a match tier, break ties by original library position. The database is
-  // ordered by canonicalness — hand-verified core foods first, single ingredients
-  // next, composite/prepared dishes last — so plain "Salmon, cooked" leads over
-  // "Salmon jerky", and "Greek yogurt, plain" over "Greek yogurt parfait".
-  scored.sort((a, b) => b.score - a.score || a.index - b.index)
+  const scored: { food: CommonFood; index: number; tier: number; matched: number; weight: number }[] = []
+  for (let index = 0; index < cache.length; index++) {
+    const food = cache[index]
+    const tier = matchScore(food, q) // whole-phrase relevance, 0..6
+    const stems = foodWordStems(food)
+
+    let matched = 0
+    let weight = 0
+    let bestLen = 0
+    for (const t of tokens) {
+      if (tokenMatches(t, stems)) {
+        matched++
+        weight += t.length
+        if (t.length > bestLen) bestLen = t.length
+      }
+    }
+
+    // Keep foods that match the phrase, or cover a meaningful word (≥3 chars) of
+    // the query — so trivial tokens like "air" alone never surface a food.
+    if (tier === 0 && (matched === 0 || bestLen < 3)) continue
+
+    scored.push({ food, index, tier, matched, weight })
+  }
+
+  // Rank: whole-phrase match first, then how many query words are covered, then
+  // how much of the query (by length) is covered, then canonical library position
+  // (core foods → single ingredients → composite dishes) as a stable tie-break.
+  scored.sort(
+    (a, b) => b.tier - a.tier || b.matched - a.matched || b.weight - a.weight || a.index - b.index,
+  )
 
   return scored.slice(0, limit).map((entry) => toSearchFood(entry.food))
 }
