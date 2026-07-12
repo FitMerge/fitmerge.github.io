@@ -5,7 +5,7 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { getExerciseById } from '../../data/exercises'
 import { isoToLabel, todayISO } from '../../lib/date'
-import { formatDurationMin, totalSetsDone, totalVolume, weightUnitLabel } from './utils'
+import { formatDurationMin, sessionDurationMs, totalSetsDone, totalVolume, weightUnitLabel } from './utils'
 import type { WorkoutSession } from '../../types'
 
 type SessionDetailProps = {
@@ -47,14 +47,20 @@ export default function SessionDetail({ session, onClose, onRepeated }: SessionD
     onClose()
   }
 
-  const durationMs = session ? (session.finishedAt ?? session.startedAt) - session.startedAt : 0
+  const durationMs = session ? sessionDurationMs(session) : 0
+  const canRepeat = session ? !(session.imported && session.entries.length === 0) : false
 
   return (
     <Sheet open={session !== null} onClose={onClose} title={session?.name ?? ''}>
       {session && (
         <div className="space-y-4">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-400 flex items-center gap-1.5">
             {isoToLabel(session.date)} · {formatDurationMin(durationMs)}
+            {session.imported && (
+              <span className="shrink-0 rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
+                Imported
+              </span>
+            )}
           </p>
 
           <div className="grid grid-cols-3 gap-2 text-center">
@@ -72,32 +78,41 @@ export default function SessionDetail({ session, onClose, onRepeated }: SessionD
             </div>
           </div>
 
-          <div className="space-y-3">
-            {session.entries.map((entry) => {
-              const exercise = getExerciseById(entry.exerciseId)
-              return (
-                <div key={entry.exerciseId}>
-                  <p className="text-sm font-semibold text-slate-100 mb-1">
-                    {exercise?.name ?? 'Unknown exercise'}
-                  </p>
-                  <div className="space-y-1">
-                    {entry.sets.map((set, idx) => (
-                      <p
-                        key={idx}
-                        className={`text-sm tabular-nums ${set.done ? 'text-slate-300' : 'text-slate-600'}`}
-                      >
-                        {set.weight} {unitLabel} × {set.reps} {set.done ? '✓' : '✗'}
-                      </p>
-                    ))}
+          {session.entries.length === 0 && session.imported ? (
+            <p className="text-sm text-slate-500">
+              No set-by-set data — imported from Health Connect.
+              {session.kcal !== undefined ? ` ${Math.round(session.kcal)} kcal.` : ''}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {session.entries.map((entry) => {
+                const exercise = getExerciseById(entry.exerciseId)
+                return (
+                  <div key={entry.exerciseId}>
+                    <p className="text-sm font-semibold text-slate-100 mb-1">
+                      {exercise?.name ?? 'Unknown exercise'}
+                    </p>
+                    <div className="space-y-1">
+                      {entry.sets.map((set, idx) => (
+                        <p
+                          key={idx}
+                          className={`text-sm tabular-nums ${set.done ? 'text-slate-300' : 'text-slate-600'}`}
+                        >
+                          {set.weight} {unitLabel} × {set.reps} {set.done ? '✓' : '✗'}
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
 
-          <Button variant="primary" full onClick={repeat}>
-            Repeat workout
-          </Button>
+          {canRepeat && (
+            <Button variant="primary" full onClick={repeat}>
+              Repeat workout
+            </Button>
+          )}
 
           {confirmDelete ? (
             <div className="space-y-2">

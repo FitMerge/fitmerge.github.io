@@ -66,6 +66,18 @@ export function formatDurationMin(ms: number): string {
   return `${min} min`
 }
 
+/**
+ * Duration for a session, in milliseconds. Imported sessions (Apple Health / Garmin / FitMerge
+ * JSON) may have no meaningful startedAt/finishedAt gap — an empty routine finished the instant
+ * it started — so fall back to the reported durationMin when present.
+ */
+export function sessionDurationMs(session: WorkoutSession): number {
+  if (session.imported && session.durationMin !== undefined) {
+    return session.durationMin * 60000
+  }
+  return (session.finishedAt ?? session.startedAt) - session.startedAt
+}
+
 /** Ids of exercises that have at least one completed set in a finished session. */
 export function exerciseIdsWithHistory(sessions: WorkoutSession[]): Set<string> {
   const ids = new Set<string>()

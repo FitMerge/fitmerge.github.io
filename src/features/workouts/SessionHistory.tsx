@@ -6,7 +6,14 @@ import SessionDetail from './SessionDetail'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { isoToLabel } from '../../lib/date'
-import { formatDurationMin, monthYearLabel, totalSetsDone, totalVolume, weightUnitLabel } from './utils'
+import {
+  formatDurationMin,
+  monthYearLabel,
+  sessionDurationMs,
+  totalSetsDone,
+  totalVolume,
+  weightUnitLabel,
+} from './utils'
 import type { WorkoutSession } from '../../types'
 
 type SessionHistoryProps = {
@@ -63,7 +70,7 @@ export default function SessionHistory({ onBack, onRepeated }: SessionHistoryPro
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
               <div className="space-y-2">
                 {groupSessions.map((session) => {
-                  const durationMs = (session.finishedAt ?? session.startedAt) - session.startedAt
+                  const durationMs = sessionDurationMs(session)
                   return (
                     <Card
                       key={session.id}
@@ -72,7 +79,14 @@ export default function SessionHistory({ onBack, onRepeated }: SessionHistoryPro
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-100 truncate">{session.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-slate-100 truncate">{session.name}</p>
+                            {session.imported && (
+                              <span className="shrink-0 rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
+                                Imported
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500">
                             {isoToLabel(session.date)} · {formatDurationMin(durationMs)}
                           </p>

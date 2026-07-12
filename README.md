@@ -29,6 +29,75 @@ installable PWA.
 - Metric/imperial units, JSON data export, full local persistence (no account needed —
   all data stays in your browser).
 
+### Health Data Connect
+- Import weigh-ins and workouts from an **Apple Health** export, a **Garmin Connect** CSV,
+  or a documented **FitMerge JSON** file — all parsed locally in the browser, nothing is
+  uploaded anywhere. See [Connect Apple Health & Garmin](#connect-apple-health--garmin) below.
+
+## Connect Apple Health & Garmin
+
+FitMerge's **Settings → Connect health data** card imports weigh-ins and workouts from three
+sources. All parsing happens locally in the browser — nothing is uploaded to a server.
+
+### Apple Health
+
+1. Open the **Health** app on your iPhone → tap your profile picture (top right) → **Export
+   All Health Data**.
+2. AirDrop or otherwise transfer the resulting `export.zip` to the device running FitMerge.
+3. In FitMerge, go to **Settings → Connect health data → Import file** and pick the zip (or
+   the `export.xml` inside it). Body weight, body fat percentage, and workouts are extracted.
+
+### Garmin Connect (CSV)
+
+1. On [connect.garmin.com](https://connect.garmin.com), open **Reports** and export either a
+   **weight** history CSV or an **activities** CSV.
+2. In FitMerge, **Settings → Connect health data → Import file** and pick the CSV. FitMerge
+   detects which kind of export it is from the header row.
+
+### Garmin Connect (`garmin-sync.py` script)
+
+For a one-shot pull of both weigh-ins and activities into a single file:
+
+```bash
+pip install garminconnect
+python3 scripts/garmin-sync.py --days 90 --out fitmerge-import.json
+```
+
+Credentials come from the `GARMIN_EMAIL` / `GARMIN_PASSWORD` environment variables (or you'll
+be prompted). The session token is cached locally so you won't be re-prompted every run. Then
+import the resulting `fitmerge-import.json` the same way as any other file.
+
+Run `python3 scripts/garmin-sync.py --self-test` to sanity-check the script offline (no
+network or `garminconnect` install needed) — this is what CI runs to validate the script.
+
+### Claude / MCP route
+
+If you'd rather have Claude do the pull: install a community Garmin MCP server in Claude
+Desktop (e.g. [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp) or
+[eddmann/garmin-connect-mcp](https://github.com/eddmann/garmin-connect-mcp)), then ask Claude
+to emit a FitMerge JSON file using the schema below and import the result.
+
+**Example prompt:** *"Using the Garmin MCP server, pull my weigh-ins and activities from the
+last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schema below."*
+
+**FitMerge JSON schema (version 1):**
+
+```json
+{
+  "version": 1,
+  "weights": [
+    { "date": "YYYY-MM-DD", "weightKg": 82.4, "bodyFatPct": 21.5 }
+  ],
+  "sessions": [
+    { "name": "Running", "date": "YYYY-MM-DD", "durationMin": 32.5, "kcal": 320 }
+  ]
+}
+```
+
+`bodyFatPct`, `durationMin`, and `kcal` are all optional. Dates are local `YYYY-MM-DD`
+strings. Re-importing the same file is safe — weigh-ins replace same-date entries and
+previously-imported workouts (matched by date + name) are skipped rather than duplicated.
+
 ## Development
 
 ```bash

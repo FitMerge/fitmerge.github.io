@@ -3,6 +3,7 @@ import UnitsSection from './UnitsSection'
 import GoalsSection from './GoalsSection'
 import AiSection from './AiSection'
 import DataSection from './DataSection'
+import HealthConnectSection from './HealthConnectSection'
 import AboutSection from './AboutSection'
 
 export default function Settings() {
@@ -18,6 +19,7 @@ export default function Settings() {
       <GoalsSection />
       <AiSection />
       <DataSection />
+      <HealthConnectSection />
       <AboutSection />
     </div>
   )

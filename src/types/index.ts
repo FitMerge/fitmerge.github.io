@@ -77,6 +77,12 @@ export type WorkoutSession = {
   startedAt: number
   finishedAt?: number
   entries: WorkoutSessionEntry[]
+  /** True for sessions created via Health Data Connect import (Apple Health, Garmin, FitMerge JSON). */
+  imported?: boolean
+  /** Minutes — used for imported sessions where entries (and thus timers) are empty. */
+  durationMin?: number
+  /** Calories burned, when reported by the import source. */
+  kcal?: number
 }
 
 export type BodyEntry = {
