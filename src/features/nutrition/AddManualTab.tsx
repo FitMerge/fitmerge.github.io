@@ -37,7 +37,9 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
     Boolean(entry?.fiber || entry?.sugar || entry?.sodium),
   )
 
-  const canSave = name.trim().length > 0 && calories >= 0
+  // Allow a name-less "Quick add" (just calories), MyFitnessPal-style.
+  const canSave = name.trim().length > 0 || calories > 0
+  const finalName = name.trim() || 'Quick add'
 
   function handleSave() {
     if (!canSave) return
@@ -46,7 +48,7 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
     const sodiumValue = sodium > 0 ? sodium : undefined
     if (entry) {
       updateEntry(entry.id, {
-        name: name.trim(),
+        name: finalName,
         qty,
         unit,
         calories,
@@ -62,7 +64,7 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
       addEntry({
         date,
         mealType,
-        name: name.trim(),
+        name: finalName,
         qty,
         unit,
         calories,
@@ -87,7 +89,7 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm text-slate-400 mb-1">Name</label>
+        <label className="block text-sm text-slate-400 mb-1">Name (optional — leave blank for a quick calorie add)</label>
         <input
           type="text"
           value={name}
