@@ -9,6 +9,8 @@ type SettingsState = {
   geminiApiKey: string
   usdaApiKey: string
   waterGoalMl: number
+  /** Target body weight in kg (canonical metric storage); undefined = no goal set. */
+  goalWeightKg?: number
   onboarded: boolean
   setGoals: (goals: Goals) => void
   setUnits: (units: Units) => void
@@ -16,6 +18,7 @@ type SettingsState = {
   setGeminiApiKey: (key: string) => void
   setUsdaApiKey: (key: string) => void
   setWaterGoalMl: (ml: number) => void
+  setGoalWeightKg: (kg: number | undefined) => void
   setOnboarded: (v: boolean) => void
 }
 
@@ -35,6 +38,7 @@ export const useSettingsStore = create<SettingsState>()(
       setGeminiApiKey: (key) => set({ geminiApiKey: key }),
       setUsdaApiKey: (key) => set({ usdaApiKey: key }),
       setWaterGoalMl: (ml) => set({ waterGoalMl: ml }),
+      setGoalWeightKg: (kg) => set({ goalWeightKg: kg }),
       setOnboarded: (v) => set({ onboarded: v }),
     }),
     { name: 'fm-settings' },

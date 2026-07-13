@@ -28,9 +28,10 @@ export default function Progress() {
       <RestingHrHrvSection />
       <IntensityDistributionSection />
 
+      <WeightSection />
+
       <RangeSelector value={range} onChange={setRange} />
 
-      <WeightSection range={range} />
       <MeasurementsSection />
       <HealthMetricsSection />
       <CaloriesSection range={range} />
