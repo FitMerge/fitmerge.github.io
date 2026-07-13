@@ -8,7 +8,34 @@ import type { Macros, MealType } from '../../types'
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
 
-type UnitMode = 'g' | 'serving'
+type UnitMode = 'serving' | 'g' | 'oz' | 'cup' | 'tbsp' | 'tsp' | 'floz'
+
+// Grams per one of each measure. Weight units (g, oz) are exact; volume units are
+// standard approximations for quick estimating (real grams-per-cup vary by food).
+const UNIT_GRAMS: Record<Exclude<UnitMode, 'serving'>, number> = {
+  g: 1,
+  oz: 28.3495,
+  cup: 240,
+  tbsp: 15,
+  tsp: 5,
+  floz: 30,
+}
+const UNIT_LABEL: Record<UnitMode, string> = {
+  serving: 'serving',
+  g: 'g',
+  oz: 'oz',
+  cup: 'cup',
+  tbsp: 'tbsp',
+  tsp: 'tsp',
+  floz: 'fl oz',
+}
+const VOLUME_UNITS = new Set<UnitMode>(['cup', 'tbsp', 'tsp', 'floz'])
+// Order shown in the picker after "serving".
+const GRAM_UNIT_ORDER: Exclude<UnitMode, 'serving'>[] = ['g', 'oz', 'cup', 'tbsp', 'tsp', 'floz']
+
+function defaultQtyFor(mode: UnitMode): number {
+  return mode === 'g' ? 100 : 1
+}
 
 type FoodDetailPanelProps = {
   name: string
@@ -65,33 +92,37 @@ export default function FoodDetailPanel({
   const addCustomFood = useNutritionStore((s) => s.addCustomFood)
 
   // Serving is listed first so it's the default: logging "1" should mean one
-  // natural serving (e.g. 1 large egg), not 1 gram. Grams stays as a secondary
-  // option for when someone wants to weigh a portion precisely.
+  // natural serving (e.g. 1 large egg), not 1 gram. When per-100g data exists we
+  // also offer weight (g, oz) and household volume units (cup/tbsp/tsp) so you can
+  // log the way you actually measure — especially when estimating.
   const unitOptions: { mode: UnitMode; label: string }[] = []
   if (perServing) unitOptions.push({ mode: 'serving', label: 'serving' })
-  if (per100g) unitOptions.push({ mode: 'g', label: '100 g' })
+  if (per100g) for (const m of GRAM_UNIT_ORDER) unitOptions.push({ mode: m, label: UNIT_LABEL[m] })
 
   const [unit, setUnit] = useState<UnitMode>(unitOptions[0]?.mode ?? 'serving')
-  const [qty, setQty] = useState(unit === 'g' ? 100 : 1)
+  const [qty, setQty] = useState(defaultQtyFor(unitOptions[0]?.mode ?? 'serving'))
   const [mealType, setMealType] = useState<MealType>(defaultMealType ?? 'breakfast')
   const [saved, setSaved] = useState(false)
 
   function handleUnitChange(mode: UnitMode) {
     setUnit(mode)
-    setQty(mode === 'g' ? 100 : 1)
+    setQty(defaultQtyFor(mode))
   }
 
+  // Grams represented by the current qty (for gram-based units); undefined for serving.
+  const gramsForQty = unit === 'serving' ? undefined : qty * UNIT_GRAMS[unit]
+
   const macros = useMemo<Macros>(() => {
-    if (unit === 'g' && per100g) return scale(per100g, qty / 100)
     if (unit === 'serving' && perServing) return scale(perServing, qty)
+    if (gramsForQty !== undefined && per100g) return scale(per100g, gramsForQty / 100)
     return { calories: 0, protein: 0, carbs: 0, fat: 0 }
-  }, [unit, qty, per100g, perServing])
+  }, [unit, qty, per100g, perServing, gramsForQty])
 
   const extras = useMemo<Extras | undefined>(() => {
-    if (unit === 'g') return scaleExtras(extras100g, qty / 100)
     if (unit === 'serving') return scaleExtras(extrasServing, qty)
+    if (gramsForQty !== undefined) return scaleExtras(extras100g, gramsForQty / 100)
     return undefined
-  }, [unit, qty, extras100g, extrasServing])
+  }, [unit, qty, extras100g, extrasServing, gramsForQty])
 
   function handleAdd() {
     if (!(qty > 0)) return
@@ -104,7 +135,7 @@ export default function FoodDetailPanel({
       mealType,
       name: brand ? `${name} (${brand})` : name,
       qty,
-      unit: unit === 'g' ? 'g' : servingText,
+      unit: unit === 'serving' ? servingText : UNIT_LABEL[unit],
       calories: round1(macros.calories),
       protein: round1(macros.protein),
       carbs: round1(macros.carbs),
@@ -149,13 +180,13 @@ export default function FoodDetailPanel({
       </div>
 
       {unitOptions.length > 1 && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {unitOptions.map((opt) => (
             <button
               key={opt.mode}
               type="button"
               onClick={() => handleUnitChange(opt.mode)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium ${
                 unit === opt.mode ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300'
               }`}
             >
@@ -166,12 +197,19 @@ export default function FoodDetailPanel({
       )}
 
       <NumberField
-        label={unit === 'g' ? 'Quantity (g)' : `Quantity (${servingText})`}
+        label={`Quantity (${unit === 'serving' ? servingText : UNIT_LABEL[unit]})`}
         value={qty}
         onChange={setQty}
         step={unit === 'g' ? 10 : 1}
         min={0}
       />
+
+      {gramsForQty !== undefined && (
+        <p className="text-xs text-slate-500">
+          ≈ {Math.round(gramsForQty)} g
+          {VOLUME_UNITS.has(unit) ? ' · volume is an estimate; grams or oz are exact' : ''}
+        </p>
+      )}
 
       <p className="text-sm text-slate-300">
         {Math.round(macros.calories)} kcal · P {macros.protein.toFixed(1)} · C {macros.carbs.toFixed(1)} · F{' '}
