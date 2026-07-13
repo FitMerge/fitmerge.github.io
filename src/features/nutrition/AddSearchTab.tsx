@@ -113,6 +113,22 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
 
   const commonResults = useMemo(() => searchCommonFoods(query), [query, foodsReady])
 
+  // USDA returns both generic and branded foods; branded ones join the online
+  // "Branded" list (with OpenFoodFacts) while generic ones stay separate.
+  const usdaGeneric = useMemo(() => usdaResults.filter((f) => !f.brand), [usdaResults])
+  const brandedCombined = useMemo(() => {
+    const usdaBranded = usdaResults.filter((f) => f.brand)
+    const seen = new Set<string>()
+    const out: SearchFood[] = []
+    for (const f of [...usdaBranded, ...brandedResults]) {
+      const key = `${f.name.toLowerCase()}::${(f.brand ?? '').toLowerCase()}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(f)
+    }
+    return out
+  }, [usdaResults, brandedResults])
+
   const recentItems = useMemo(() => recentFoods(entries), [entries])
   const frequentItems = useMemo(() => {
     const recentNames = new Set(recentItems.map((i) => i.name.trim().toLowerCase()))
@@ -386,7 +402,7 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-300">Common foods</h3>
           <div className="space-y-2">
-            {commonResults.map((food) => (
+            {commonResults.slice(0, 6).map((food) => (
               <SearchResultRow
                 key={food.id}
                 name={food.name}
@@ -402,11 +418,11 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
         </div>
       )}
 
-      {trimmedQuery && usdaResults.length > 0 && (
+      {trimmedQuery && usdaGeneric.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-300">Generic foods (USDA)</h3>
           <div className="space-y-2">
-            {usdaResults.map((food) => (
+            {usdaGeneric.slice(0, 8).map((food) => (
               <SearchResultRow
                 key={food.id}
                 name={food.name}
@@ -428,12 +444,12 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
         </p>
       )}
 
-      {trimmedQuery && (loading || error || brandedResults.length > 0 || commonResults.length > 0) && (
+      {trimmedQuery && (loading || error || brandedCombined.length > 0 || commonResults.length > 0) && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-300">Branded</h3>
 
           {loading &&
-            (commonResults.length > 0 ? (
+            (commonResults.length > 0 || brandedCombined.length > 0 ? (
               <p className="text-sm text-slate-500">Searching online database…</p>
             ) : (
               <div className="flex justify-center py-8">
@@ -443,7 +459,8 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
 
           {!loading &&
             error &&
-            (commonResults.length > 0 ? (
+            brandedCombined.length === 0 &&
+            (commonResults.length > 0 || usdaGeneric.length > 0 ? (
               <p className="text-sm text-slate-500">
                 Online food database unavailable.{' '}
                 <button
@@ -463,24 +480,30 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
               </div>
             ))}
 
-          {!loading && !error && brandedResults.length === 0 && commonResults.length > 0 && (
+          {!loading && brandedCombined.length === 0 && (commonResults.length > 0 || usdaGeneric.length > 0) && !error && (
             <p className="text-sm text-slate-500">No branded results for "{trimmedQuery}"</p>
           )}
 
-          {!loading && !error && brandedResults.length > 0 && (
+          {brandedCombined.length > 0 && (
             <div className="space-y-2">
-              {brandedResults.map((food) => (
-                <SearchResultRow
-                  key={food.id}
-                  name={food.name}
-                  brand={food.brand}
-                  subtitle={food.servingText}
-                  calorieLabel={`${Math.round(food.per100g.calories)} kcal /100g`}
-                  onClick={() => selectSearchFood(food)}
-                  onQuickAdd={() => quickAddSearchFood(food, food.id)}
-                  added={justAdded.has(food.id)}
-                />
-              ))}
+              {brandedCombined.map((food) => {
+                const macros = food.perServing ?? food.per100g
+                const label = food.perServing
+                  ? `${Math.round(macros.calories)} kcal`
+                  : `${Math.round(macros.calories)} kcal /100g`
+                return (
+                  <SearchResultRow
+                    key={food.id}
+                    name={food.name}
+                    brand={food.brand}
+                    subtitle={food.servingText}
+                    calorieLabel={label}
+                    onClick={() => selectSearchFood(food)}
+                    onQuickAdd={() => quickAddSearchFood(food, food.id)}
+                    added={justAdded.has(food.id)}
+                  />
+                )
+              })}
             </div>
           )}
         </div>
@@ -490,8 +513,8 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
         !loading &&
         !error &&
         commonResults.length === 0 &&
-        usdaResults.length === 0 &&
-        brandedResults.length === 0 && (
+        usdaGeneric.length === 0 &&
+        brandedCombined.length === 0 && (
           <div className="space-y-3">
             <EmptyState icon={Search} title="No foods found" subtitle={`No results for "${trimmedQuery}"`} />
             {onManual && (

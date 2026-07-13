@@ -1,7 +1,8 @@
-// USDA FoodData Central search — the free U.S. government food database. Unlike
-// OpenFoodFacts (branded/packaged products), FDC is rich in *generic* foods:
-// "Potatoes, home fries", "Hash browns", restaurant dishes, raw ingredients. This
-// is the diverse fallback that makes natural searches resolve like MyFitnessPal.
+// USDA FoodData Central search — the free U.S. government food database. FDC is
+// rich in *generic* foods ("Potatoes, home fries", raw ingredients) AND carries a
+// ~1.9M-item Branded Foods dataset (packaged products and supplements) that beats
+// OpenFoodFacts on U.S. coverage — so we query both and let the UI split them into
+// "Generic" vs "Branded", MyFitnessPal-style.
 //
 // Works out of the box with the shared DEMO_KEY (rate-limited to ~30 req/hour per
 // IP). Users can paste a free personal key (fdc.nal.usda.gov/api-key-signup) in
@@ -12,9 +13,10 @@ import type { Extras, SearchFood } from './openFoodFacts'
 
 const SEARCH_ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search'
 export const USDA_DEMO_KEY = 'DEMO_KEY'
-// Generic datatypes only — Branded is already covered (better) by OpenFoodFacts,
-// and excluding it keeps results generic and de-duplicated.
-const DATA_TYPES = 'Foundation,SR Legacy,Survey (FNDDS)'
+// Include Branded so packaged products and supplements (protein powders, bars,
+// named brands) resolve — this is what makes searches like "1up iso vanilla ice
+// cream" return the actual product instead of only generic whey powder.
+const DATA_TYPES = 'Foundation,SR Legacy,Survey (FNDDS),Branded'
 
 // FDC nutrient numbers (stable across datasets).
 const N_ENERGY_KCAL = 1008
@@ -96,12 +98,19 @@ export function parseUsdaFood(raw: unknown): SearchFood | undefined {
   }
   const extras100g = buildExtras(n)
 
-  // If FDC gives a gram serving size, expose a per-serving basis too.
+  // Branded foods carry a brand + a human serving label ("1 scoop (31g)").
+  const brandName = typeof raw.brandName === 'string' ? raw.brandName.trim() : ''
+  const brandOwner = typeof raw.brandOwner === 'string' ? raw.brandOwner.trim() : ''
+  const brand = tidyBrand(brandName || brandOwner) || undefined
+  const household =
+    typeof raw.householdServingFullText === 'string' ? raw.householdServingFullText.trim() : ''
+
+  // If FDC gives a gram/ml serving size, expose a per-serving basis too.
   let perServing: Macros | undefined
-  let servingText = '100 g'
+  let servingText = household || '100 g'
   const servingSize = coerceNumber(raw.servingSize, NaN)
   const unit = typeof raw.servingSizeUnit === 'string' ? raw.servingSizeUnit.toLowerCase() : ''
-  if (Number.isFinite(servingSize) && servingSize > 0 && (unit === 'g' || unit === 'gram')) {
+  if (Number.isFinite(servingSize) && servingSize > 0 && (unit === 'g' || unit === 'gram' || unit === 'ml')) {
     const factor = servingSize / 100
     perServing = {
       calories: Math.round(per100g.calories * factor * 10) / 10,
@@ -109,19 +118,27 @@ export function parseUsdaFood(raw: unknown): SearchFood | undefined {
       carbs: Math.round(per100g.carbs * factor * 10) / 10,
       fat: Math.round(per100g.fat * factor * 10) / 10,
     }
-    servingText = `1 serving (${Math.round(servingSize)} g)`
+    if (!household) servingText = `1 serving (${Math.round(servingSize)} ${unit === 'ml' ? 'ml' : 'g'})`
   }
 
   const fdcId = coerceNumber(raw.fdcId, NaN)
   return {
     id: Number.isFinite(fdcId) ? `usda-${fdcId}` : `usda-${description}`,
     name: description,
-    brand: undefined,
+    brand,
     servingText,
     per100g,
     perServing,
     extras100g,
   }
+}
+
+/** Brand strings arrive ALL-CAPS or mixed; title-case the shouty ones. */
+function tidyBrand(raw: string): string {
+  const b = raw.trim()
+  if (!b) return ''
+  if (b === b.toUpperCase() && /[A-Z]/.test(b)) return b.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+  return b
 }
 
 // In-memory per-session cache so repeat searches don't burn the rate limit.
@@ -142,7 +159,7 @@ export async function searchUsdaFoods(
   const params = new URLSearchParams({
     query: trimmed,
     dataType: DATA_TYPES,
-    pageSize: '20',
+    pageSize: '40',
     api_key: key,
   })
 
@@ -171,9 +188,11 @@ export async function searchUsdaFoods(
   for (const food of payload.foods) {
     const parsed = parseUsdaFood(food)
     if (!parsed) continue
-    const nameKey = parsed.name.toLowerCase()
-    if (seen.has(nameKey)) continue
-    seen.add(nameKey)
+    // Key on name + brand so distinct branded products aren't collapsed, but exact
+    // duplicates are.
+    const dedupeKey = `${parsed.name.toLowerCase()}::${(parsed.brand ?? '').toLowerCase()}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
     results.push(parsed)
   }
 
