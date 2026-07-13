@@ -89,6 +89,7 @@ export default function HealthConnectSection() {
           durationMin: session.durationMin,
           kcal: session.kcal,
           trainingLoad: session.trainingLoad,
+          distanceKm: session.distanceKm,
         }
       }),
     )

@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { uid } from '../lib/id'
-import type { Program, Routine, WorkoutSession } from '../types'
+import type { ProgramTemplate } from '../data/programs'
+import type { Program, ProgramDay, Routine, WorkoutSession } from '../types'
 
 type WorkoutsState = {
   routines: Routine[]
@@ -23,6 +24,9 @@ type WorkoutsState = {
   /** Creates a session, marks it as the active in-progress session, and returns its id. */
   startSession: (session: Omit<WorkoutSession, 'id'>) => string
   addProgram: (program: Omit<Program, 'id' | 'createdAt' | 'completedDayIds'>) => string
+  /** Installs a ready-made program template: creates its routines and a program that
+   * schedules them, in a single write. Returns the new program's id. */
+  installProgramTemplate: (template: ProgramTemplate) => string
   updateProgram: (id: string, patch: Partial<Program>) => void
   removeProgram: (id: string) => void
   setActiveProgram: (id: string | undefined) => void
@@ -93,6 +97,40 @@ export const useWorkoutsStore = create<WorkoutsState>()(
           activeProgramId: id,
         })
         return id
+      },
+      installProgramTemplate: (template) => {
+        // Create a fresh Routine per template routine, tracking key → new id.
+        const routineIdByKey = new Map<string, string>()
+        const newRoutines: Routine[] = template.routines.map((tr) => {
+          const id = uid()
+          routineIdByKey.set(tr.key, id)
+          return {
+            id,
+            name: tr.name,
+            items: tr.items,
+            scheduleDays: tr.scheduleDays,
+          }
+        })
+        const programId = uid()
+        const days: ProgramDay[] = template.schedule.map((d) => ({
+          id: uid(),
+          week: d.week,
+          name: d.name,
+          routineId: routineIdByKey.get(d.routineKey) ?? '',
+        }))
+        const program: Program = {
+          id: programId,
+          name: template.name,
+          createdAt: Date.now(),
+          days,
+          completedDayIds: [],
+        }
+        set({
+          routines: [...get().routines, ...newRoutines],
+          programs: [...get().programs, program],
+          activeProgramId: programId,
+        })
+        return programId
       },
       updateProgram: (id, patch) => {
         set({ programs: get().programs.map((p) => (p.id === id ? { ...p, ...patch } : p)) })

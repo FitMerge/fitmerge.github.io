@@ -76,6 +76,9 @@ def build_payload(weights, sessions, health=None):
         training_load = s.get("trainingLoad")
         if isinstance(training_load, (int, float)) and training_load >= 0:
             row["trainingLoad"] = round(float(training_load), 1)
+        distance_km = s.get("distanceKm")
+        if isinstance(distance_km, (int, float)) and distance_km > 0:
+            row["distanceKm"] = round(float(distance_km), 3)
         clean_sessions.append(row)
 
     clean_health = []
@@ -164,6 +167,10 @@ def fetch_from_garmin(days):
         training_load = act.get("activityTrainingLoad") or act.get("trainingLoad")
         if isinstance(training_load, (int, float)) and training_load > 0:
             row["trainingLoad"] = training_load
+        # Distance in metres → km, for pace/distance progression charts.
+        distance_m = act.get("distance")
+        if isinstance(distance_m, (int, float)) and distance_m > 0:
+            row["distanceKm"] = distance_m / 1000.0
         sessions.append(row)
 
     health = fetch_daily_metrics(client, end, days)
@@ -267,7 +274,8 @@ def self_test():
         {"date": "2026-07-01", "weightKg": 81.2, "bodyFatPct": 20.8},
     ]
     canned_sessions = [
-        {"name": "Running", "date": "2026-06-20", "durationMin": 32.5, "kcal": 320, "trainingLoad": 88.0},
+        {"name": "Running", "date": "2026-06-20", "durationMin": 32.5, "kcal": 320, "trainingLoad": 88.0,
+         "distanceKm": 5.2},
         {"name": "Strength Training", "date": "2026-06-25", "durationMin": 48.0, "kcal": 410},
     ]
     canned_health = [
@@ -295,7 +303,9 @@ def self_test():
         payload["weights"][0].get("bodyFatPct") == 21.5,
         payload["sessions"][0].get("durationMin") == 32.5,
         payload["sessions"][0].get("trainingLoad") == 88.0,
+        payload["sessions"][0].get("distanceKm") == 5.2,
         "trainingLoad" not in payload["sessions"][1],  # absent when not provided
+        "distanceKm" not in payload["sessions"][1],  # absent when not provided
     ]
 
     # JSON round-trip sanity check.

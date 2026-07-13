@@ -7,6 +7,7 @@ export type ImportedSessionInput = {
   durationMin?: number
   kcal?: number
   trainingLoad?: number
+  distanceKm?: number
 }
 
 export type HealthImportSource = 'fitmerge-json' | 'apple-health' | 'garmin-csv'

@@ -25,7 +25,10 @@ installable PWA.
 - **In-workout management**: reorder, replace, or remove exercises mid-session, add per-exercise
   notes, and a built-in **plate calculator** (what to load on each side of the bar).
 - **Training statistics**: lifetime totals (workouts, volume, reps, time), a weekly-frequency
-  chart, week-streak, and a **muscle-balance** view of sets per muscle over the last 30 days.
+  chart, week-streak, a **muscle-balance** view of sets per muscle over the last 30 days, and
+  **cardio progress** charts (pace, distance, duration, calories per activity type over time).
+- **Program library**: ready-made multi-week training programs (Push/Pull/Legs, Full Body, 5×5,
+  and more) you can browse and start with one tap, on top of your own custom routines.
 - **Body measurements**: track chest, arms, waist, thighs and more over time, with per-measure
   history charts (alongside body-weight tracking).
 - **Hevy-style session logger**: a compact set table showing each set's **previous** performance
@@ -70,8 +73,8 @@ sources. All parsing happens locally in the browser — nothing is uploaded to a
 
 For a one-shot pull of **everything** — weigh-ins, activities, and daily wellness metrics
 (steps, sleep + sleep score, resting HR, HRV, stress, Body Battery, VO₂ max, SpO₂, respiration,
-floors, moderate/vigorous intensity minutes, per-activity training load, active/total calories) —
-into a single file:
+floors, moderate/vigorous intensity minutes, per-activity training load and distance, active/total
+calories) — into a single file:
 
 ```bash
 pip install garminconnect
@@ -109,7 +112,7 @@ last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schem
     { "date": "YYYY-MM-DD", "weightKg": 82.4, "bodyFatPct": 21.5 }
   ],
   "sessions": [
-    { "name": "Running", "date": "YYYY-MM-DD", "durationMin": 32.5, "kcal": 320, "trainingLoad": 88 }
+    { "name": "Running", "date": "YYYY-MM-DD", "durationMin": 32.5, "kcal": 320, "trainingLoad": 88, "distanceKm": 5.2 }
   ],
   "health": [
     { "date": "YYYY-MM-DD", "metrics": {
@@ -125,7 +128,8 @@ last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schem
 `weights`, `sessions`, and `health` are all optional (include any subset). The `metrics` object
 is an **open-ended bag of numbers** — any key you include is stored and shown on the Health
 metrics screen; known keys get nice labels/units, unknown ones display with a derived label.
-`bodyFatPct`, `durationMin`, `kcal`, and `trainingLoad` are optional. Dates are local
+`bodyFatPct`, `durationMin`, `kcal`, `trainingLoad`, and `distanceKm` are optional
+(`distanceKm` powers the cardio pace/distance progression charts). Dates are local
 `YYYY-MM-DD` strings.
 
 ### Coaching analytics (Progress tab)

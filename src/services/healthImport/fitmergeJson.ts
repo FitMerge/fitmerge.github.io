@@ -58,11 +58,13 @@ function parseSession(raw: unknown): ImportedSessionInput | undefined {
   const durationMin = coerceFiniteNumber(raw.durationMin)
   const kcal = coerceFiniteNumber(raw.kcal)
   const trainingLoad = coerceFiniteNumber(raw.trainingLoad)
+  const distanceKm = coerceFiniteNumber(raw.distanceKm)
 
   const session: ImportedSessionInput = { name, date }
   if (durationMin !== undefined && durationMin >= 0) session.durationMin = durationMin
   if (kcal !== undefined && kcal >= 0) session.kcal = kcal
   if (trainingLoad !== undefined && trainingLoad >= 0) session.trainingLoad = trainingLoad
+  if (distanceKm !== undefined && distanceKm > 0) session.distanceKm = distanceKm
   return session
 }
 

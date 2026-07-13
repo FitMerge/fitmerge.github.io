@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarRange, ChevronRight, Dumbbell, History, Plus } from 'lucide-react'
+import { BarChart3, CalendarRange, ChevronRight, Dumbbell, History, LayoutList, Plus } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import EmptyState from '../../components/EmptyState'
@@ -11,6 +11,7 @@ import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
 import SessionHistory from './SessionHistory'
 import ProgramBuilder from './ProgramBuilder'
+import ProgramLibrary from './ProgramLibrary'
 import ProgramDetail from './ProgramDetail'
 import WorkoutStats from './WorkoutStats'
 import { useWorkoutsStore } from '../../store/workouts'
@@ -27,6 +28,7 @@ type ViewState =
   | { kind: 'stats' }
   | { kind: 'program'; programId: string }
   | { kind: 'programEdit'; programId?: string }
+  | { kind: 'programs' }
 
 export default function Workouts() {
   const [view, setView] = useState<ViewState>({ kind: 'home' })
@@ -131,6 +133,10 @@ export default function Workouts() {
 
   if (view.kind === 'stats') {
     return <WorkoutStats onBack={() => setView({ kind: 'home' })} />
+  }
+
+  if (view.kind === 'programs') {
+    return <ProgramLibrary onBack={() => setView({ kind: 'home' })} onStarted={() => setView({ kind: 'home' })} />
   }
 
   if (view.kind === 'programEdit') {
@@ -250,6 +256,20 @@ export default function Workouts() {
             </button>
           )}
         </div>
+
+        <Card
+          className="active:bg-slate-800/60 flex items-center gap-3"
+          onClick={() => setView({ kind: 'programs' })}
+        >
+          <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-400 shrink-0">
+            <LayoutList size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-slate-100">Browse program templates</p>
+            <p className="text-xs text-slate-500">Start a ready-made plan in one tap</p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-slate-500" />
+        </Card>
 
         {programs.length === 0 ? (
           <Card className="space-y-3">

@@ -121,6 +121,9 @@ export type WorkoutSession = {
   /** Garmin's training-load (TSS-like) value for the activity, when available.
    * Used to calibrate the CTL/ATL/TSB performance-management chart. */
   trainingLoad?: number
+  /** Distance covered (kilometres) for cardio activities, when reported — powers
+   * pace/distance progression charts. */
+  distanceKm?: number
 }
 
 export type BodyEntry = {
