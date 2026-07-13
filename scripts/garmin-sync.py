@@ -18,8 +18,14 @@ Output schema (FitMerge JSON, version 1):
     {
       "version": 1,
       "weights": [{"date": "YYYY-MM-DD", "weightKg": number, "bodyFatPct"?: number}],
-      "sessions": [{"name": string, "date": "YYYY-MM-DD", "durationMin"?: number, "kcal"?: number}]
+      "sessions": [{"name": string, "date": "YYYY-MM-DD", "durationMin"?: number, "kcal"?: number}],
+      "health":  [{"date": "YYYY-MM-DD", "metrics": {"steps": number, "restingHr": number,
+                    "sleepMinutes": number, "sleepScore": number, "stress": number,
+                    "bodyBattery": number, "hrv": number, "spo2": number, "vo2max": number, ...}}]
     }
+
+The "metrics" bag is open-ended: any numeric field is imported and displayed, so new Garmin
+metrics need no code change on either side.
 """
 
 import argparse
@@ -33,8 +39,9 @@ from datetime import date, timedelta
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def build_payload(weights, sessions):
+def build_payload(weights, sessions, health=None):
     """Assembles + validates the version-1 FitMerge JSON payload from already-shaped rows."""
+    health = health or []
     clean_weights = []
     for w in weights:
         d = w.get("date")
@@ -66,7 +73,21 @@ def build_payload(weights, sessions):
             row["kcal"] = round(float(kcal))
         clean_sessions.append(row)
 
-    return {"version": 1, "weights": clean_weights, "sessions": clean_sessions}
+    clean_health = []
+    for h in health:
+        d = h.get("date")
+        if not isinstance(d, str) or not DATE_RE.match(d):
+            continue
+        metrics = {}
+        for k, v in (h.get("metrics") or {}).items():
+            # bools are ints in Python — exclude them; keep only finite numbers.
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                continue
+            metrics[str(k)] = round(float(v), 3)
+        if metrics:
+            clean_health.append({"date": d, "metrics": metrics})
+
+    return {"version": 1, "weights": clean_weights, "sessions": clean_sessions, "health": clean_health}
 
 
 def fetch_from_garmin(days):
@@ -123,7 +144,79 @@ def fetch_from_garmin(days):
             row["kcal"] = calories
         sessions.append(row)
 
-    return weights, sessions
+    health = fetch_daily_metrics(client, end, days)
+    return weights, sessions, health
+
+
+def fetch_daily_metrics(client, end, days):
+    """Pull every daily wellness metric Garmin exposes, one day at a time. Every call is
+    wrapped defensively so a missing endpoint or a day with no data never aborts the run."""
+    by_date = {}
+
+    def put(ds, key, val):
+        if val is None or isinstance(val, bool) or not isinstance(val, (int, float)):
+            return
+        by_date.setdefault(ds, {})[key] = val
+
+    def call(method_name, *a):
+        m = getattr(client, method_name, None)
+        if m is None:
+            return None
+        try:
+            return m(*a)
+        except Exception:
+            return None
+
+    for i in range(days + 1):
+        ds = (end - timedelta(days=i)).isoformat()
+
+        st = call("get_stats", ds) or {}
+        if isinstance(st, dict):
+            put(ds, "steps", st.get("totalSteps"))
+            put(ds, "floors", st.get("floorsAscended"))
+            put(ds, "activeCalories", st.get("activeKilocalories"))
+            put(ds, "totalCalories", st.get("totalKilocalories"))
+            put(ds, "restingHr", st.get("restingHeartRate"))
+            put(ds, "maxHr", st.get("maxHeartRate"))
+            put(ds, "stress", st.get("averageStressLevel"))
+            put(ds, "bodyBattery", st.get("bodyBatteryMostRecentValue") or st.get("bodyBatteryHighestValue"))
+            mod = st.get("moderateIntensityMinutes") or 0
+            vig = st.get("vigorousIntensityMinutes") or 0
+            if mod or vig:
+                put(ds, "intensityMinutes", mod + vig)
+            dist = st.get("totalDistanceMeters")
+            if isinstance(dist, (int, float)) and dist > 0:
+                put(ds, "distanceKm", dist / 1000.0)
+
+        sl = call("get_sleep_data", ds) or {}
+        dto = sl.get("dailySleepDTO") if isinstance(sl, dict) else None
+        if isinstance(dto, dict):
+            if dto.get("sleepTimeSeconds"):
+                put(ds, "sleepMinutes", dto["sleepTimeSeconds"] / 60.0)
+            if dto.get("deepSleepSeconds"):
+                put(ds, "deepSleepMinutes", dto["deepSleepSeconds"] / 60.0)
+            if dto.get("remSleepSeconds"):
+                put(ds, "remSleepMinutes", dto["remSleepSeconds"] / 60.0)
+            put(ds, "sleepScore", ((dto.get("sleepScores") or {}).get("overall") or {}).get("value"))
+
+        hrv = call("get_hrv_data", ds) or {}
+        if isinstance(hrv, dict):
+            put(ds, "hrv", (hrv.get("hrvSummary") or {}).get("lastNightAvg"))
+
+        sp = call("get_spo2_data", ds) or {}
+        if isinstance(sp, dict):
+            put(ds, "spo2", sp.get("averageSpO2") or sp.get("averageSpo2"))
+
+        rp = call("get_respiration_data", ds) or {}
+        if isinstance(rp, dict):
+            put(ds, "respiration", rp.get("avgWakingRespirationValue") or rp.get("avgSleepRespirationValue"))
+
+        mx = call("get_max_metrics", ds)
+        item = mx[0] if isinstance(mx, list) and mx else (mx if isinstance(mx, dict) else {})
+        gen = (item.get("generic") or {}) if isinstance(item, dict) else {}
+        put(ds, "vo2max", gen.get("vo2MaxValue"))
+
+    return [{"date": d, "metrics": m} for d, m in by_date.items()]
 
 
 def self_test():
@@ -136,13 +229,24 @@ def self_test():
         {"name": "Running", "date": "2026-06-20", "durationMin": 32.5, "kcal": 320},
         {"name": "Strength Training", "date": "2026-06-25", "durationMin": 48.0, "kcal": 410},
     ]
+    canned_health = [
+        {"date": "2026-07-01", "metrics": {"steps": 8421, "restingHr": 54, "sleepMinutes": 447,
+                                            "sleepScore": 82, "stress": 31, "bodyBattery": 76,
+                                            "vo2max": 48.0, "hrv": 62, "spo2": 96, "intense": True}},
+        {"date": "bad-date", "metrics": {"steps": 100}},   # rejected
+        {"date": "2026-07-02", "metrics": {"nope": "x"}},  # no numeric metrics -> rejected
+    ]
 
-    payload = build_payload(canned_weights, canned_sessions)
+    payload = build_payload(canned_weights, canned_sessions, canned_health)
 
     checks = [
         payload.get("version") == 1,
         len(payload["weights"]) == 3,
         len(payload["sessions"]) == 2,
+        len(payload["health"]) == 1,
+        payload["health"][0]["metrics"].get("steps") == 8421,
+        "intense" not in payload["health"][0]["metrics"],  # bool excluded
+        payload["health"][0]["metrics"].get("vo2max") == 48.0,
         all(DATE_RE.match(w["date"]) for w in payload["weights"]),
         all(isinstance(w["weightKg"], (int, float)) and w["weightKg"] > 0 for w in payload["weights"]),
         all(DATE_RE.match(s["date"]) for s in payload["sessions"]),
@@ -173,13 +277,16 @@ def main():
     if args.self_test:
         sys.exit(self_test())
 
-    weights, sessions = fetch_from_garmin(args.days)
-    payload = build_payload(weights, sessions)
+    weights, sessions, health = fetch_from_garmin(args.days)
+    payload = build_payload(weights, sessions, health)
 
     with open(args.out, "w") as f:
         json.dump(payload, f, indent=2)
 
-    print(f"Wrote {len(payload['weights'])} weigh-ins and {len(payload['sessions'])} sessions to {args.out}")
+    print(
+        f"Wrote {len(payload['weights'])} weigh-ins, {len(payload['sessions'])} sessions, "
+        f"and {len(payload['health'])} days of metrics to {args.out}"
+    )
 
 
 if __name__ == "__main__":

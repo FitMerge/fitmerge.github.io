@@ -6,6 +6,7 @@ import Sheet from '../../components/Sheet'
 import { useNutritionStore } from '../../store/nutrition'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useBodyStore } from '../../store/body'
+import { useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
 import { applyBackup, parseBackup, type ParsedBackup } from '../../services/dataBackup'
 
@@ -44,6 +45,8 @@ export default function DataSection() {
     const body = useBodyStore.getState()
     const settings = useSettingsStore.getState()
 
+    const health = useHealthStore.getState()
+
     const payload = {
       exportedAt: new Date().toISOString(),
       nutrition: {
@@ -51,9 +54,11 @@ export default function DataSection() {
         customFoods: nutrition.customFoods,
         savedMeals: nutrition.savedMeals,
         water: nutrition.water,
+        exercise: nutrition.exercise,
       },
-      workouts: { routines: workouts.routines, sessions: workouts.sessions },
+      workouts: { routines: workouts.routines, sessions: workouts.sessions, programs: workouts.programs },
       body: { entries: body.entries },
+      health: { days: health.days },
       settings: {
         goals: settings.goals,
         units: settings.units,
@@ -75,9 +80,16 @@ export default function DataSection() {
     // Clears logged data only (as the confirm copy states) — the user's
     // preferences (units, goals, profile, Gemini key) are intentionally kept,
     // so a reset never silently flips units or wipes their setup.
-    useNutritionStore.setState({ entries: [], customFoods: [], savedMeals: [], water: {} })
-    useWorkoutsStore.setState({ routines: [], sessions: [], activeSessionId: undefined })
+    useNutritionStore.setState({ entries: [], customFoods: [], savedMeals: [], water: {}, exercise: {} })
+    useWorkoutsStore.setState({
+      routines: [],
+      sessions: [],
+      programs: [],
+      activeSessionId: undefined,
+      activeProgramId: undefined,
+    })
     useBodyStore.setState({ entries: [] })
+    useHealthStore.setState({ days: {} })
     setConfirmOpen(false)
   }
 

@@ -5,16 +5,18 @@ import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { useBodyStore } from '../../store/body'
 import { useWorkoutsStore } from '../../store/workouts'
+import { useHealthStore } from '../../store/health'
 import { detectAndParse, sourceLabel } from '../../services/healthImport'
 import type { HealthImportResult } from '../../services/healthImport'
 
 type Stage = 'idle' | 'parsing' | 'preview' | 'error'
 
-type SuccessSummary = { weights: number; sessions: number }
+type SuccessSummary = { weights: number; sessions: number; health: number }
 
 export default function HealthConnectSection() {
   const upsertEntry = useBodyStore((s) => s.upsertEntry)
   const addSession = useWorkoutsStore((s) => s.addSession)
+  const upsertHealthDay = useHealthStore((s) => s.upsertDay)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -42,8 +44,8 @@ export default function HealthConnectSection() {
 
     try {
       const parsed = await detectAndParse(file, (pct) => setProgress(pct))
-      if (parsed.weights.length === 0 && parsed.sessions.length === 0) {
-        setErrorMessage('No weigh-ins or workouts found in that file.')
+      if (parsed.weights.length === 0 && parsed.sessions.length === 0 && parsed.health.length === 0) {
+        setErrorMessage('No weigh-ins, workouts, or health metrics found in that file.')
         setStage('error')
         return
       }
@@ -93,7 +95,11 @@ export default function HealthConnectSection() {
       importedSessions++
     }
 
-    setSuccess({ weights: result.weights.length, sessions: importedSessions })
+    for (const day of result.health) {
+      upsertHealthDay(day)
+    }
+
+    setSuccess({ weights: result.weights.length, sessions: importedSessions, health: result.health.length })
     setResult(null)
     setStage('idle')
   }
@@ -133,7 +139,8 @@ export default function HealthConnectSection() {
         <div className="space-y-3">
           <div className="rounded-xl bg-slate-800/60 p-3 text-sm text-slate-200">
             Found {result.weights.length} weigh-in{result.weights.length === 1 ? '' : 's'} ·{' '}
-            {result.sessions.length} workout{result.sessions.length === 1 ? '' : 's'} from{' '}
+            {result.sessions.length} workout{result.sessions.length === 1 ? '' : 's'} ·{' '}
+            {result.health.length} day{result.health.length === 1 ? '' : 's'} of metrics from{' '}
             {sourceLabel(result.source)}
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -159,7 +166,7 @@ export default function HealthConnectSection() {
       {success && (
         <p className="text-sm text-emerald-400">
           Imported {success.weights} weigh-in{success.weights === 1 ? '' : 's'} · {success.sessions} workout
-          {success.sessions === 1 ? '' : 's'}
+          {success.sessions === 1 ? '' : 's'} · {success.health} day{success.health === 1 ? '' : 's'} of metrics
         </p>
       )}
 

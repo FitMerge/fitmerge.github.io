@@ -56,12 +56,18 @@ sources. All parsing happens locally in the browser — nothing is uploaded to a
 
 ### Garmin Connect (`garmin-sync.py` script)
 
-For a one-shot pull of both weigh-ins and activities into a single file:
+For a one-shot pull of **everything** — weigh-ins, activities, and daily wellness metrics
+(steps, sleep + sleep score, resting HR, HRV, stress, Body Battery, VO₂ max, SpO₂, respiration,
+floors, intensity minutes, active/total calories) — into a single file:
 
 ```bash
 pip install garminconnect
 python3 scripts/garmin-sync.py --days 90 --out fitmerge-import.json
 ```
+
+The daily metrics land in `Progress → Health metrics`. The `metrics` bag is open-ended: any
+numeric field the script pulls is imported and displayed, so new Garmin metrics show up with no
+code change.
 
 Credentials come from the `GARMIN_EMAIL` / `GARMIN_PASSWORD` environment variables (or you'll
 be prompted). The session token is cached locally so you won't be re-prompted every run. Then
@@ -77,7 +83,8 @@ Desktop (e.g. [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp) or
 [eddmann/garmin-connect-mcp](https://github.com/eddmann/garmin-connect-mcp)), then ask Claude
 to emit a FitMerge JSON file using the schema below and import the result.
 
-**Example prompt:** *"Using the Garmin MCP server, pull my weigh-ins and activities from the
+**Example prompt:** *"Using the Garmin MCP server, pull my weigh-ins, activities, and daily
+health metrics (steps, sleep, resting HR, HRV, stress, Body Battery, VO₂ max, SpO₂) from the
 last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schema below."*
 
 **FitMerge JSON schema (version 1):**
@@ -90,13 +97,23 @@ last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schem
   ],
   "sessions": [
     { "name": "Running", "date": "YYYY-MM-DD", "durationMin": 32.5, "kcal": 320 }
+  ],
+  "health": [
+    { "date": "YYYY-MM-DD", "metrics": {
+        "steps": 9241, "restingHr": 53, "sleepMinutes": 432, "sleepScore": 84,
+        "stress": 29, "bodyBattery": 81, "hrv": 64, "spo2": 96, "vo2max": 47.5,
+        "floors": 12, "intensityMinutes": 45, "activeCalories": 620
+      } }
   ]
 }
 ```
 
-`bodyFatPct`, `durationMin`, and `kcal` are all optional. Dates are local `YYYY-MM-DD`
-strings. Re-importing the same file is safe — weigh-ins replace same-date entries and
-previously-imported workouts (matched by date + name) are skipped rather than duplicated.
+`weights`, `sessions`, and `health` are all optional (include any subset). The `metrics` object
+is an **open-ended bag of numbers** — any key you include is stored and shown on the Health
+metrics screen; known keys get nice labels/units, unknown ones display with a derived label.
+`bodyFatPct`, `durationMin`, and `kcal` are optional. Dates are local `YYYY-MM-DD` strings.
+Re-importing is safe — weigh-ins replace same-date entries, previously-imported workouts
+(matched by date + name) are skipped, and health metrics merge per date.
 
 ## Sync across devices (Google login)
 

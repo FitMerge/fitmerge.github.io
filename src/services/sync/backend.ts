@@ -2,7 +2,7 @@
 // (Firestore) lives alongside the Firebase glue; an in-memory fake here powers
 // deterministic multi-device tests without touching the network.
 
-export type StoreName = 'nutrition' | 'workouts' | 'body' | 'settings'
+export type StoreName = 'nutrition' | 'workouts' | 'body' | 'settings' | 'health'
 
 /** A store's synced data — a plain, JSON-serializable snapshot of its fields. */
 export type StoreData = Record<string, unknown>

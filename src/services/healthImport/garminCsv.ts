@@ -168,7 +168,7 @@ export function parseGarminCsv(text: string): HealthImportResult {
     if (sessions.length === 0) {
       throw new Error('Unrecognized CSV — expected a Garmin weight or activities export')
     }
-    return { weights: [], sessions, source: 'garmin-csv' }
+    return { weights: [], sessions, health: [], source: 'garmin-csv' }
   }
 
   if (isWeight) {
@@ -176,7 +176,7 @@ export function parseGarminCsv(text: string): HealthImportResult {
     if (weights.length === 0) {
       throw new Error('Unrecognized CSV — expected a Garmin weight or activities export')
     }
-    return { weights, sessions: [], source: 'garmin-csv' }
+    return { weights, sessions: [], health: [], source: 'garmin-csv' }
   }
 
   throw new Error('Unrecognized CSV — expected a Garmin weight or activities export')

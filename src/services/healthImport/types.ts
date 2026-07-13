@@ -13,6 +13,7 @@ export type HealthImportSource = 'fitmerge-json' | 'apple-health' | 'garmin-csv'
 export type HealthImportResult = {
   weights: import('../../types').BodyEntry[]
   sessions: ImportedSessionInput[]
+  health: import('../../types').HealthDay[]
   source: HealthImportSource
 }
 

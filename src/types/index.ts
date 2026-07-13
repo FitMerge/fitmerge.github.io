@@ -127,6 +127,18 @@ export type Profile = {
   goalType?: 'lose' | 'maintain' | 'gain'
 }
 
+/**
+ * Daily wellness metrics from an import (Garmin, Apple Health, …). Deliberately a
+ * flexible bag of named numeric metrics — steps, restingHr, sleepScore, stress,
+ * bodyBattery, vo2max, spo2, hrv, floors, intensityMinutes, and anything else the
+ * source exposes — so new Garmin metrics need no schema change. Known keys get
+ * nice labels/units from the metric catalog; unknown keys still display.
+ */
+export type HealthDay = {
+  date: string
+  metrics: Record<string, number>
+}
+
 /** A logged exercise / cardio session that burns calories back into the day's budget. */
 export type ExerciseEntry = {
   id: string

@@ -10,6 +10,7 @@
 import { useNutritionStore } from '../../store/nutrition'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useBodyStore } from '../../store/body'
+import { useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
 import type {
   BodyEntry,
@@ -17,6 +18,7 @@ import type {
   ExerciseEntry,
   FoodEntry,
   Goals,
+  HealthDay,
   Profile,
   Program,
   Routine,
@@ -52,6 +54,17 @@ function asArray<T>(v: unknown): T[] {
 
 function asRecord(v: unknown): Record<string, number> {
   return v && typeof v === 'object' ? (v as Record<string, number>) : {}
+}
+
+function asHealthDays(v: unknown): Record<string, HealthDay> {
+  if (!v || typeof v !== 'object') return {}
+  const out: Record<string, HealthDay> = {}
+  for (const [date, day] of Object.entries(v as Record<string, unknown>)) {
+    if (day && typeof day === 'object' && typeof (day as HealthDay).metrics === 'object') {
+      out[date] = { date, metrics: (day as HealthDay).metrics }
+    }
+  }
+  return out
 }
 
 function asExerciseMap(v: unknown): Record<string, ExerciseEntry[]> {
@@ -165,6 +178,32 @@ const body: StoreAdapter = {
   },
 }
 
+// --- health ----------------------------------------------------------------
+
+const health: StoreAdapter = {
+  name: 'health',
+  read() {
+    return { days: useHealthStore.getState().days }
+  },
+  apply(data) {
+    useHealthStore.setState({ days: asHealthDays(data.days) })
+  },
+  subscribe(cb) {
+    return useHealthStore.subscribe(cb)
+  },
+  merge(local, cloud) {
+    if (!cloud) return local
+    // Union by date; within a date, merge metric bags (local wins per-metric).
+    const ld = asHealthDays(local.days)
+    const cd = asHealthDays(cloud.days)
+    const days: Record<string, HealthDay> = {}
+    for (const date of new Set([...Object.keys(ld), ...Object.keys(cd)])) {
+      days[date] = { date, metrics: { ...(cd[date]?.metrics ?? {}), ...(ld[date]?.metrics ?? {}) } }
+    }
+    return { days }
+  },
+}
+
 // --- settings --------------------------------------------------------------
 // Singleton values (not collections). geminiApiKey is device-local and never
 // read/applied here, so it survives untouched. On merge, cloud values win so a
@@ -194,4 +233,4 @@ const settings: StoreAdapter = {
   },
 }
 
-export const STORE_ADAPTERS: StoreAdapter[] = [nutrition, workouts, body, settings]
+export const STORE_ADAPTERS: StoreAdapter[] = [nutrition, workouts, body, settings, health]

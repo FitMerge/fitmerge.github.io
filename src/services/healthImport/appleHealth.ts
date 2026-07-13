@@ -121,7 +121,7 @@ export function parseAppleHealthXml(
     return bodyFatPct !== undefined ? { ...entry, bodyFatPct } : entry
   })
 
-  return { weights, sessions, source: 'apple-health' }
+  return { weights, sessions, health: [], source: 'apple-health' }
 }
 
 /** Reads an Apple Health export (export.zip, export.xml, or plain text) and parses it. */

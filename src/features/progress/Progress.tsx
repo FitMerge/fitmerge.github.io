@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import RangeSelector from './RangeSelector'
 import WeightSection from './WeightSection'
+import HealthMetricsSection from './HealthMetricsSection'
 import CaloriesSection from './CaloriesSection'
 import MacroAveragesSection from './MacroAveragesSection'
 import VolumeSection from './VolumeSection'
@@ -20,6 +21,7 @@ export default function Progress() {
       <RangeSelector value={range} onChange={setRange} />
 
       <WeightSection range={range} />
+      <HealthMetricsSection />
       <CaloriesSection range={range} />
       <MacroAveragesSection range={range} />
       <VolumeSection range={range} />
