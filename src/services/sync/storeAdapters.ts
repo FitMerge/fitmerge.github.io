@@ -196,7 +196,19 @@ const health: StoreAdapter = {
     return { days: useHealthStore.getState().days }
   },
   apply(data) {
-    useHealthStore.setState({ days: asHealthDays(data.days) })
+    // Union incoming days with what's already local — never a hard replace. Health
+    // history can be large (years of daily Garmin metrics) and may exceed
+    // Firestore's 1MB per-doc limit, so its cloud upload can silently fail and the
+    // realtime listener then delivers an EMPTY doc. A replace here would wipe the
+    // local history on every load; a merge keeps it (and still folds in any genuine
+    // remote additions).
+    const incoming = asHealthDays(data.days)
+    const current = useHealthStore.getState().days
+    const merged: Record<string, HealthDay> = { ...current }
+    for (const date of Object.keys(incoming)) {
+      merged[date] = { date, metrics: { ...(current[date]?.metrics ?? {}), ...incoming[date].metrics } }
+    }
+    useHealthStore.setState({ days: merged })
   },
   subscribe(cb) {
     return useHealthStore.subscribe(cb)

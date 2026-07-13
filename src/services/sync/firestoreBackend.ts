@@ -35,13 +35,17 @@ export class FirestoreBackend implements SyncBackend {
   async get(store: StoreName): Promise<StoreData | null> {
     const snap = await getDoc(this.ref(store))
     if (!snap.exists()) return null
-    const data = snap.data() as StoredDoc
-    return isStoreData(data.payload) ? data.payload : null
+    return decodePayload((snap.data() as StoredDoc).payload)
   }
 
   async set(store: StoreName, data: StoreData): Promise<void> {
     await setDoc(this.ref(store), {
-      payload: data,
+      // Store the payload as a single JSON string, NOT a nested map. Firestore's
+      // 1MB document limit counts every nested field name, so a large map (years of
+      // daily health metrics = tens of thousands of fields) blows past 1MB and the
+      // write is rejected. A JSON string is just its byte length — the same data
+      // fits comfortably. Reads accept both the string and legacy nested-map form.
+      payload: JSON.stringify(data),
       clientId: CLIENT_ID,
       updatedAt: serverTimestamp(),
     })
@@ -53,11 +57,25 @@ export class FirestoreBackend implements SyncBackend {
       if (snap.metadata.hasPendingWrites) return // our own write, not yet confirmed remotely
       const data = snap.data() as StoredDoc
       if (data.clientId === CLIENT_ID) return // echo of our own write
-      if (isStoreData(data.payload)) cb(data.payload)
+      const decoded = decodePayload(data.payload)
+      if (decoded) cb(decoded)
     })
   }
 }
 
 function isStoreData(value: unknown): value is StoreData {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** Accepts the current JSON-string payload or a legacy nested-object payload. */
+function decodePayload(payload: unknown): StoreData | null {
+  if (typeof payload === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(payload)
+      return isStoreData(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return isStoreData(payload) ? payload : null
 }

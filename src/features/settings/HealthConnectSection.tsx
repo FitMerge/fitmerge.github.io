@@ -18,6 +18,12 @@ export default function HealthConnectSection() {
   const addImportedSessions = useWorkoutsStore((s) => s.addImportedSessions)
   const bulkUpsertDays = useHealthStore((s) => s.bulkUpsertDays)
 
+  // Live counts of what's actually persisted on THIS device — the ground truth for
+  // "did my import land?" (independent of any cloud sync state).
+  const storedWeights = useBodyStore((s) => s.entries.length)
+  const storedSessions = useWorkoutsStore((s) => s.sessions.length)
+  const storedHealthDays = useHealthStore((s) => Object.keys(s.days).length)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [stage, setStage] = useState<Stage>('idle')
@@ -100,6 +106,16 @@ export default function HealthConnectSection() {
       <p className="text-sm text-slate-400">
         Import weight and workouts from Apple Health, Garmin, or a FitMerge JSON file.
       </p>
+
+      {(storedWeights > 0 || storedSessions > 0 || storedHealthDays > 0) && (
+        <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
+          <span className="text-slate-500">On this device: </span>
+          {storedWeights.toLocaleString()} weigh-ins · {storedSessions.toLocaleString()} activities ·{' '}
+          <span className={storedHealthDays > 0 ? 'text-emerald-400' : 'text-amber-400'}>
+            {storedHealthDays.toLocaleString()} days of health metrics
+          </span>
+        </div>
+      )}
 
       <input
         ref={fileInputRef}
