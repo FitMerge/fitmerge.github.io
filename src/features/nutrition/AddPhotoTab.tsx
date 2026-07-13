@@ -134,11 +134,13 @@ export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhoto
 
   return (
     <div className="space-y-4">
+      {/* No `capture` attribute: on iOS that would force the camera and hide the
+          photo library. Without it, tapping shows the full menu — Take Photo AND
+          Choose from Library. */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handleFileChange}
         className="hidden"
       />
