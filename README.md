@@ -45,9 +45,12 @@ installable PWA.
   all data stays in your browser).
 
 ### Health Data Connect
-- Import weigh-ins and workouts from an **Apple Health** export, a **Garmin Connect** CSV,
-  or a documented **FitMerge JSON** file — all parsed locally in the browser, nothing is
-  uploaded anywhere. See [Connect Apple Health & Garmin](#connect-apple-health--garmin) below.
+- Import weigh-ins, workouts, and **dozens of daily Garmin metrics** — training readiness,
+  endurance & hill scores, fitness age, race-time predictions, Body Battery, full sleep stages,
+  HRV, stress, respiration, VO₂ max, body composition and more — from an **Apple Health** export,
+  a **Garmin Connect** CSV, or a documented **FitMerge JSON** file. All parsed locally in the
+  browser, nothing is uploaded anywhere. Every metric renders as a grouped, tappable **trend
+  chart**. See [Connect Apple Health & Garmin](#connect-apple-health--garmin) below.
 
 ## Connect Apple Health & Garmin
 
@@ -71,19 +74,31 @@ sources. All parsing happens locally in the browser — nothing is uploaded to a
 
 ### Garmin Connect (`garmin-sync.py` script)
 
-For a one-shot pull of **everything** — weigh-ins, activities, and daily wellness metrics
-(steps, sleep + sleep score, resting HR, HRV, stress, Body Battery, VO₂ max, SpO₂, respiration,
-floors, moderate/vigorous intensity minutes, per-activity training load and distance, active/total
-calories) — into a single file:
+For a one-shot pull of **everything** — weigh-ins, activities, and the full set of daily
+wellness + performance metrics — into a single file:
+
+- **Activity**: steps, floors, distance, moderate/vigorous intensity minutes, active/total calories
+- **Heart & recovery**: resting & max HR, HRV, average & max stress, Body Battery (level, high/low,
+  charged/drained), Pulse Ox (avg/low), respiration (avg/min/max)
+- **Sleep**: total/deep/REM/light/awake time + sleep score
+- **Training & performance**: VO₂ max (running + cycling), training readiness, acute training load,
+  endurance score, hill score, fitness age, and 5K/10K/half/marathon race-time predictions
+- **Body composition** (from the weigh-in feed): BMI, muscle & bone mass, body water %, visceral fat,
+  metabolic age, physique rating
+- Per-activity training load and distance (for the cardio pace/distance charts)
 
 ```bash
 pip install garminconnect
 python3 scripts/garmin-sync.py --days 90 --out fitmerge-import.json
 ```
 
-The daily metrics land in `Progress → Health metrics`. The `metrics` bag is open-ended: any
-numeric field the script pulls is imported and displayed, so new Garmin metrics show up with no
-code change.
+The daily metrics land in `Progress → Health metrics`, grouped into **Training & performance,
+Heart & recovery, Sleep, Activity** and **Body composition** sections. Each metric is a tile with
+a live **sparkline** of its recent trend; tap any tile for the full history with 30d/90d/1y/All
+ranges, min/avg/high stats, a 7-day moving-average overlay, and an improving/worsening delta (which
+knows that a *lower* resting HR, stress, race time or fitness age is better). The `metrics` bag is
+open-ended: any numeric field the script pulls is imported and displayed, so new Garmin metrics show
+up with no code change.
 
 Credentials come from the `GARMIN_EMAIL` / `GARMIN_PASSWORD` environment variables (or you'll
 be prompted). The session token is cached locally so you won't be re-prompted every run. Then
@@ -117,7 +132,11 @@ last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schem
   "health": [
     { "date": "YYYY-MM-DD", "metrics": {
         "steps": 9241, "restingHr": 53, "sleepMinutes": 432, "sleepScore": 84,
-        "stress": 29, "bodyBattery": 81, "hrv": 64, "spo2": 96, "vo2max": 47.5,
+        "deepSleepMinutes": 78, "remSleepMinutes": 96, "lightSleepMinutes": 240,
+        "stress": 29, "maxStress": 74, "bodyBattery": 81, "bodyBatteryHigh": 92,
+        "hrv": 64, "spo2": 96, "respiration": 14, "vo2max": 47.5,
+        "trainingReadiness": 74, "enduranceScore": 6100, "hillScore": 58,
+        "fitnessAge": 34, "raceTime5k": 1350, "bmi": 23.4, "muscleMassKg": 61.2,
         "floors": 12, "intensityMinutes": 45, "moderateIntensityMinutes": 30,
         "vigorousIntensityMinutes": 15, "activeCalories": 620
       } }

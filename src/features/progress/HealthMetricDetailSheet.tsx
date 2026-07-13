@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { TrendingDown, TrendingUp } from 'lucide-react'
 import Sheet from '../../components/Sheet'
 import { formatMetric, metricMeta } from '../../lib/healthMetrics'
 import {
@@ -7,6 +8,7 @@ import {
   metricSamples,
   metricSeries,
   metricStats,
+  withMovingAverage,
   type HealthRangeKey,
 } from './healthTrends'
 import type { HealthDay } from '../../types'
@@ -21,11 +23,18 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
   const [range, setRange] = useState<HealthRangeKey>('90d')
 
   const samples = useMemo(() => (metricKey ? metricSamples(days, metricKey) : []), [days, metricKey])
-  const series = useMemo(() => metricSeries(samples, range), [samples, range])
+  const series = useMemo(() => withMovingAverage(metricSeries(samples, range)), [samples, range])
   const stats = useMemo(() => metricStats(samples, range), [samples, range])
 
   const meta = metricKey ? metricMeta(metricKey) : null
   const hasPoints = series.some((p) => p.value !== null)
+  // Show the smoothing line only for noisy day-by-day ranges; long ranges are
+  // already bucketed averages.
+  const showAvg = range === '30d' || range === '90d'
+
+  const delta = stats ? stats.last - stats.first : 0
+  const improving = meta?.lowerIsBetter ? delta < 0 : delta > 0
+  const meaningful = stats ? Math.abs(delta) > Math.abs(stats.avg) * 0.01 : false
 
   return (
     <Sheet open={metricKey !== null} onClose={onClose} title={meta?.label ?? 'Metric'}>
@@ -54,6 +63,19 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
                 <Stat label="High" value={formatMetric(metricKey, stats.max)} />
               </div>
 
+              {meaningful && (
+                <div
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${
+                    improving ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                  }`}
+                >
+                  {delta > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                  {delta > 0 ? '+' : ''}
+                  {formatMetric(metricKey, delta)} over this range
+                  <span className="text-slate-500">· {improving ? 'improving' : 'worsening'}</span>
+                </div>
+              )}
+
               <div style={{ height: 200 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -76,8 +98,22 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
                     <Tooltip
                       contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: '#cbd5e1' }}
-                      formatter={(v: number) => [formatMetric(metricKey, v), meta?.label ?? '']}
+                      formatter={(v: number, name) => [
+                        formatMetric(metricKey, v),
+                        name === 'avg' ? '7-pt avg' : meta?.label ?? '',
+                      ]}
                     />
+                    {showAvg && (
+                      <Line
+                        type="monotone"
+                        dataKey="avg"
+                        stroke="#38bdf8"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 3"
+                        dot={false}
+                        connectNulls
+                      />
+                    )}
                     <Line
                       type="monotone"
                       dataKey="value"
@@ -92,7 +128,7 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
 
               <p className="text-center text-xs text-slate-500">
                 {stats.count} day{stats.count === 1 ? '' : 's'} of data
-                {range === '1y' ? ' · weekly average' : range === 'all' ? ' · monthly average' : ''}
+                {showAvg ? ' · dashed line = 7-day average' : range === '1y' ? ' · weekly average' : ' · monthly average'}
               </p>
             </>
           ) : (

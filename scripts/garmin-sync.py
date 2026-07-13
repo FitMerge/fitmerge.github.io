@@ -22,8 +22,18 @@ Output schema (FitMerge JSON, version 1):
                     "trainingLoad"?: number}],
       "health":  [{"date": "YYYY-MM-DD", "metrics": {"steps": number, "restingHr": number,
                     "sleepMinutes": number, "sleepScore": number, "stress": number,
-                    "bodyBattery": number, "hrv": number, "spo2": number, "vo2max": number, ...}}]
+                    "bodyBattery": number, "hrv": number, "spo2": number, "vo2max": number,
+                    "trainingReadiness": number, "enduranceScore": number, "hillScore": number,
+                    "fitnessAge": number, "raceTime5k": number, "bmi": number, ...}}]
     }
+
+Metrics pulled per day: steps, floors, active/total calories, resting & max HR, average &
+max stress, Body Battery (level + high/low/charged/drained), intensity minutes (moderate +
+vigorous), distance, sleep (total/deep/REM/light/awake + score), HRV, Pulse Ox (avg + low),
+respiration (avg/min/max), VO₂ max (running + cycling), training readiness, and — weekly —
+training-status acute load, endurance score, hill score, fitness age, and 5K/10K/half/marathon
+race-time predictions. Body-composition detail (BMI, muscle & bone mass, body water, visceral
+fat, metabolic age, physique rating) is folded in from the weigh-in feed.
 
 The "metrics" bag is open-ended: any numeric field is imported and displayed, so new Garmin
 metrics need no code change on either side.
@@ -138,16 +148,43 @@ def fetch_from_garmin(days):
         except Exception:
             continue
 
+    # Body-composition detail (BMI, muscle/bone mass, body water, visceral fat,
+    # metabolic age, physique rating) rides in as daily health metrics keyed by date.
+    bodycomp_metrics = {}
     for entry in (body_comp or {}).get("dateWeightList", []) if isinstance(body_comp, dict) else (body_comp or []):
         calendar_date = entry.get("calendarDate") or entry.get("date")
         weight_grams = entry.get("weight")
         if calendar_date is None or weight_grams is None:
             continue
-        row = {"date": str(calendar_date)[:10], "weightKg": weight_grams / 1000.0}
+        ds = str(calendar_date)[:10]
+        row = {"date": ds, "weightKg": weight_grams / 1000.0}
         body_fat = entry.get("bodyFat")
         if body_fat:
             row["bodyFatPct"] = body_fat
         weights.append(row)
+
+        detail = {}
+
+        def _bc(dst, *keys):
+            for k in keys:
+                v = entry.get(k)
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+                    detail[dst] = v
+                    return
+
+        _bc("bmi", "bmi")
+        _bc("muscleMassKg", "muscleMass")  # grams on some accounts → normalised below
+        _bc("boneMassKg", "boneMass")
+        _bc("bodyWaterPct", "bodyWater")
+        _bc("physiqueRating", "physiqueRating")
+        _bc("visceralFat", "visceralFat", "visceralFatRating")
+        _bc("metabolicAge", "metabolicAge")
+        # Garmin reports muscle/bone mass in grams; convert anything implausibly large to kg.
+        for k in ("muscleMassKg", "boneMassKg"):
+            if k in detail and detail[k] > 200:
+                detail[k] = detail[k] / 1000.0
+        if detail:
+            bodycomp_metrics[ds] = detail
 
     sessions = []
     activities = client.get_activities_by_date(start_str, end_str) or []
@@ -174,7 +211,88 @@ def fetch_from_garmin(days):
         sessions.append(row)
 
     health = fetch_daily_metrics(client, end, days)
+    # Fold body-composition detail into the matching health day.
+    by_date = {h["date"]: h["metrics"] for h in health}
+    for ds, detail in bodycomp_metrics.items():
+        by_date.setdefault(ds, {}).update(detail)
+    health = [{"date": d, "metrics": m} for d, m in by_date.items()]
     return weights, sessions, health
+
+
+def _first_num(d, *keys):
+    """First numeric (non-bool, finite) value among candidate keys of a dict."""
+    if not isinstance(d, dict):
+        return None
+    for k in keys:
+        v = d.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return v
+    return None
+
+
+def _deep_num(obj, *names, _depth=0):
+    """Search a nested dict/list for the first numeric value whose key exactly matches
+    one of `names`. Garmin buries values like acute load under varying wrapper keys
+    across firmware/library versions, so a defensive scan keeps us robust."""
+    if _depth > 6:
+        return None
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in names and isinstance(v, (int, float)) and not isinstance(v, bool):
+                return v
+        for v in obj.values():
+            found = _deep_num(v, *names, _depth=_depth + 1)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _deep_num(v, *names, _depth=_depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
+def fetch_slow_metrics(call, ds, put):
+    """Pull the slow-moving performance metrics for one date: training status (acute
+    load), endurance score, hill score, fitness age, and race-time predictions. Every
+    endpoint name/shape varies across garminconnect versions, so each is probed with
+    several method names and the value is deep-scanned defensively."""
+    # Training status → acute (7-day) training load.
+    for m in ("get_training_status",):
+        st = call(m, ds)
+        if st is not None:
+            put(ds, "acuteLoad", _deep_num(st, "acuteTrainingLoad", "acwrAcute", "dailyAcuteChronicWorkloadRatio"))
+            break
+
+    # Endurance score.
+    for m in ("get_endurance_score",):
+        es = call(m, ds, ds) if m == "get_endurance_score" else call(m, ds)
+        if es is not None:
+            put(ds, "enduranceScore", _deep_num(es, "overallScore", "enduranceScore", "score"))
+            break
+
+    # Hill score.
+    for m in ("get_hill_score",):
+        hs = call(m, ds, ds)
+        if hs is not None:
+            put(ds, "hillScore", _deep_num(hs, "overallScore", "hillScore", "score"))
+            break
+
+    # Fitness age (endpoint name differs across library versions).
+    for m in ("get_fitnessage_data", "get_fitness_age"):
+        fa = call(m, ds)
+        if fa is not None:
+            put(ds, "fitnessAge", _deep_num(fa, "fitnessAge", "achievableFitnessAge", "bioAge"))
+            break
+
+    # Race-time predictions (seconds) for 5K / 10K / half / marathon.
+    rpred = call("get_race_predictions")
+    row = rpred[-1] if isinstance(rpred, list) and rpred else (rpred if isinstance(rpred, dict) else {})
+    if isinstance(row, dict):
+        put(ds, "raceTime5k", _first_num(row, "time5K", "time5k"))
+        put(ds, "raceTime10k", _first_num(row, "time10K", "time10k"))
+        put(ds, "raceTimeHalf", _first_num(row, "timeHalfMarathon", "timeHalf"))
+        put(ds, "raceTimeMarathon", _first_num(row, "timeMarathon"))
 
 
 def fetch_daily_metrics(client, end, days):
@@ -230,6 +348,20 @@ def fetch_daily_metrics(client, end, days):
             if isinstance(dist, (int, float)) and dist > 0:
                 put(ds, "distanceKm", dist / 1000.0)
 
+        # Detailed stress (average already comes from get_stats above).
+        stress = call("get_stress_data", ds) or {}
+        if isinstance(stress, dict):
+            put(ds, "maxStress", stress.get("maxStressLevel"))
+
+        # Body Battery high/low and charged/drained deltas for the day.
+        bb = call("get_body_battery", ds, ds)
+        bb_day = bb[0] if isinstance(bb, list) and bb else (bb if isinstance(bb, dict) else {})
+        if isinstance(bb_day, dict):
+            put(ds, "bodyBatteryHigh", _first_num(bb_day, "highestBatteryLevel", "charged"))
+            put(ds, "bodyBatteryLow", _first_num(bb_day, "lowestBatteryLevel"))
+            put(ds, "bodyBatteryCharged", _first_num(bb_day, "charged"))
+            put(ds, "bodyBatteryDrained", _first_num(bb_day, "drained"))
+
         sl = call("get_sleep_data", ds) or {}
         dto = sl.get("dailySleepDTO") if isinstance(sl, dict) else None
         if isinstance(dto, dict):
@@ -239,6 +371,10 @@ def fetch_daily_metrics(client, end, days):
                 put(ds, "deepSleepMinutes", dto["deepSleepSeconds"] / 60.0)
             if dto.get("remSleepSeconds"):
                 put(ds, "remSleepMinutes", dto["remSleepSeconds"] / 60.0)
+            if dto.get("lightSleepSeconds"):
+                put(ds, "lightSleepMinutes", dto["lightSleepSeconds"] / 60.0)
+            if dto.get("awakeSleepSeconds"):
+                put(ds, "awakeMinutes", dto["awakeSleepSeconds"] / 60.0)
             put(ds, "sleepScore", ((dto.get("sleepScores") or {}).get("overall") or {}).get("value"))
 
         hrv = call("get_hrv_data", ds) or {}
@@ -248,15 +384,31 @@ def fetch_daily_metrics(client, end, days):
         sp = call("get_spo2_data", ds) or {}
         if isinstance(sp, dict):
             put(ds, "spo2", sp.get("averageSpO2") or sp.get("averageSpo2"))
+            put(ds, "spo2Low", sp.get("lowestSpO2") or sp.get("lowestSpo2"))
 
         rp = call("get_respiration_data", ds) or {}
         if isinstance(rp, dict):
             put(ds, "respiration", rp.get("avgWakingRespirationValue") or rp.get("avgSleepRespirationValue"))
+            put(ds, "respirationMin", rp.get("lowestRespirationValue"))
+            put(ds, "respirationMax", rp.get("highestRespirationValue"))
 
         mx = call("get_max_metrics", ds)
         item = mx[0] if isinstance(mx, list) and mx else (mx if isinstance(mx, dict) else {})
         gen = (item.get("generic") or {}) if isinstance(item, dict) else {}
         put(ds, "vo2max", gen.get("vo2MaxValue"))
+        cyc = (item.get("cycling") or {}) if isinstance(item, dict) else {}
+        put(ds, "vo2maxCycling", cyc.get("vo2MaxValue"))
+
+        # Training readiness is a genuinely daily score (0–100).
+        tr = call("get_training_readiness", ds)
+        tr_day = tr[0] if isinstance(tr, list) and tr else (tr if isinstance(tr, dict) else {})
+        if isinstance(tr_day, dict):
+            put(ds, "trainingReadiness", tr_day.get("score"))
+
+        # Performance metrics that barely move day-to-day — pull weekly (and on the
+        # most recent day) to keep the API-call count sane on multi-month syncs.
+        if i % 7 == 0 or i == 0:
+            fetch_slow_metrics(call, ds, put)
 
         # Be polite on long pulls so we don't trip Garmin's throttle, and show
         # progress so a multi-month run doesn't look frozen.
@@ -281,21 +433,39 @@ def self_test():
     canned_health = [
         {"date": "2026-07-01", "metrics": {"steps": 8421, "restingHr": 54, "sleepMinutes": 447,
                                             "sleepScore": 82, "stress": 31, "bodyBattery": 76,
-                                            "vo2max": 48.0, "hrv": 62, "spo2": 96, "intense": True}},
+                                            "vo2max": 48.0, "hrv": 62, "spo2": 96, "intense": True,
+                                            "trainingReadiness": 74, "enduranceScore": 6100,
+                                            "hillScore": 58, "fitnessAge": 34.0, "raceTime5k": 1350,
+                                            "bmi": 23.4, "muscleMassKg": 61.2, "lightSleepMinutes": 210,
+                                            "bodyBatteryHigh": 92}},
         {"date": "bad-date", "metrics": {"steps": 100}},   # rejected
         {"date": "2026-07-02", "metrics": {"nope": "x"}},  # no numeric metrics -> rejected
     ]
 
     payload = build_payload(canned_weights, canned_sessions, canned_health)
 
+    m0 = payload["health"][0]["metrics"] if payload["health"] else {}
     checks = [
         payload.get("version") == 1,
         len(payload["weights"]) == 3,
         len(payload["sessions"]) == 2,
         len(payload["health"]) == 1,
-        payload["health"][0]["metrics"].get("steps") == 8421,
-        "intense" not in payload["health"][0]["metrics"],  # bool excluded
-        payload["health"][0]["metrics"].get("vo2max") == 48.0,
+        m0.get("steps") == 8421,
+        "intense" not in m0,  # bool excluded
+        m0.get("vo2max") == 48.0,
+        m0.get("trainingReadiness") == 74,
+        m0.get("enduranceScore") == 6100,
+        m0.get("hillScore") == 58,
+        m0.get("fitnessAge") == 34.0,
+        m0.get("raceTime5k") == 1350,
+        m0.get("bmi") == 23.4,
+        m0.get("lightSleepMinutes") == 210,
+        m0.get("bodyBatteryHigh") == 92,
+        # Defensive extractor helpers.
+        _first_num({"a": True, "b": 5}, "a", "b") == 5,  # bool skipped
+        _deep_num({"x": {"y": {"acuteTrainingLoad": 812}}}, "acuteTrainingLoad") == 812,
+        _deep_num([{"z": 1}, {"score": 58}], "score") == 58,
+        _deep_num({"nothing": 1}, "score") is None,
         all(DATE_RE.match(w["date"]) for w in payload["weights"]),
         all(isinstance(w["weightKg"], (int, float)) and w["weightKg"] > 0 for w in payload["weights"]),
         all(DATE_RE.match(s["date"]) for s in payload["sessions"]),

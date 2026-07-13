@@ -17,7 +17,23 @@ export const HEALTH_RANGE_OPTIONS: { key: HealthRangeKey; label: string }[] = [
 ]
 
 export type MetricSample = { date: string; value: number }
-export type TrendPoint = { date: string; label: string; value: number | null }
+export type TrendPoint = { date: string; label: string; value: number | null; avg?: number | null }
+
+/**
+ * Adds a centred/​trailing moving average (`avg`) over the non-null points, so a
+ * noisy daily metric (steps, HRV, stress) gets a smooth trend line on top of the
+ * raw series. `window` is the number of recent non-null points averaged.
+ */
+export function withMovingAverage(points: TrendPoint[], window = 7): TrendPoint[] {
+  const recent: number[] = []
+  return points.map((p) => {
+    if (p.value === null) return { ...p, avg: null }
+    recent.push(p.value)
+    if (recent.length > window) recent.shift()
+    const avg = recent.reduce((s, v) => s + v, 0) / recent.length
+    return { ...p, avg }
+  })
+}
 
 /** Sorted (oldest→newest) list of every day that recorded `key`. */
 export function metricSamples(days: Record<string, HealthDay>, key: string): MetricSample[] {
