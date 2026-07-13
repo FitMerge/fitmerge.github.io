@@ -58,6 +58,24 @@ export type Routine = {
   scheduleDays?: number[]
 }
 
+/** One scheduled session within a multi-week Program (reuses an existing Routine). */
+export type ProgramDay = {
+  id: string
+  week: number
+  name: string
+  routineId: string
+}
+
+/** A multi-week guided training plan — an ordered list of workout days you follow. */
+export type Program = {
+  id: string
+  name: string
+  createdAt: number
+  days: ProgramDay[]
+  /** ids of ProgramDays already completed. */
+  completedDayIds: string[]
+}
+
 export type SetLog = {
   reps: number
   weight: number
@@ -72,6 +90,8 @@ export type WorkoutSessionEntry = {
 export type WorkoutSession = {
   id: string
   routineId?: string
+  /** Set when this session was started from a Program day, so finishing it marks that day done. */
+  programDayId?: string
   name: string
   date: string
   startedAt: number

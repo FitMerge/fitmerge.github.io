@@ -17,6 +17,7 @@ import type {
   FoodEntry,
   Goals,
   Profile,
+  Program,
   Routine,
   SavedMeal,
   Units,
@@ -95,12 +96,13 @@ const workouts: StoreAdapter = {
   name: 'workouts',
   read() {
     const s = useWorkoutsStore.getState()
-    return { routines: s.routines, sessions: s.sessions }
+    return { routines: s.routines, sessions: s.sessions, programs: s.programs }
   },
   apply(data) {
     useWorkoutsStore.setState({
       routines: asArray<Routine>(data.routines),
       sessions: asArray<WorkoutSession>(data.sessions),
+      programs: asArray<Program>(data.programs),
     })
   },
   subscribe(cb) {
@@ -111,6 +113,7 @@ const workouts: StoreAdapter = {
     return {
       routines: unionBy(asArray<Routine>(local.routines), asArray<Routine>(cloud.routines), (r) => r.id),
       sessions: unionBy(asArray<WorkoutSession>(local.sessions), asArray<WorkoutSession>(cloud.sessions), (s) => s.id),
+      programs: unionBy(asArray<Program>(local.programs), asArray<Program>(cloud.programs), (p) => p.id),
     }
   },
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Dumbbell, History, Plus } from 'lucide-react'
+import { CalendarRange, ChevronRight, Dumbbell, History, Plus } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import EmptyState from '../../components/EmptyState'
@@ -10,6 +10,8 @@ import ExerciseLibrary from './ExerciseLibrary'
 import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
 import SessionHistory from './SessionHistory'
+import ProgramBuilder from './ProgramBuilder'
+import ProgramDetail from './ProgramDetail'
 import { useWorkoutsStore } from '../../store/workouts'
 import { todayISO, weekdayIndex } from '../../lib/date'
 import { lastWeightForExercise } from './utils'
@@ -21,6 +23,8 @@ type ViewState =
   | { kind: 'edit'; routineId?: string }
   | { kind: 'session' }
   | { kind: 'history' }
+  | { kind: 'program'; programId: string }
+  | { kind: 'programEdit'; programId?: string }
 
 export default function Workouts() {
   const [view, setView] = useState<ViewState>({ kind: 'home' })
@@ -31,6 +35,7 @@ export default function Workouts() {
 
   const routines = useWorkoutsStore((s) => s.routines)
   const sessions = useWorkoutsStore((s) => s.sessions)
+  const programs = useWorkoutsStore((s) => s.programs)
   const addRoutine = useWorkoutsStore((s) => s.addRoutine)
   const removeRoutine = useWorkoutsStore((s) => s.removeRoutine)
   const startSession = useWorkoutsStore((s) => s.startSession)
@@ -118,6 +123,21 @@ export default function Workouts() {
       <SessionHistory
         onBack={() => setView({ kind: 'home' })}
         onRepeated={() => setView({ kind: 'session' })}
+      />
+    )
+  }
+
+  if (view.kind === 'programEdit') {
+    return <ProgramBuilder programId={view.programId} onDone={() => setView({ kind: 'home' })} />
+  }
+
+  if (view.kind === 'program') {
+    return (
+      <ProgramDetail
+        programId={view.programId}
+        onStartSession={() => setView({ kind: 'session' })}
+        onEdit={() => setView({ kind: 'programEdit', programId: view.programId })}
+        onDone={() => setView({ kind: 'home' })}
       />
     )
   }
@@ -210,6 +230,69 @@ export default function Workouts() {
           </span>
         </Button>
       )}
+
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-200">Programs</h2>
+          {programs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setView({ kind: 'programEdit' })}
+              className="text-xs font-medium text-emerald-400 active:text-emerald-300"
+            >
+              + New
+            </button>
+          )}
+        </div>
+
+        {programs.length === 0 ? (
+          <Card className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-400 shrink-0">
+                <CalendarRange size={18} />
+              </div>
+              <p className="text-sm text-slate-300">
+                Follow a multi-week plan with scheduled workouts — a guided program you tick off day by day.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              full
+              disabled={routines.length === 0}
+              onClick={() => setView({ kind: 'programEdit' })}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <Plus size={15} /> New program
+              </span>
+            </Button>
+            {routines.length === 0 && (
+              <p className="text-center text-xs text-slate-500">Create a routine first to build a program.</p>
+            )}
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {programs.map((p) => {
+              const done = p.completedDayIds.length
+              const total = p.days.length
+              return (
+                <Card
+                  key={p.id}
+                  className="flex items-center gap-3 active:bg-slate-800/60"
+                  onClick={() => setView({ kind: 'program', programId: p.id })}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-100">{p.name}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {done}/{total} workouts done
+                    </p>
+                  </div>
+                  <ChevronRight size={18} className="shrink-0 text-slate-500" />
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       <Button variant="ghost" full onClick={quickStart}>
         Start empty workout

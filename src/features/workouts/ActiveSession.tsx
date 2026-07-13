@@ -31,6 +31,7 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const updateSession = useWorkoutsStore((s) => s.updateSession)
   const removeSession = useWorkoutsStore((s) => s.removeSession)
   const setActiveSessionId = useWorkoutsStore((s) => s.setActiveSessionId)
+  const completeProgramDay = useWorkoutsStore((s) => s.completeProgramDay)
   const units = useSettingsStore((s) => s.units)
 
   const session = sessions.find((s) => s.id === sessionId)
@@ -118,6 +119,7 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
 
   function finishSession() {
     updateSession(session!.id, { finishedAt: Date.now() })
+    if (session!.programDayId) completeProgramDay(session!.programDayId)
     setActiveSessionId(undefined)
     onExit()
   }
