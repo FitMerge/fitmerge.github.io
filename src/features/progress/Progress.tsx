@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import RangeSelector from './RangeSelector'
+import FormFitnessSection from './FormFitnessSection'
 import WeightSection from './WeightSection'
 import HealthMetricsSection from './HealthMetricsSection'
 import CaloriesSection from './CaloriesSection'
@@ -17,6 +18,8 @@ export default function Progress() {
         <h1 className="text-xl font-bold text-slate-100">Progress</h1>
         <p className="text-sm text-slate-400">See trends in weight and performance over time.</p>
       </header>
+
+      <FormFitnessSection />
 
       <RangeSelector value={range} onChange={setRange} />
 
