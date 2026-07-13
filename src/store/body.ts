@@ -6,6 +6,8 @@ type BodyState = {
   entries: BodyEntry[]
   measurements: MeasurementEntry[]
   upsertEntry: (entry: BodyEntry) => void
+  /** Upsert many weigh-ins in a single persisted write (bulk import). */
+  bulkUpsertEntries: (entries: BodyEntry[]) => void
   removeEntry: (date: string) => void
   /** Merge measurement values into the entry for `date` (values override same keys). */
   upsertMeasurement: (date: string, values: Record<string, number>) => void
@@ -20,6 +22,11 @@ export const useBodyStore = create<BodyState>()(
       upsertEntry: (entry) => {
         const rest = get().entries.filter((e) => e.date !== entry.date)
         set({ entries: [...rest, entry] })
+      },
+      bulkUpsertEntries: (incoming) => {
+        const byDate = new Map(get().entries.map((e) => [e.date, e]))
+        for (const e of incoming) byDate.set(e.date, e)
+        set({ entries: Array.from(byDate.values()) })
       },
       removeEntry: (date) => {
         set({ entries: get().entries.filter((e) => e.date !== date) })

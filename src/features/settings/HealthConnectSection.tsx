@@ -14,9 +14,9 @@ type Stage = 'idle' | 'parsing' | 'preview' | 'error'
 type SuccessSummary = { weights: number; sessions: number; health: number }
 
 export default function HealthConnectSection() {
-  const upsertEntry = useBodyStore((s) => s.upsertEntry)
-  const addSession = useWorkoutsStore((s) => s.addSession)
-  const upsertHealthDay = useHealthStore((s) => s.upsertDay)
+  const bulkUpsertEntries = useBodyStore((s) => s.bulkUpsertEntries)
+  const addImportedSessions = useWorkoutsStore((s) => s.addImportedSessions)
+  const bulkUpsertDays = useHealthStore((s) => s.bulkUpsertDays)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -65,40 +65,29 @@ export default function HealthConnectSection() {
   function handleImport() {
     if (!result) return
 
-    for (const weight of result.weights) {
-      upsertEntry(weight)
-    }
+    // Three batched writes (one per store) instead of one write per record —
+    // importing years of Garmin data is otherwise O(n²) over localStorage and
+    // freezes / gets killed mid-import, silently dropping health metrics.
+    bulkUpsertEntries(result.weights)
 
-    const existing = useWorkoutsStore.getState().sessions
-    const seenKeys = new Set(
-      existing.filter((s) => s.imported).map((s) => `${s.date}::${s.name}`),
+    const importedSessions = addImportedSessions(
+      result.sessions.map((session) => {
+        const startedAt = Date.parse(`${session.date}T12:00:00`)
+        return {
+          name: session.name,
+          date: session.date,
+          startedAt,
+          finishedAt: startedAt + (session.durationMin ?? 0) * 60000,
+          entries: [],
+          imported: true as const,
+          durationMin: session.durationMin,
+          kcal: session.kcal,
+          trainingLoad: session.trainingLoad,
+        }
+      }),
     )
 
-    let importedSessions = 0
-    for (const session of result.sessions) {
-      const key = `${session.date}::${session.name}`
-      if (seenKeys.has(key)) continue
-      seenKeys.add(key)
-
-      const startedAt = Date.parse(`${session.date}T12:00:00`)
-      const finishedAt = startedAt + (session.durationMin ?? 0) * 60000
-      addSession({
-        name: session.name,
-        date: session.date,
-        startedAt,
-        finishedAt,
-        entries: [],
-        imported: true,
-        durationMin: session.durationMin,
-        kcal: session.kcal,
-        trainingLoad: session.trainingLoad,
-      })
-      importedSessions++
-    }
-
-    for (const day of result.health) {
-      upsertHealthDay(day)
-    }
+    bulkUpsertDays(result.health)
 
     setSuccess({ weights: result.weights.length, sessions: importedSessions, health: result.health.length })
     setResult(null)

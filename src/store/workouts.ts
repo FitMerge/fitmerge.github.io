@@ -13,6 +13,10 @@ type WorkoutsState = {
   updateRoutine: (id: string, patch: Partial<Routine>) => void
   removeRoutine: (id: string) => void
   addSession: (session: Omit<WorkoutSession, 'id'>) => void
+  /** Append many imported sessions in a SINGLE persisted write, skipping ones that
+   * duplicate an existing imported session (same date + name). Avoids the O(n²)
+   * per-session localStorage writes that froze large Garmin imports. */
+  addImportedSessions: (sessions: Omit<WorkoutSession, 'id'>[]) => number
   updateSession: (id: string, patch: Partial<WorkoutSession>) => void
   removeSession: (id: string) => void
   setActiveSessionId: (id: string | undefined) => void
@@ -47,6 +51,24 @@ export const useWorkoutsStore = create<WorkoutsState>()(
       },
       addSession: (session) => {
         set({ sessions: [...get().sessions, { ...session, id: uid() }] })
+      },
+      addImportedSessions: (incoming) => {
+        const existing = get().sessions
+        // Key on date+name+duration+kcal so two distinct activities on the same day
+        // (e.g. a morning and evening walk) are both kept, while re-importing the
+        // same file stays idempotent.
+        const key = (s: Pick<WorkoutSession, 'date' | 'name' | 'durationMin' | 'kcal'>) =>
+          `${s.date}::${s.name}::${s.durationMin ?? ''}::${s.kcal ?? ''}`
+        const seen = new Set(existing.filter((s) => s.imported).map(key))
+        const added: WorkoutSession[] = []
+        for (const s of incoming) {
+          const k = key(s)
+          if (seen.has(k)) continue
+          seen.add(k)
+          added.push({ ...s, id: uid() })
+        }
+        if (added.length > 0) set({ sessions: [...existing, ...added] })
+        return added.length
       },
       updateSession: (id, patch) => {
         set({
