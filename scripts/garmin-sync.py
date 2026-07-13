@@ -34,6 +34,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import date, timedelta
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -173,12 +174,22 @@ def fetch_daily_metrics(client, end, days):
         m = getattr(client, method_name, None)
         if m is None:
             return None
-        try:
-            return m(*a)
-        except Exception:
-            return None
+        # On a long multi-month pull Garmin can rate-limit (429) partway through.
+        # Rather than silently dropping the day, back off and retry a few times;
+        # only give up (return None) on a non-rate-limit error or after retries.
+        for attempt in range(4):
+            try:
+                return m(*a)
+            except Exception as e:
+                msg = str(e).lower()
+                if "429" in msg or "rate" in msg or "too many" in msg:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                return None
+        return None
 
-    for i in range(days + 1):
+    total = days + 1
+    for i in range(total):
         ds = (end - timedelta(days=i)).isoformat()
 
         st = call("get_stats", ds) or {}
@@ -226,6 +237,12 @@ def fetch_daily_metrics(client, end, days):
         item = mx[0] if isinstance(mx, list) and mx else (mx if isinstance(mx, dict) else {})
         gen = (item.get("generic") or {}) if isinstance(item, dict) else {}
         put(ds, "vo2max", gen.get("vo2MaxValue"))
+
+        # Be polite on long pulls so we don't trip Garmin's throttle, and show
+        # progress so a multi-month run doesn't look frozen.
+        time.sleep(0.2)
+        if (i + 1) % 30 == 0 or (i + 1) == total:
+            print(f"  ...pulled {i + 1}/{total} days of metrics", file=sys.stderr)
 
     return [{"date": d, "metrics": m} for d, m in by_date.items()]
 
