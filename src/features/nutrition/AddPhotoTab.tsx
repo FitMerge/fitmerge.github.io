@@ -42,6 +42,7 @@ export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhoto
   const [stage, setStage] = useState<Stage>('pick')
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
   const [items, setItems] = useState<ReviewItem[]>([])
+  const [provider, setProvider] = useState<'mock' | 'gemini'>('mock')
   const [mealType, setMealType] = useState<MealType>(defaultMealType ?? 'breakfast')
   const [errorMessage, setErrorMessage] = useState('')
   const [saving, setSaving] = useState(false)
@@ -70,6 +71,7 @@ export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhoto
     setStage('analyzing')
     try {
       const result = await analyzeFoodPhoto(imageDataUrl, geminiApiKey)
+      setProvider(result.provider)
       setItems(
         result.items.map((item) => ({
           ...item,
@@ -191,6 +193,13 @@ export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhoto
 
       {stage === 'review' && (
         <div className="space-y-4">
+          {provider === 'mock' && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
+              <span className="font-semibold">Sample results — not a real analysis of your photo.</span>{' '}
+              Photo mode is in demo mode. Add a free Gemini key in Settings → AI photo analysis to get
+              actual macros read from your photo. You can still edit these numbers and log them.
+            </div>
+          )}
           <div className="space-y-2">
             {items.map((item) => (
               <Card key={item.id} className="p-3 space-y-2">
