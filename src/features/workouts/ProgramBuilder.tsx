@@ -16,6 +16,7 @@ export default function ProgramBuilder({ programId, onDone }: ProgramBuilderProp
   const programs = useWorkoutsStore((s) => s.programs)
   const addProgram = useWorkoutsStore((s) => s.addProgram)
   const updateProgram = useWorkoutsStore((s) => s.updateProgram)
+  const removeProgram = useWorkoutsStore((s) => s.removeProgram)
 
   const existing = programId ? programs.find((p) => p.id === programId) : undefined
 
@@ -144,6 +145,19 @@ export default function ProgramBuilder({ programId, onDone }: ProgramBuilderProp
       <Button variant="primary" full disabled={!canSave} onClick={save}>
         {existing ? 'Save program' : 'Create program'}
       </Button>
+
+      {existing && (
+        <Button
+          variant="ghost"
+          full
+          onClick={() => {
+            removeProgram(existing.id)
+            onDone()
+          }}
+        >
+          <span className="text-red-400">Delete program</span>
+        </Button>
+      )}
     </div>
   )
 }
