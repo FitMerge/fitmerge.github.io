@@ -41,6 +41,12 @@ export type Exercise = {
   muscleGroup: string
   equipment: string
   instructions?: string
+  /** Muscles primarily worked — highlighted strongly on the exercise muscle map. */
+  primaryMuscles?: import('../data/muscles').MuscleId[]
+  /** Assisting muscles — highlighted faintly on the muscle map. */
+  secondaryMuscles?: import('../data/muscles').MuscleId[]
+  /** Numbered how-to steps shown on the exercise demonstration sheet. */
+  steps?: string[]
 }
 
 export type RoutineItem = {
@@ -76,10 +82,15 @@ export type Program = {
   completedDayIds: string[]
 }
 
+export type SetType = 'warmup' | 'normal' | 'drop'
+
 export type SetLog = {
   reps: number
   weight: number
   done: boolean
+  /** Set classification; absent means a normal working set. Warmup/drop sets are
+   * excluded from working-volume and personal-record calculations. */
+  type?: SetType
 }
 
 export type WorkoutSessionEntry = {

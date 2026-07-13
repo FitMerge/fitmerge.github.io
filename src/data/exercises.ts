@@ -9,6 +9,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Chest',
     equipment: 'Barbell',
     instructions: 'Lie on a flat bench, lower the bar to mid-chest, then press up to full elbow extension.',
+    primaryMuscles: ['chest', 'frontDelts', 'triceps'],
+    secondaryMuscles: [],
+    steps: [
+      'Lie flat and grip the bar just wider than shoulder width.',
+      'Unrack, then lower the bar under control to your mid-chest.',
+      'Press the bar back up until your elbows lock out.',
+      'Keep your shoulder blades pinned and feet planted throughout.',
+    ],
   },
   {
     id: 'incline-db-press',
@@ -16,6 +24,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Chest',
     equipment: 'Dumbbell',
     instructions: 'On a 30-45° incline bench, press dumbbells from shoulder height straight up over the chest.',
+    primaryMuscles: ['chest', 'frontDelts'],
+    secondaryMuscles: ['triceps'],
+    steps: [
+      'Set the bench to a 30-45 degree incline and sit back.',
+      'Start with dumbbells at shoulder height, palms facing forward.',
+      'Press both dumbbells up until they nearly touch overhead.',
+      'Lower slowly to a deep stretch across the upper chest.',
+    ],
   },
   {
     id: 'push-up',
@@ -23,6 +39,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Chest',
     equipment: 'Bodyweight',
     instructions: 'Keep a straight line from head to heels, lower your chest to the floor, then push back up.',
+    primaryMuscles: ['chest', 'triceps'],
+    secondaryMuscles: ['frontDelts', 'abs'],
+    steps: [
+      'Set hands slightly wider than shoulders with a braced core.',
+      'Hold a straight line from head to heels.',
+      'Lower your chest toward the floor with elbows at 45 degrees.',
+      'Press back up to full arm extension.',
+    ],
   },
   {
     id: 'cable-fly',
@@ -30,6 +54,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Chest',
     equipment: 'Cable',
     instructions: 'With a slight elbow bend, sweep both handles in a wide arc until they meet in front of your chest.',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['frontDelts'],
+    steps: [
+      'Set the pulleys high and grab a handle in each hand.',
+      'Step forward with a soft, fixed bend in your elbows.',
+      'Sweep both handles down and in until they meet ahead of your chest.',
+      'Return slowly along the same arc to a controlled stretch.',
+    ],
   },
   {
     id: 'chest-dip',
@@ -37,6 +69,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Chest',
     equipment: 'Bodyweight',
     instructions: 'Lean forward on parallel bars and lower until your shoulders dip below your elbows, then press up.',
+    primaryMuscles: ['chest', 'triceps'],
+    secondaryMuscles: ['frontDelts'],
+    steps: [
+      'Support yourself on parallel bars with arms locked out.',
+      'Lean your torso forward to bias the chest.',
+      'Lower until your shoulders drop just below your elbows.',
+      'Press back up powerfully to the starting position.',
+    ],
   },
 
   // Back
@@ -46,6 +86,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Back',
     equipment: 'Bodyweight',
     instructions: 'Hang from a bar with an overhand grip and pull your chin above the bar, then lower with control.',
+    primaryMuscles: ['lats', 'biceps'],
+    secondaryMuscles: ['upperBack', 'rearDelts', 'forearms'],
+    steps: [
+      'Hang from the bar with an overhand, shoulder-width grip.',
+      'Drive your elbows down and pull your chest toward the bar.',
+      'Bring your chin above the bar without swinging.',
+      'Lower with control to a full dead hang.',
+    ],
   },
   {
     id: 'lat-pulldown',
@@ -53,6 +101,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Back',
     equipment: 'Machine',
     instructions: 'Pull the bar down to your upper chest while keeping your torso upright, then let it rise slowly.',
+    primaryMuscles: ['lats', 'biceps'],
+    secondaryMuscles: ['upperBack', 'rearDelts'],
+    steps: [
+      'Grip the bar wider than shoulders and pin your thighs under the pad.',
+      'Lean back slightly and keep your chest tall.',
+      'Pull the bar down to your upper chest, driving elbows down.',
+      'Let the bar rise slowly until your arms are fully extended.',
+    ],
   },
   {
     id: 'barbell-row',
@@ -60,6 +116,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Back',
     equipment: 'Barbell',
     instructions: 'Hinge at the hips with a flat back and row the bar into your lower ribcage.',
+    primaryMuscles: ['lats', 'upperBack'],
+    secondaryMuscles: ['biceps', 'rearDelts', 'lowerBack'],
+    steps: [
+      'Hinge at the hips with a flat back and soft knees.',
+      'Let the bar hang with an overhand, shoulder-width grip.',
+      'Row the bar into your lower ribcage, squeezing your back.',
+      'Lower under control without rounding your spine.',
+    ],
   },
   {
     id: 'seated-cable-row',
@@ -67,6 +131,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Back',
     equipment: 'Cable',
     instructions: 'Sit tall and pull the handle to your torso, squeezing your shoulder blades together.',
+    primaryMuscles: ['lats', 'upperBack'],
+    secondaryMuscles: ['biceps', 'rearDelts'],
+    steps: [
+      'Sit tall with a slight knee bend and grab the handle.',
+      'Keep your chest up and back flat throughout.',
+      'Pull the handle to your torso, squeezing your shoulder blades.',
+      'Extend your arms slowly to a controlled stretch.',
+    ],
   },
   {
     id: 'deadlift',
@@ -74,6 +146,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Back',
     equipment: 'Barbell',
     instructions: 'Grip the bar outside your legs, drive through the floor, and stand tall keeping the bar close.',
+    primaryMuscles: ['glutes', 'hamstrings', 'lowerBack'],
+    secondaryMuscles: ['quads', 'traps', 'forearms'],
+    steps: [
+      'Stand with mid-foot under the bar and grip just outside your legs.',
+      'Set a flat back, brace your core, and take the slack out of the bar.',
+      'Drive through the floor and stand tall, keeping the bar close.',
+      'Return the bar by hinging your hips back and bending your knees.',
+    ],
   },
   {
     id: 'single-arm-db-row',
@@ -81,6 +161,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Back',
     equipment: 'Dumbbell',
     instructions: 'Brace one hand on a bench and row the dumbbell up toward your hip, keeping your torso still.',
+    primaryMuscles: ['lats', 'upperBack'],
+    secondaryMuscles: ['biceps', 'rearDelts'],
+    steps: [
+      'Brace one hand and knee on a bench with a flat back.',
+      'Let the dumbbell hang directly below your shoulder.',
+      'Row it up toward your hip, driving your elbow back.',
+      'Lower slowly and keep your torso still throughout.',
+    ],
   },
 
   // Shoulders
@@ -90,6 +178,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Shoulders',
     equipment: 'Barbell',
     instructions: 'Press the bar from shoulder height straight overhead, keeping your core braced.',
+    primaryMuscles: ['frontDelts', 'sideDelts'],
+    secondaryMuscles: ['triceps', 'traps'],
+    steps: [
+      'Hold the bar at shoulder height with a shoulder-width grip.',
+      'Brace your core and squeeze your glutes to stay rigid.',
+      'Press the bar straight overhead, moving your head back slightly.',
+      'Lock out overhead, then lower under control to your shoulders.',
+    ],
   },
   {
     id: 'lateral-raise',
@@ -97,6 +193,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Shoulders',
     equipment: 'Dumbbell',
     instructions: 'Raise dumbbells out to the sides to shoulder height with a slight elbow bend, then lower slowly.',
+    primaryMuscles: ['sideDelts'],
+    secondaryMuscles: ['traps'],
+    steps: [
+      'Stand tall with a dumbbell in each hand at your sides.',
+      'Keep a slight, fixed bend in your elbows.',
+      'Raise the dumbbells out to the sides to shoulder height.',
+      'Lower slowly, resisting the weight on the way down.',
+    ],
   },
   {
     id: 'rear-delt-fly',
@@ -104,6 +208,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Shoulders',
     equipment: 'Dumbbell',
     instructions: 'Hinge forward and raise dumbbells out to the sides, squeezing your rear shoulders at the top.',
+    primaryMuscles: ['rearDelts'],
+    secondaryMuscles: ['upperBack', 'traps'],
+    steps: [
+      'Hinge forward at the hips with a flat back.',
+      'Let the dumbbells hang below your chest, elbows soft.',
+      'Raise them out to the sides, leading with your elbows.',
+      'Squeeze your rear delts at the top, then lower slowly.',
+    ],
   },
   {
     id: 'face-pull',
@@ -111,6 +223,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Shoulders',
     equipment: 'Cable',
     instructions: 'Pull the rope toward your face, flaring your elbows out wide and squeezing your upper back.',
+    primaryMuscles: ['rearDelts', 'upperBack'],
+    secondaryMuscles: ['traps', 'biceps'],
+    steps: [
+      'Set the pulley to face height and grab the rope ends.',
+      'Step back with straight arms and a tall chest.',
+      'Pull the rope toward your face, flaring elbows out wide.',
+      'Squeeze your upper back, then extend the arms slowly.',
+    ],
   },
   {
     id: 'arnold-press',
@@ -118,6 +238,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Shoulders',
     equipment: 'Dumbbell',
     instructions: 'Start with palms facing you, rotate outward as you press the dumbbells overhead.',
+    primaryMuscles: ['frontDelts', 'sideDelts'],
+    secondaryMuscles: ['triceps'],
+    steps: [
+      'Sit tall holding dumbbells at chest height, palms facing you.',
+      'Rotate your palms outward as you begin pressing up.',
+      'Press overhead until arms lock out with palms forward.',
+      'Reverse the rotation as you lower back to the start.',
+    ],
   },
 
   // Biceps
@@ -127,6 +255,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Biceps',
     equipment: 'Barbell',
     instructions: 'Keeping elbows pinned to your sides, curl the bar up to shoulder height and lower slowly.',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: ['forearms'],
+    steps: [
+      'Stand tall gripping the bar shoulder-width, palms up.',
+      'Pin your elbows to your sides and brace your core.',
+      'Curl the bar up to shoulder height, squeezing the biceps.',
+      'Lower slowly to full extension without swinging.',
+    ],
   },
   {
     id: 'dumbbell-curl',
@@ -134,6 +270,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Biceps',
     equipment: 'Dumbbell',
     instructions: 'Curl each dumbbell up while keeping your elbow still, alternating or together.',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: ['forearms'],
+    steps: [
+      'Stand with a dumbbell in each hand, palms facing forward.',
+      'Keep your elbows pinned close to your torso.',
+      'Curl the weights up while squeezing the biceps.',
+      'Lower slowly and fully before the next rep.',
+    ],
   },
   {
     id: 'hammer-curl',
@@ -141,6 +285,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Biceps',
     equipment: 'Dumbbell',
     instructions: 'Curl dumbbells with a neutral palms-facing-in grip to emphasize the forearm and brachialis.',
+    primaryMuscles: ['biceps', 'forearms'],
+    secondaryMuscles: [],
+    steps: [
+      'Hold dumbbells with a neutral grip, palms facing inward.',
+      'Keep your elbows fixed at your sides.',
+      'Curl the weights up while maintaining the neutral grip.',
+      'Lower under control to full extension.',
+    ],
   },
   {
     id: 'preacher-curl',
@@ -148,6 +300,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Biceps',
     equipment: 'Machine',
     instructions: 'Rest your arms on the preacher pad and curl the weight up without letting elbows lift off.',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: ['forearms'],
+    steps: [
+      'Seat yourself with the backs of your arms flat on the pad.',
+      'Grip the bar or handles with palms facing up.',
+      'Curl the weight up, keeping your elbows glued to the pad.',
+      'Lower slowly to a controlled stretch, avoiding a hard lockout.',
+    ],
   },
 
   // Triceps
@@ -157,6 +317,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Triceps',
     equipment: 'Cable',
     instructions: 'Keep elbows tucked and push the bar or rope down until your arms are fully extended.',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    steps: [
+      'Set a high pulley and grip the bar or rope attachment.',
+      'Tuck your elbows to your sides and stand slightly forward.',
+      'Push down until your arms are fully extended.',
+      'Return slowly to about 90 degrees at the elbow.',
+    ],
   },
   {
     id: 'skull-crusher',
@@ -164,6 +332,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Triceps',
     equipment: 'Barbell',
     instructions: 'Lying on a bench, lower the bar toward your forehead by bending only at the elbows, then extend.',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    steps: [
+      'Lie on a bench holding the bar over your chest, arms straight.',
+      'Keep your upper arms vertical and elbows fixed in place.',
+      'Lower the bar toward your forehead by bending the elbows.',
+      'Extend back up until your arms lock out.',
+    ],
   },
   {
     id: 'triceps-dip',
@@ -171,6 +347,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Triceps',
     equipment: 'Bodyweight',
     instructions: 'Keeping your torso upright, lower on parallel bars or a bench then press back up through the triceps.',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: ['chest', 'frontDelts'],
+    steps: [
+      'Support yourself on parallel bars with arms locked and torso upright.',
+      'Keep your elbows tucked and pointing back.',
+      'Lower until your elbows reach about 90 degrees.',
+      'Press back up strongly through the triceps to lockout.',
+    ],
   },
   {
     id: 'overhead-triceps-extension',
@@ -178,6 +362,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Triceps',
     equipment: 'Dumbbell',
     instructions: 'Hold a dumbbell overhead with both hands and lower it behind your head, then extend back up.',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    steps: [
+      'Hold one dumbbell overhead with both hands, arms extended.',
+      'Keep your upper arms close to your head and elbows in.',
+      'Lower the dumbbell behind your head by bending the elbows.',
+      'Extend back overhead until your arms lock out.',
+    ],
   },
 
   // Legs
@@ -187,6 +379,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Barbell',
     instructions: 'Bar on your upper back, squat down until hips drop below knee level, then drive back up.',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings', 'lowerBack', 'abs'],
+    steps: [
+      'Rest the bar on your upper back and unrack it.',
+      'Set your feet shoulder-width with toes slightly out.',
+      'Sit down and back until your hips drop below your knees.',
+      'Drive through your whole foot to stand back tall.',
+    ],
   },
   {
     id: 'front-squat',
@@ -194,6 +394,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Barbell',
     instructions: 'Rest the bar on your front shoulders and squat down keeping your torso upright.',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['abs', 'upperBack'],
+    steps: [
+      'Rack the bar across your front shoulders with high elbows.',
+      'Keep your chest tall and torso as upright as possible.',
+      'Squat down until your hips drop below your knees.',
+      'Drive up through your heels while keeping elbows high.',
+    ],
   },
   {
     id: 'leg-press',
@@ -201,6 +409,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Machine',
     instructions: 'Push the platform away by extending your legs, then lower with control under a stable knee track.',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings'],
+    steps: [
+      'Sit in the machine with feet shoulder-width on the platform.',
+      'Release the safeties and hold the platform with legs bent.',
+      'Push the platform away until your legs are nearly straight.',
+      'Lower under control until your knees reach about 90 degrees.',
+    ],
   },
   {
     id: 'lunge',
@@ -208,6 +424,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Dumbbell',
     instructions: 'Step forward and lower your back knee toward the floor, then push back to standing.',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings', 'adductors'],
+    steps: [
+      'Hold a dumbbell in each hand and stand tall.',
+      'Step forward into a long stride, keeping your torso upright.',
+      'Lower your back knee toward the floor under control.',
+      'Push through your front heel to return to standing.',
+    ],
   },
   {
     id: 'romanian-deadlift',
@@ -215,6 +439,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Barbell',
     instructions: 'Hinge at the hips with soft knees, lowering the bar along your legs until you feel a hamstring stretch.',
+    primaryMuscles: ['hamstrings', 'glutes'],
+    secondaryMuscles: ['lowerBack', 'forearms'],
+    steps: [
+      'Stand tall holding the bar against your thighs, knees soft.',
+      'Push your hips back and slide the bar down your legs.',
+      'Lower until you feel a deep hamstring stretch, back flat.',
+      'Drive your hips forward to stand back tall.',
+    ],
   },
   {
     id: 'leg-curl',
@@ -222,6 +454,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Machine',
     instructions: 'Curl the pad toward your glutes by flexing at the knee, then lower slowly.',
+    primaryMuscles: ['hamstrings'],
+    secondaryMuscles: ['calves'],
+    steps: [
+      'Position yourself with the pad against your lower calves.',
+      'Keep your hips pressed into the bench.',
+      'Curl the pad toward your glutes by flexing your knees.',
+      'Lower slowly, resisting the weight to full extension.',
+    ],
   },
   {
     id: 'leg-extension',
@@ -229,6 +469,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Machine',
     instructions: 'Extend your knees to lift the pad until your legs are straight, then lower under control.',
+    primaryMuscles: ['quads'],
+    secondaryMuscles: [],
+    steps: [
+      'Sit with the pad resting on your lower shins.',
+      'Hold the handles and keep your back against the seat.',
+      'Extend your knees to lift the pad until legs are straight.',
+      'Squeeze the quads, then lower under control.',
+    ],
   },
   {
     id: 'calf-raise',
@@ -236,6 +484,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Legs',
     equipment: 'Machine',
     instructions: 'Rise up onto your toes as high as possible, pause, then lower your heels below the platform.',
+    primaryMuscles: ['calves'],
+    secondaryMuscles: [],
+    steps: [
+      'Place the balls of your feet on the platform edge.',
+      'Rise up onto your toes as high as possible.',
+      'Pause and squeeze the calves at the top.',
+      'Lower your heels below the platform for a full stretch.',
+    ],
   },
 
   // Glutes
@@ -245,6 +501,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Glutes',
     equipment: 'Barbell',
     instructions: 'With shoulders on a bench and a bar over your hips, drive through your heels to full hip extension.',
+    primaryMuscles: ['glutes'],
+    secondaryMuscles: ['hamstrings', 'quads'],
+    steps: [
+      'Rest your upper back on a bench with a padded bar over your hips.',
+      'Plant your feet flat, knees bent about 90 degrees.',
+      'Drive through your heels to full hip extension.',
+      'Squeeze your glutes at the top, then lower under control.',
+    ],
   },
   {
     id: 'glute-bridge',
@@ -252,6 +516,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Glutes',
     equipment: 'Bodyweight',
     instructions: 'Lying on your back with knees bent, squeeze your glutes to lift your hips off the floor.',
+    primaryMuscles: ['glutes'],
+    secondaryMuscles: ['hamstrings'],
+    steps: [
+      'Lie on your back with knees bent and feet flat.',
+      'Brace your core and press through your heels.',
+      'Squeeze your glutes to lift your hips into a straight line.',
+      'Pause at the top, then lower under control.',
+    ],
   },
   {
     id: 'cable-kickback',
@@ -259,6 +531,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Glutes',
     equipment: 'Cable',
     instructions: 'With an ankle cuff attached, kick your leg back and up, squeezing the glute at the top.',
+    primaryMuscles: ['glutes'],
+    secondaryMuscles: ['hamstrings'],
+    steps: [
+      'Attach an ankle cuff to a low pulley and face the machine.',
+      'Hinge slightly forward and hold the frame for balance.',
+      'Kick your working leg back and up, keeping it fairly straight.',
+      'Squeeze the glute at the top, then return under control.',
+    ],
   },
   {
     id: 'bulgarian-split-squat',
@@ -266,6 +546,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Glutes',
     equipment: 'Dumbbell',
     instructions: 'With your rear foot elevated behind you, lower your back knee toward the floor and drive back up.',
+    primaryMuscles: ['glutes', 'quads'],
+    secondaryMuscles: ['hamstrings', 'adductors'],
+    steps: [
+      'Rest the top of your rear foot on a bench behind you.',
+      'Hold dumbbells and keep your front shin roughly vertical.',
+      'Lower your back knee toward the floor under control.',
+      'Drive through your front heel to return to standing.',
+    ],
   },
 
   // Core
@@ -275,6 +563,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Core',
     equipment: 'Bodyweight',
     instructions: 'Hold a straight line from head to heels on your forearms and toes, bracing your core.',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: ['obliques', 'lowerBack'],
+    steps: [
+      'Set your forearms on the floor under your shoulders.',
+      'Extend your legs and rise onto your toes.',
+      'Hold a straight line from head to heels, bracing hard.',
+      'Keep breathing and avoid letting your hips sag or pike.',
+    ],
   },
   {
     id: 'crunch',
@@ -282,6 +578,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Core',
     equipment: 'Bodyweight',
     instructions: 'Curl your shoulders off the floor toward your hips, keeping your lower back down.',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: ['obliques'],
+    steps: [
+      'Lie on your back with knees bent and feet flat.',
+      'Place your hands lightly by your head or across your chest.',
+      'Curl your shoulders off the floor toward your hips.',
+      'Lower slowly, keeping your lower back pressed down.',
+    ],
   },
   {
     id: 'hanging-leg-raise',
@@ -289,6 +593,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Core',
     equipment: 'Bodyweight',
     instructions: 'Hang from a bar and raise your legs to hip height or higher without swinging.',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: ['obliques', 'forearms'],
+    steps: [
+      'Hang from a bar with a shoulder-width overhand grip.',
+      'Brace your core and avoid swinging.',
+      'Raise your legs to hip height or higher with control.',
+      'Lower slowly back to a full hang.',
+    ],
   },
   {
     id: 'russian-twist',
@@ -296,6 +608,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Core',
     equipment: 'Kettlebell',
     instructions: 'Sitting with feet lifted, rotate a weight from side to side while keeping your chest up.',
+    primaryMuscles: ['obliques', 'abs'],
+    secondaryMuscles: [],
+    steps: [
+      'Sit with knees bent and lean back to engage your core.',
+      'Lift your feet off the floor and hold a weight at your chest.',
+      'Rotate the weight to one side, then the other.',
+      'Keep your chest up and move with control, not momentum.',
+    ],
   },
   {
     id: 'cable-woodchop',
@@ -303,6 +623,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Core',
     equipment: 'Cable',
     instructions: 'Rotate the cable diagonally from high to low (or low to high) across your body, pivoting your hips.',
+    primaryMuscles: ['obliques', 'abs'],
+    secondaryMuscles: ['frontDelts'],
+    steps: [
+      'Set the pulley high and grip the handle with both hands.',
+      'Stand side-on with arms extended toward the pulley.',
+      'Pull the handle diagonally across your body to the opposite hip.',
+      'Pivot your hips and return slowly along the same path.',
+    ],
   },
 
   // Cardio
@@ -312,6 +640,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Cardio',
     equipment: 'Other',
     instructions: 'Maintain a steady pace and posture, landing lightly under your hips.',
+    primaryMuscles: ['quads', 'hamstrings', 'calves'],
+    secondaryMuscles: ['glutes'],
+    steps: [
+      'Stand tall with a slight forward lean from the ankles.',
+      'Drive your knees forward and swing arms in rhythm.',
+      'Land lightly under your hips with a quick cadence.',
+      'Keep a steady, controlled breathing pattern throughout.',
+    ],
   },
   {
     id: 'cycling',
@@ -319,6 +655,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Cardio',
     equipment: 'Other',
     instructions: 'Pedal at a controlled cadence with a slight bend in your knee at full extension.',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings', 'calves'],
+    steps: [
+      'Set the saddle so your knee stays slightly bent at the bottom.',
+      'Grip the bars with a relaxed upper body.',
+      'Pedal in smooth circles at a controlled cadence.',
+      'Adjust resistance to keep effort steady over time.',
+    ],
   },
   {
     id: 'rowing-machine',
@@ -326,6 +670,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Cardio',
     equipment: 'Machine',
     instructions: 'Drive with your legs, then lean back and pull the handle to your ribs before reversing the sequence.',
+    primaryMuscles: ['lats', 'upperBack', 'quads'],
+    secondaryMuscles: ['biceps', 'hamstrings'],
+    steps: [
+      'Strap in and start compressed with shins vertical.',
+      'Drive powerfully through your legs first.',
+      'Lean back slightly and pull the handle to your lower ribs.',
+      'Reverse the order — arms, torso, then legs — to return.',
+    ],
   },
   {
     id: 'jump-rope',
@@ -333,6 +685,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Cardio',
     equipment: 'Other',
     instructions: 'Jump with small, quick hops on the balls of your feet as the rope passes under you.',
+    primaryMuscles: ['calves'],
+    secondaryMuscles: ['quads', 'forearms'],
+    steps: [
+      'Hold the handles at your hips and turn the rope with your wrists.',
+      'Stay light on the balls of your feet.',
+      'Make small, quick hops as the rope passes under you.',
+      'Keep a steady rhythm and a relaxed upper body.',
+    ],
   },
   {
     id: 'burpee',
@@ -340,6 +700,14 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: 'Cardio',
     equipment: 'Bodyweight',
     instructions: 'Drop into a squat, kick back to a plank, do a push-up, then jump feet in and leap up.',
+    primaryMuscles: ['chest', 'quads', 'abs'],
+    secondaryMuscles: ['frontDelts', 'triceps'],
+    steps: [
+      'From standing, drop into a squat and plant your hands.',
+      'Kick your feet back into a plank and lower into a push-up.',
+      'Jump your feet back toward your hands.',
+      'Explode up into a jump, then repeat smoothly.',
+    ],
   },
 ]
 

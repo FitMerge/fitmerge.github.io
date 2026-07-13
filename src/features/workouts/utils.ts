@@ -1,6 +1,12 @@
-import type { Units, WorkoutSession } from '../../types'
+import { epley1RM } from '../progress/utils'
+import type { SetLog, Units, WorkoutSession } from '../../types'
 
 export const DEFAULT_REST_SEC = 90
+
+/** A working set is any completed set that isn't a warmup. */
+export function isWorkingSet(set: SetLog): boolean {
+  return set.done && set.type !== 'warmup' && set.weight > 0 && set.reps > 0
+}
 
 export function weightUnitLabel(units: Units): string {
   return units === 'imperial' ? 'lb' : 'kg'
@@ -39,9 +45,48 @@ export function totalSetsDone(session: WorkoutSession): number {
 
 export function totalVolume(session: WorkoutSession): number {
   return session.entries.reduce(
-    (sum, e) => sum + e.sets.filter((s) => s.done).reduce((s2, set) => s2 + set.weight * set.reps, 0),
+    (sum, e) => sum + e.sets.filter(isWorkingSet).reduce((s2, set) => s2 + set.weight * set.reps, 0),
     0,
   )
+}
+
+/**
+ * The set list for an exercise from the most recent finished session (excluding
+ * `excludeSessionId`, typically the in-progress one) — used to show each set's
+ * "previous" reference in the logger, Hevy-style.
+ */
+export function previousSessionSets(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+  excludeSessionId?: string,
+): SetLog[] | null {
+  const finished = sessions
+    .filter((s) => s.finishedAt !== undefined && s.id !== excludeSessionId)
+    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
+  for (const session of finished) {
+    const entry = session.entries.find((e) => e.exerciseId === exerciseId)
+    if (entry && entry.sets.some((s) => s.done)) return entry.sets.filter((s) => s.done)
+  }
+  return null
+}
+
+/** Best est-1RM ever hit on an exercise before `excludeSessionId` — the bar a new PR must clear. */
+export function priorBest1RM(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+  excludeSessionId?: string,
+): number {
+  let best = 0
+  for (const session of sessions) {
+    if (!session.finishedAt || session.id === excludeSessionId) continue
+    const entry = session.entries.find((e) => e.exerciseId === exerciseId)
+    if (!entry) continue
+    for (const set of entry.sets) {
+      if (!isWorkingSet(set)) continue
+      best = Math.max(best, epley1RM(set.weight, set.reps))
+    }
+  }
+  return best
 }
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']

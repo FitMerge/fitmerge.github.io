@@ -17,10 +17,15 @@ installable PWA.
   goals with progress rings.
 
 ### Training
-- **Exercise library**: 46 seeded exercises filterable by muscle group and equipment.
+- **Exercise library with demonstrations**: 46 seeded exercises filterable by muscle group and
+  equipment. Each opens a detail sheet with a **front/back muscle map** highlighting the primary
+  and secondary muscles worked, numbered how-to steps, and your personal best.
 - **Routine builder**: custom plans with per-exercise sets/reps/rest and weekday scheduling.
-- **Live session logger**: elapsed timer, per-set weight/reps, rest countdown with +15s/skip,
-  previous-weight prefill, ad-hoc quick workouts, resumable after reload.
+- **Hevy-style session logger**: a compact set table showing each set's **previous** performance
+  (tap to copy), **warmup / drop set types** (tap the set badge to cycle), and a **🏆 live PR
+  flag** when a set beats your best estimated 1RM. Elapsed timer, rest countdown with +15s/skip,
+  previous-weight prefill, ad-hoc quick workouts, resumable after reload, and a finish summary
+  that celebrates new personal records. Warmup sets are excluded from volume and PR totals.
 
 ### Progress & more
 - Weight trend, calorie history vs goal, macro averages, weekly training volume, and

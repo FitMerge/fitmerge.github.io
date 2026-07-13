@@ -115,7 +115,7 @@ export function personalRecords(sessions: WorkoutSession[]): PersonalRecord[] {
     if (!session.finishedAt) continue
     for (const entry of session.entries) {
       for (const set of entry.sets) {
-        if (!set.done || set.reps <= 0 || set.weight <= 0) continue
+        if (!set.done || set.type === 'warmup' || set.reps <= 0 || set.weight <= 0) continue
         const est1RM = epley1RM(set.weight, set.reps)
         const current = best.get(entry.exerciseId)
         if (!current || est1RM > current.est1RM) {
