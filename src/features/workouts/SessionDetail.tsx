@@ -87,20 +87,41 @@ export default function SessionDetail({ session, onClose, onRepeated }: SessionD
             <div className="space-y-3">
               {session.entries.map((entry) => {
                 const exercise = getExerciseById(entry.exerciseId)
+                const vol = entry.sets
+                  .filter((s) => s.done && s.type !== 'warmup')
+                  .reduce((sum, s) => sum + s.weight * s.reps, 0)
                 return (
                   <div key={entry.exerciseId}>
-                    <p className="text-sm font-semibold text-slate-100 mb-1">
-                      {exercise?.name ?? 'Unknown exercise'}
-                    </p>
+                    <div className="mb-1 flex items-baseline justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-100">
+                        {exercise?.name ?? 'Unknown exercise'}
+                      </p>
+                      {vol > 0 && (
+                        <span className="shrink-0 text-xs tabular-nums text-slate-500">
+                          {Math.round(vol).toLocaleString()} {unitLabel}
+                        </span>
+                      )}
+                    </div>
+                    {entry.note && <p className="mb-1 text-xs italic text-slate-500">{entry.note}</p>}
                     <div className="space-y-1">
-                      {entry.sets.map((set, idx) => (
-                        <p
-                          key={idx}
-                          className={`text-sm tabular-nums ${set.done ? 'text-slate-300' : 'text-slate-600'}`}
-                        >
-                          {set.weight} {unitLabel} × {set.reps} {set.done ? '✓' : '✗'}
-                        </p>
-                      ))}
+                      {entry.sets.map((set, idx) => {
+                        const tag = set.type === 'warmup' ? 'W' : set.type === 'drop' ? 'D' : `${idx + 1}`
+                        const tagCls =
+                          set.type === 'warmup'
+                            ? 'text-amber-400'
+                            : set.type === 'drop'
+                              ? 'text-purple-400'
+                              : 'text-slate-500'
+                        return (
+                          <p
+                            key={idx}
+                            className={`flex items-center gap-2 text-sm tabular-nums ${set.done ? 'text-slate-300' : 'text-slate-600'}`}
+                          >
+                            <span className={`w-4 text-xs font-semibold ${tagCls}`}>{tag}</span>
+                            {set.weight} {unitLabel} × {set.reps} {set.done ? '✓' : '✗'}
+                          </p>
+                        )
+                      })}
                     </div>
                   </div>
                 )

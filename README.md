@@ -20,7 +20,14 @@ installable PWA.
 - **Exercise library with demonstrations**: 46 seeded exercises filterable by muscle group and
   equipment. Each opens a detail sheet with a **front/back muscle map** highlighting the primary
   and secondary muscles worked, numbered how-to steps, and your personal best.
-- **Routine builder**: custom plans with per-exercise sets/reps/rest and weekday scheduling.
+- **Routine builder**: custom plans with per-exercise sets/reps/rest, per-exercise notes, and
+  weekday scheduling.
+- **In-workout management**: reorder, replace, or remove exercises mid-session, add per-exercise
+  notes, and a built-in **plate calculator** (what to load on each side of the bar).
+- **Training statistics**: lifetime totals (workouts, volume, reps, time), a weekly-frequency
+  chart, week-streak, and a **muscle-balance** view of sets per muscle over the last 30 days.
+- **Body measurements**: track chest, arms, waist, thighs and more over time, with per-measure
+  history charts (alongside body-weight tracking).
 - **Hevy-style session logger**: a compact set table showing each set's **previous** performance
   (tap to copy), **warmup / drop set types** (tap the set badge to cycle), and a **🏆 live PR
   flag** when a set beats your best estimated 1RM. Elapsed timer, rest countdown with +15s/skip,

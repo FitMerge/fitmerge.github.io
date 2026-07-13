@@ -54,6 +54,8 @@ export type RoutineItem = {
   targetSets: number
   targetReps: number
   restSec: number
+  /** Coaching note shown under the exercise while training. */
+  note?: string
 }
 
 export type Routine = {
@@ -96,6 +98,8 @@ export type SetLog = {
 export type WorkoutSessionEntry = {
   exerciseId: string
   sets: SetLog[]
+  /** Free-text note for this exercise within the session (form cues, tweaks). */
+  note?: string
 }
 
 export type WorkoutSession = {
@@ -124,6 +128,18 @@ export type BodyEntry = {
   weightKg: number
   bodyFatPct?: number
   note?: string
+}
+
+/**
+ * Body-measurement entry — an open-ended bag of circumference/length values keyed
+ * by measurement id (see `src/data/measurements.ts`). Lengths are stored in
+ * centimetres and converted for display; open-ended so new measures need no schema
+ * change, mirroring HealthDay.
+ */
+export type MeasurementEntry = {
+  date: string
+  /** measurementId → value in centimetres. */
+  values: Record<string, number>
 }
 
 export type Units = 'metric' | 'imperial'

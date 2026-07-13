@@ -19,6 +19,7 @@ import type {
   FoodEntry,
   Goals,
   HealthDay,
+  MeasurementEntry,
   Profile,
   Program,
   Routine,
@@ -161,19 +162,28 @@ const workouts: StoreAdapter = {
 const body: StoreAdapter = {
   name: 'body',
   read() {
-    return { entries: useBodyStore.getState().entries }
+    const s = useBodyStore.getState()
+    return { entries: s.entries, measurements: s.measurements }
   },
   apply(data) {
-    useBodyStore.setState({ entries: asArray<BodyEntry>(data.entries) })
+    useBodyStore.setState({
+      entries: asArray<BodyEntry>(data.entries),
+      measurements: asArray<MeasurementEntry>(data.measurements),
+    })
   },
   subscribe(cb) {
     return useBodyStore.subscribe(cb)
   },
   merge(local, cloud) {
     if (!cloud) return local
-    // One weigh-in per date; local wins a same-date conflict.
+    // One weigh-in / measurement set per date; local wins a same-date conflict.
     return {
       entries: unionBy(asArray<BodyEntry>(local.entries), asArray<BodyEntry>(cloud.entries), (e) => e.date),
+      measurements: unionBy(
+        asArray<MeasurementEntry>(local.measurements),
+        asArray<MeasurementEntry>(cloud.measurements),
+        (e) => e.date,
+      ),
     }
   },
 }

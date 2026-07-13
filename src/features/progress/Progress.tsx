@@ -5,6 +5,7 @@ import RecoveryRiskSection from './RecoveryRiskSection'
 import RestingHrHrvSection from './RestingHrHrvSection'
 import IntensityDistributionSection from './IntensityDistributionSection'
 import WeightSection from './WeightSection'
+import MeasurementsSection from './MeasurementsSection'
 import HealthMetricsSection from './HealthMetricsSection'
 import CaloriesSection from './CaloriesSection'
 import MacroAveragesSection from './MacroAveragesSection'
@@ -30,6 +31,7 @@ export default function Progress() {
       <RangeSelector value={range} onChange={setRange} />
 
       <WeightSection range={range} />
+      <MeasurementsSection />
       <HealthMetricsSection />
       <CaloriesSection range={range} />
       <MacroAveragesSection range={range} />

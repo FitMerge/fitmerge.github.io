@@ -86,6 +86,14 @@ export default function RoutineItemRow({
           suffix="s"
         />
       </div>
+
+      <input
+        type="text"
+        value={item.note ?? ''}
+        onChange={(e) => onChange({ note: e.target.value || undefined })}
+        placeholder="Note (optional) — e.g. tempo 3-1-1, last set to failure"
+        className="w-full rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
+      />
     </Card>
   )
 }

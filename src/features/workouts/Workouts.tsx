@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { CalendarRange, ChevronRight, Dumbbell, History, Plus } from 'lucide-react'
+import { BarChart3, CalendarRange, ChevronRight, Dumbbell, History, Plus } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import EmptyState from '../../components/EmptyState'
@@ -12,6 +12,7 @@ import ActiveSession from './ActiveSession'
 import SessionHistory from './SessionHistory'
 import ProgramBuilder from './ProgramBuilder'
 import ProgramDetail from './ProgramDetail'
+import WorkoutStats from './WorkoutStats'
 import { useWorkoutsStore } from '../../store/workouts'
 import { todayISO, weekdayIndex } from '../../lib/date'
 import { lastWeightForExercise } from './utils'
@@ -23,6 +24,7 @@ type ViewState =
   | { kind: 'edit'; routineId?: string }
   | { kind: 'session' }
   | { kind: 'history' }
+  | { kind: 'stats' }
   | { kind: 'program'; programId: string }
   | { kind: 'programEdit'; programId?: string }
 
@@ -125,6 +127,10 @@ export default function Workouts() {
         onRepeated={() => setView({ kind: 'session' })}
       />
     )
+  }
+
+  if (view.kind === 'stats') {
+    return <WorkoutStats onBack={() => setView({ kind: 'home' })} />
   }
 
   if (view.kind === 'programEdit') {
@@ -317,6 +323,16 @@ export default function Workouts() {
           <p className="text-xs text-slate-500">
             {finishedCount} finished workout{finishedCount === 1 ? '' : 's'}
           </p>
+        </div>
+      </Card>
+
+      <Card className="active:bg-slate-800/60 flex items-center gap-3" onClick={() => setView({ kind: 'stats' })}>
+        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-primary-400 shrink-0">
+          <BarChart3 size={18} />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-slate-100">Statistics</p>
+          <p className="text-xs text-slate-500">Lifetime totals & muscle balance</p>
         </div>
       </Card>
 

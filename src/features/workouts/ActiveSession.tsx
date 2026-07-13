@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Info, Trophy } from 'lucide-react'
+import { ArrowDown, ArrowUp, Calculator, Info, MoreVertical, Repeat, Trash2, Trophy } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
 import ExercisePicker from './ExercisePicker'
 import ExerciseDetailSheet from './ExerciseDetailSheet'
+import PlateCalculatorSheet from './PlateCalculatorSheet'
 import SetRow from './SetRow'
 import RestTimerBar from './RestTimerBar'
 import { useWorkoutsStore } from '../../store/workouts'
@@ -22,6 +23,7 @@ import {
   totalVolume,
   weightUnitLabel,
 } from './utils'
+import type { ReactNode } from 'react'
 import type { Exercise, SetLog, WorkoutSessionEntry } from '../../types'
 
 type ActiveSessionProps = {
@@ -51,6 +53,11 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [finishOpen, setFinishOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
+  // When set, the exercise picker is swapping this exercise instead of adding a new one.
+  const [replaceId, setReplaceId] = useState<string | null>(null)
+  // Exercise ids whose action row / note editor is expanded.
+  const [expandedActions, setExpandedActions] = useState<Set<string>>(() => new Set())
+  const [plateWeight, setPlateWeight] = useState<number | null>(null)
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -170,6 +177,50 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     patchEntries([...session!.entries, newEntry])
   }
 
+  // Picker double-duties: swap an exercise (keeping its logged sets) when replaceId
+  // is set, otherwise append a new exercise.
+  function handlePick(exercise: Exercise) {
+    if (replaceId) {
+      if (replaceId !== exercise.id && !session!.entries.some((e) => e.exerciseId === exercise.id)) {
+        patchEntries(
+          session!.entries.map((e) => (e.exerciseId === replaceId ? { ...e, exerciseId: exercise.id } : e)),
+        )
+      }
+      setReplaceId(null)
+      setPickerOpen(false) // replace picks a single exercise, then closes
+    } else {
+      addExerciseEntry(exercise)
+    }
+  }
+
+  function moveEntry(exerciseId: string, dir: -1 | 1) {
+    const idx = session!.entries.findIndex((e) => e.exerciseId === exerciseId)
+    const target = idx + dir
+    if (idx < 0 || target < 0 || target >= session!.entries.length) return
+    const next = [...session!.entries]
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    patchEntries(next)
+  }
+
+  function removeEntry(exerciseId: string) {
+    patchEntries(session!.entries.filter((e) => e.exerciseId !== exerciseId))
+  }
+
+  function setEntryNote(exerciseId: string, note: string) {
+    patchEntries(
+      session!.entries.map((e) => (e.exerciseId === exerciseId ? { ...e, note: note || undefined } : e)),
+    )
+  }
+
+  function toggleActions(exerciseId: string) {
+    setExpandedActions((prev) => {
+      const next = new Set(prev)
+      if (next.has(exerciseId)) next.delete(exerciseId)
+      else next.add(exerciseId)
+      return next
+    })
+  }
+
   function handleCheckedOn(exerciseId: string) {
     const total = restSecFor(exerciseId)
     setRestTimer({ total, secondsLeft: total })
@@ -221,10 +272,14 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         {session.entries.length === 0 ? (
           <p className="text-sm text-slate-500">No exercises yet. Add one to get started.</p>
         ) : (
-          session.entries.map((entry) => {
+          session.entries.map((entry, entryIdx) => {
             const exercise = getExerciseById(entry.exerciseId)
             const prevSets = prevByExercise[entry.exerciseId] ?? null
             const prIdx = prSet[entry.exerciseId]
+            const actionsOpen = expandedActions.has(entry.exerciseId)
+            const topWeight = Math.max(0, ...entry.sets.map((s) => s.weight))
+            const routineNote = routine?.items.find((it) => it.exerciseId === entry.exerciseId)?.note
+            const displayNote = entry.note ?? routineNote
             return (
               <Card key={entry.exerciseId}>
                 <div className="flex items-center justify-between gap-2 mb-2">
@@ -238,10 +293,48 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
                     </h3>
                     <Info size={13} className="shrink-0 text-slate-500" />
                   </button>
-                  <span className="shrink-0 text-xs text-slate-500 tabular-nums">
-                    {entry.sets.filter((s) => s.done).length}/{entry.sets.length}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-slate-500 tabular-nums">
+                      {entry.sets.filter((s) => s.done).length}/{entry.sets.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleActions(entry.exerciseId)}
+                      aria-label="Exercise options"
+                      className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                        actionsOpen ? 'bg-slate-700 text-slate-200' : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <MoreVertical size={15} />
+                    </button>
+                  </div>
                 </div>
+
+                {actionsOpen && (
+                  <div className="mb-2 space-y-2 rounded-lg bg-slate-800/50 p-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      <ActionBtn icon={<ArrowUp size={13} />} label="Up" disabled={entryIdx === 0} onClick={() => moveEntry(entry.exerciseId, -1)} />
+                      <ActionBtn icon={<ArrowDown size={13} />} label="Down" disabled={entryIdx === session.entries.length - 1} onClick={() => moveEntry(entry.exerciseId, 1)} />
+                      <ActionBtn icon={<Repeat size={13} />} label="Replace" onClick={() => { setReplaceId(entry.exerciseId); setPickerOpen(true) }} />
+                      <ActionBtn icon={<Calculator size={13} />} label="Plates" onClick={() => setPlateWeight(topWeight)} />
+                      <ActionBtn icon={<Trash2 size={13} />} label="Remove" danger onClick={() => removeEntry(entry.exerciseId)} />
+                    </div>
+                    <input
+                      type="text"
+                      value={entry.note ?? ''}
+                      onChange={(e) => setEntryNote(entry.exerciseId, e.target.value)}
+                      placeholder="Add a note (form cue, tweak…)"
+                      className="w-full rounded-lg bg-slate-900 px-2.5 py-2 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                )}
+
+                {displayNote && !actionsOpen && (
+                  <p className="mb-2 rounded-md bg-slate-800/40 px-2 py-1 text-[11px] italic text-slate-400">
+                    {displayNote}
+                  </p>
+                )}
+
                 <div className="grid grid-cols-[2rem_1fr_1fr_1fr_2.25rem] gap-1.5 px-0.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">
                   <span className="text-center">Set</span>
                   <span className="text-center">Prev</span>
@@ -291,9 +384,22 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         />
       )}
 
-      <ExercisePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExerciseEntry} />
+      <ExercisePicker
+        open={pickerOpen}
+        onClose={() => {
+          setPickerOpen(false)
+          setReplaceId(null)
+        }}
+        onPick={handlePick}
+      />
 
       <ExerciseDetailSheet exerciseId={detailId} onClose={() => setDetailId(null)} />
+
+      <PlateCalculatorSheet
+        open={plateWeight !== null}
+        onClose={() => setPlateWeight(null)}
+        initialWeight={plateWeight ?? undefined}
+      />
 
       <Sheet open={finishOpen} onClose={() => setFinishOpen(false)} title="Finish workout?">
         <div className="space-y-4">
@@ -340,5 +446,33 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         </div>
       </Sheet>
     </div>
+  )
+}
+
+function ActionBtn({
+  icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: ReactNode
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium disabled:opacity-30 ${
+        danger ? 'bg-red-500/15 text-red-400' : 'bg-slate-700/70 text-slate-200'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }

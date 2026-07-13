@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { Dumbbell, Target, TrendingUp } from 'lucide-react'
 import Sheet from '../../components/Sheet'
 import MuscleMap from '../../components/MuscleMap'
@@ -137,7 +138,7 @@ function MuscleRow({ label, dot, names }: { label: string; dot: string; names: s
   )
 }
 
-function Chip({ icon, text }: { icon: React.ReactNode; text: string }) {
+function Chip({ icon, text }: { icon: ReactNode; text: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300">
       {icon}
