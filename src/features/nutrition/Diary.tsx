@@ -12,8 +12,12 @@ import AddFoodSheet from './AddFoodSheet'
 import AddManualTab from './AddManualTab'
 import SaveMealSheet from './SaveMealSheet'
 import WaterCard from './WaterCard'
+import ExerciseCard from './ExerciseCard'
 import { useNutritionStore, entriesForDate } from '../../store/nutrition'
+import { useWorkoutsStore } from '../../store/workouts'
+import { useBodyStore } from '../../store/body'
 import { useSettingsStore } from '../../store/settings'
+import { burnedCaloriesForDate, latestBodyWeightKg } from '../../lib/exercise'
 import { addDays, isoToLabel, todayISO } from '../../lib/date'
 import { macroPct, sumMacros } from '../../lib/macros'
 import type { FoodEntry, MealType } from '../../types'
@@ -49,6 +53,16 @@ export default function Diary() {
   const yesterdayEntries = useMemo(() => entriesForDate(allEntries, yesterdayISO), [allEntries, yesterdayISO])
 
   const totals = useMemo(() => sumMacros(dayEntries), [dayEntries])
+
+  // MyFitnessPal-style budget: calories remaining = goal − food + exercise burned.
+  const exerciseByDate = useNutritionStore((s) => s.exercise)
+  const sessions = useWorkoutsStore((s) => s.sessions)
+  const bodyEntries = useBodyStore((s) => s.entries)
+  const burned = useMemo(
+    () => burnedCaloriesForDate(selectedDate, exerciseByDate, sessions, latestBodyWeightKg(bodyEntries)),
+    [selectedDate, exerciseByDate, sessions, bodyEntries],
+  )
+  const remaining = Math.round(goals.calories - totals.calories + burned)
   const extrasSummary = useMemo(() => {
     const fiber = dayEntries.reduce((sum, e) => sum + (e.fiber ?? 0), 0)
     const sugar = dayEntries.reduce((sum, e) => sum + (e.sugar ?? 0), 0)
@@ -141,8 +155,19 @@ export default function Diary() {
           <MacroBar label="Carbs" value={totals.carbs} goal={goals.carbs} color="bg-sky-400" />
           <MacroBar label="Fat" value={totals.fat} goal={goals.fat} color="bg-amber-400" />
         </div>
+        <div className="w-full border-t border-slate-800 pt-3 flex items-center justify-between text-xs">
+          <span className="text-slate-400">
+            {Math.round(goals.calories)} goal − {Math.round(totals.calories)} food
+            {burned > 0 ? ` + ${burned} exercise` : ''}
+          </span>
+          <span className={`font-semibold ${remaining < 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+            {remaining >= 0 ? `${remaining} left` : `${Math.abs(remaining)} over`}
+          </span>
+        </div>
         {extrasSummary && <p className="text-xs text-slate-500">{extrasSummary}</p>}
       </Card>
+
+      <ExerciseCard date={selectedDate} />
 
       <WaterCard date={selectedDate} />
 

@@ -14,6 +14,7 @@ import { useSettingsStore } from '../../store/settings'
 import type {
   BodyEntry,
   CustomFood,
+  ExerciseEntry,
   FoodEntry,
   Goals,
   Profile,
@@ -53,13 +54,28 @@ function asRecord(v: unknown): Record<string, number> {
   return v && typeof v === 'object' ? (v as Record<string, number>) : {}
 }
 
+function asExerciseMap(v: unknown): Record<string, ExerciseEntry[]> {
+  if (!v || typeof v !== 'object') return {}
+  const out: Record<string, ExerciseEntry[]> = {}
+  for (const [date, list] of Object.entries(v as Record<string, unknown>)) {
+    if (Array.isArray(list)) out[date] = list as ExerciseEntry[]
+  }
+  return out
+}
+
 // --- nutrition -------------------------------------------------------------
 
 const nutrition: StoreAdapter = {
   name: 'nutrition',
   read() {
     const s = useNutritionStore.getState()
-    return { entries: s.entries, customFoods: s.customFoods, savedMeals: s.savedMeals, water: s.water }
+    return {
+      entries: s.entries,
+      customFoods: s.customFoods,
+      savedMeals: s.savedMeals,
+      water: s.water,
+      exercise: s.exercise,
+    }
   },
   apply(data) {
     useNutritionStore.setState({
@@ -67,6 +83,7 @@ const nutrition: StoreAdapter = {
       customFoods: asArray<CustomFood>(data.customFoods),
       savedMeals: asArray<SavedMeal>(data.savedMeals),
       water: asRecord(data.water),
+      exercise: asExerciseMap(data.exercise),
     })
   },
   subscribe(cb) {
@@ -79,11 +96,19 @@ const nutrition: StoreAdapter = {
     for (const [date, ml] of Object.entries(asRecord(local.water))) {
       water[date] = Math.max(ml, water[date] ?? 0)
     }
+    // exercise: union of dates; within a date, union entries by id.
+    const exercise: Record<string, ExerciseEntry[]> = {}
+    const lx = asExerciseMap(local.exercise)
+    const cx = asExerciseMap(cloud.exercise)
+    for (const date of new Set([...Object.keys(lx), ...Object.keys(cx)])) {
+      exercise[date] = unionBy(lx[date] ?? [], cx[date] ?? [], (e) => e.id)
+    }
     return {
       entries: unionBy(asArray<FoodEntry>(local.entries), asArray<FoodEntry>(cloud.entries), (e) => e.id),
       customFoods: unionBy(asArray<CustomFood>(local.customFoods), asArray<CustomFood>(cloud.customFoods), (f) => f.id),
       savedMeals: unionBy(asArray<SavedMeal>(local.savedMeals), asArray<SavedMeal>(cloud.savedMeals), (m) => m.id),
       water,
+      exercise,
     }
   },
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { uid } from '../lib/id'
-import type { CustomFood, FoodEntry, SavedMeal, SavedMealItem } from '../types'
+import type { CustomFood, ExerciseEntry, FoodEntry, SavedMeal, SavedMealItem } from '../types'
 
 type NutritionState = {
   entries: FoodEntry[]
@@ -9,6 +9,8 @@ type NutritionState = {
   savedMeals: SavedMeal[]
   /** dateISO -> total water logged that day, in ml. */
   water: Record<string, number>
+  /** dateISO -> manually-logged exercise/cardio that burns calories that day. */
+  exercise: Record<string, ExerciseEntry[]>
   addEntry: (entry: Omit<FoodEntry, 'id'>) => void
   updateEntry: (id: string, patch: Partial<FoodEntry>) => void
   removeEntry: (id: string) => void
@@ -16,6 +18,8 @@ type NutritionState = {
   addSavedMeal: (meal: Omit<SavedMeal, 'id'>) => void
   removeSavedMeal: (id: string) => void
   addWater: (date: string, deltaMl: number) => void
+  addExercise: (date: string, entry: Omit<ExerciseEntry, 'id'>) => void
+  removeExercise: (date: string, id: string) => void
 }
 
 export const useNutritionStore = create<NutritionState>()(
@@ -25,6 +29,7 @@ export const useNutritionStore = create<NutritionState>()(
       customFoods: [],
       savedMeals: [],
       water: {},
+      exercise: {},
       addEntry: (entry) => {
         set({ entries: [...get().entries, { ...entry, id: uid() }] })
       },
@@ -61,6 +66,17 @@ export const useNutritionStore = create<NutritionState>()(
           water[date] = next
         }
         set({ water })
+      },
+      addExercise: (date, entry) => {
+        const day = get().exercise[date] ?? []
+        set({ exercise: { ...get().exercise, [date]: [...day, { ...entry, id: uid() }] } })
+      },
+      removeExercise: (date, id) => {
+        const day = (get().exercise[date] ?? []).filter((e) => e.id !== id)
+        const exercise = { ...get().exercise }
+        if (day.length === 0) delete exercise[date]
+        else exercise[date] = day
+        set({ exercise })
       },
     }),
     { name: 'fm-nutrition' },

@@ -127,6 +127,14 @@ export type Profile = {
   goalType?: 'lose' | 'maintain' | 'gain'
 }
 
+/** A logged exercise / cardio session that burns calories back into the day's budget. */
+export type ExerciseEntry = {
+  id: string
+  name: string
+  minutes?: number
+  calories: number
+}
+
 export type SavedMealItem = {
   name: string
   qty: number

@@ -12,6 +12,7 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { addDays, isoToLabel, todayISO, weekdayIndex } from '../../lib/date'
 import { macroPct, sumMacros } from '../../lib/macros'
 import { convertWeight, mlToFloz, weightUnit } from '../../lib/units'
+import { burnedCaloriesForDate, latestBodyWeightKg } from '../../lib/exercise'
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -28,12 +29,19 @@ export default function Dashboard() {
   const bodyEntries = useBodyStore((s) => s.entries)
   const routines = useWorkoutsStore((s) => s.routines)
   const activeSessionId = useWorkoutsStore((s) => s.activeSessionId)
+  const sessions = useWorkoutsStore((s) => s.sessions)
+  const exerciseByDate = useNutritionStore((s) => s.exercise)
 
   const today = todayISO()
   const todayWaterMl = useNutritionStore((s) => s.water[today] ?? 0)
   const todayEntries = useMemo(() => entriesForDate(entries, today), [entries, today])
   const totals = useMemo(() => sumMacros(todayEntries), [todayEntries])
-  const remaining = Math.max(0, goals.calories - totals.calories)
+  const burned = useMemo(
+    () => burnedCaloriesForDate(today, exerciseByDate, sessions, latestBodyWeightKg(bodyEntries)),
+    [today, exerciseByDate, sessions, bodyEntries],
+  )
+  // Net budget, MyFitnessPal-style: goal − food + exercise burned.
+  const remaining = Math.max(0, goals.calories - totals.calories + burned)
 
   const streak = useMemo(() => {
     let count = 0
