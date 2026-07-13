@@ -100,7 +100,18 @@ def fetch_from_garmin(days):
     email = os.environ.get("GARMIN_EMAIL") or input("Garmin email: ")
     password = os.environ.get("GARMIN_PASSWORD") or getpass.getpass("Garmin password: ")
 
-    client = Garmin(email, password)
+    def prompt_mfa():
+        # Called only when the account has two-factor enabled. Garmin sends a code
+        # (email or authenticator app); we read it from the terminal.
+        return input("Garmin 2-factor code (check your email / authenticator app): ").strip()
+
+    # Newer garminconnect versions accept a prompt_mfa callback so two-factor
+    # accounts can finish login interactively; older ones don't take the kwarg.
+    try:
+        client = Garmin(email=email, password=password, prompt_mfa=prompt_mfa)
+    except TypeError:
+        client = Garmin(email, password)
+
     client.login()  # garth caches the session token under ~/.garminconnect after this
 
     end = date.today()
