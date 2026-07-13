@@ -13,6 +13,8 @@ export type FirebaseConfig = {
   storageBucket?: string
 }
 
+import { DEFAULT_FIREBASE_CONFIG } from '../../config/firebaseDefault'
+
 const STORAGE_KEY = 'fm-firebase-config'
 
 const REQUIRED_KEYS = ['apiKey', 'authDomain', 'projectId', 'appId'] as const
@@ -73,9 +75,11 @@ function extractField(text: string, key: string): string {
 export function loadFirebaseConfig(): FirebaseConfig | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
+    // No device-specific config saved → fall back to the baked-in default so a
+    // new device works with just "Sign in with Google".
+    if (!raw) return DEFAULT_FIREBASE_CONFIG
     const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return null
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_FIREBASE_CONFIG
     const obj = parsed as Record<string, unknown>
     if (
       typeof obj.apiKey !== 'string' ||
@@ -83,7 +87,7 @@ export function loadFirebaseConfig(): FirebaseConfig | null {
       typeof obj.projectId !== 'string' ||
       typeof obj.appId !== 'string'
     ) {
-      return null
+      return DEFAULT_FIREBASE_CONFIG
     }
     const config: FirebaseConfig = {
       apiKey: obj.apiKey,
@@ -95,7 +99,7 @@ export function loadFirebaseConfig(): FirebaseConfig | null {
     if (typeof obj.storageBucket === 'string') config.storageBucket = obj.storageBucket
     return config
   } catch {
-    return null
+    return DEFAULT_FIREBASE_CONFIG
   }
 }
 

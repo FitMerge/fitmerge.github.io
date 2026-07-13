@@ -205,15 +205,28 @@ const health: StoreAdapter = {
 }
 
 // --- settings --------------------------------------------------------------
-// Singleton values (not collections). geminiApiKey is device-local and never
-// read/applied here, so it survives untouched. On merge, cloud values win so a
-// freshly-installed device doesn't clobber the account's goals with defaults.
+// Singleton values (not collections). The API keys sync too so a new device
+// gets them after sign-in instead of re-typing — but they're guarded below so
+// an empty cloud value never wipes a real local key. On merge, cloud values win
+// so a freshly-installed device doesn't clobber the account's goals with defaults.
+
+// API keys are the user's own credentials; carry them across devices but treat
+// an empty value as "no update" so one device signing in blank can't erase them.
+const KEY_FIELDS = ['geminiApiKey', 'usdaApiKey'] as const
 
 const settings: StoreAdapter = {
   name: 'settings',
   read() {
     const s = useSettingsStore.getState()
-    return { goals: s.goals, units: s.units, profile: s.profile, waterGoalMl: s.waterGoalMl, onboarded: s.onboarded }
+    return {
+      goals: s.goals,
+      units: s.units,
+      profile: s.profile,
+      waterGoalMl: s.waterGoalMl,
+      onboarded: s.onboarded,
+      geminiApiKey: s.geminiApiKey,
+      usdaApiKey: s.usdaApiKey,
+    }
   },
   apply(data) {
     useSettingsStore.setState((prev) => ({
@@ -222,6 +235,9 @@ const settings: StoreAdapter = {
       profile: (data.profile as Profile | undefined) ?? prev.profile,
       waterGoalMl: (data.waterGoalMl as number | undefined) ?? prev.waterGoalMl,
       onboarded: (data.onboarded as boolean | undefined) ?? prev.onboarded,
+      // `||` (not `??`) so an empty incoming key keeps the existing local one.
+      geminiApiKey: (data.geminiApiKey as string | undefined) || prev.geminiApiKey,
+      usdaApiKey: (data.usdaApiKey as string | undefined) || prev.usdaApiKey,
     }))
   },
   subscribe(cb) {
@@ -229,7 +245,11 @@ const settings: StoreAdapter = {
   },
   merge(local, cloud) {
     if (!cloud) return local
-    return { ...local, ...cloud }
+    const merged = { ...local, ...cloud }
+    for (const k of KEY_FIELDS) {
+      if (!cloud[k] && local[k]) merged[k] = local[k]
+    }
+    return merged
   },
 }
 
