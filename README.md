@@ -58,7 +58,8 @@ sources. All parsing happens locally in the browser — nothing is uploaded to a
 
 For a one-shot pull of **everything** — weigh-ins, activities, and daily wellness metrics
 (steps, sleep + sleep score, resting HR, HRV, stress, Body Battery, VO₂ max, SpO₂, respiration,
-floors, intensity minutes, active/total calories) — into a single file:
+floors, moderate/vigorous intensity minutes, per-activity training load, active/total calories) —
+into a single file:
 
 ```bash
 pip install garminconnect
@@ -96,13 +97,14 @@ last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schem
     { "date": "YYYY-MM-DD", "weightKg": 82.4, "bodyFatPct": 21.5 }
   ],
   "sessions": [
-    { "name": "Running", "date": "YYYY-MM-DD", "durationMin": 32.5, "kcal": 320 }
+    { "name": "Running", "date": "YYYY-MM-DD", "durationMin": 32.5, "kcal": 320, "trainingLoad": 88 }
   ],
   "health": [
     { "date": "YYYY-MM-DD", "metrics": {
         "steps": 9241, "restingHr": 53, "sleepMinutes": 432, "sleepScore": 84,
         "stress": 29, "bodyBattery": 81, "hrv": 64, "spo2": 96, "vo2max": 47.5,
-        "floors": 12, "intensityMinutes": 45, "activeCalories": 620
+        "floors": 12, "intensityMinutes": 45, "moderateIntensityMinutes": 30,
+        "vigorousIntensityMinutes": 15, "activeCalories": 620
       } }
   ]
 }
@@ -111,7 +113,21 @@ last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schem
 `weights`, `sessions`, and `health` are all optional (include any subset). The `metrics` object
 is an **open-ended bag of numbers** — any key you include is stored and shown on the Health
 metrics screen; known keys get nice labels/units, unknown ones display with a derived label.
-`bodyFatPct`, `durationMin`, and `kcal` are optional. Dates are local `YYYY-MM-DD` strings.
+`bodyFatPct`, `durationMin`, `kcal`, and `trainingLoad` are optional. Dates are local
+`YYYY-MM-DD` strings.
+
+### Coaching analytics (Progress tab)
+
+Imported workouts + health metrics power a sports-science dashboard at the top of **Progress**:
+
+- **Form & Fitness** — a Performance Management Chart (CTL fitness / ATL fatigue / TSB form)
+  with a 28-day forward projection. Uses Garmin's `trainingLoad` when present, else estimates
+  load from activity calories.
+- **Injury & illness risk** — the Acute:Chronic Workload Ratio (ACWR) gauge plus recovery flags
+  (HRV/resting-HR divergence, sleep deficit, low Body Battery).
+- **Recovery — HR vs HRV** and **Intensity distribution** trend charts.
+- **Explain this** — sends the current numbers to Gemini (uses the same key as photo analysis)
+  for a plain-English coach interpretation.
 Re-importing is safe — weigh-ins replace same-date entries, previously-imported workouts
 (matched by date + name) are skipped, and health metrics merge per date.
 

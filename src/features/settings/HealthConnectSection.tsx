@@ -91,6 +91,7 @@ export default function HealthConnectSection() {
         imported: true,
         durationMin: session.durationMin,
         kcal: session.kcal,
+        trainingLoad: session.trainingLoad,
       })
       importedSessions++
     }

@@ -17,7 +17,7 @@ import Sheet from '../../components/Sheet'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
-import { performanceManagementChart, formState } from '../../lib/trainingLoad'
+import { performanceManagementChart, projectPmc, formState, hasRealTrainingLoad } from '../../lib/trainingLoad'
 import { coachSignals } from '../../lib/coachSignals'
 import { explainCoachData, CoachError } from '../../services/coach/explain'
 import { monthDayLabel } from './utils'
@@ -28,6 +28,8 @@ const RANGES: { key: string; label: string; days: number }[] = [
   { key: '365d', label: '1y', days: 365 },
 ]
 
+const PROJECTION_DAYS = 28
+
 const TONE_CLASSES: Record<string, string> = {
   good: 'text-emerald-400',
   warn: 'text-amber-400',
@@ -35,10 +37,14 @@ const TONE_CLASSES: Record<string, string> = {
   neutral: 'text-sky-400',
 }
 
-const SIGNAL_CLASSES: Record<string, string> = {
-  red: 'border-red-500/60 bg-red-500/10',
-  amber: 'border-amber-500/50 bg-amber-500/10',
-  green: 'border-emerald-500/50 bg-emerald-500/10',
+type Row = {
+  date: string
+  label: string
+  ctl: number | null
+  atl: number | null
+  tsb: number | null
+  ctlProj: number | null
+  tsbProj: number | null
 }
 
 export default function FormFitnessSection() {
@@ -52,12 +58,37 @@ export default function FormFitnessSection() {
   const [explainText, setExplainText] = useState('')
 
   const pmc = useMemo(() => performanceManagementChart(sessions), [sessions])
+  const projection = useMemo(() => projectPmc(sessions, PROJECTION_DAYS), [sessions])
   const signals = useMemo(() => coachSignals(days), [days])
+  const calibrated = useMemo(() => hasRealTrainingLoad(sessions), [sessions])
 
-  const chartData = useMemo(
-    () => pmc.slice(-rangeDays).map((p) => ({ ...p, label: monthDayLabel(p.date) })),
-    [pmc, rangeDays],
-  )
+  const chartData = useMemo<Row[]>(() => {
+    const actual: Row[] = pmc.slice(-rangeDays).map((p) => ({
+      date: p.date,
+      label: monthDayLabel(p.date),
+      ctl: p.ctl,
+      atl: p.atl,
+      tsb: p.tsb,
+      ctlProj: null,
+      tsbProj: null,
+    }))
+    if (actual.length && projection.length) {
+      // Bridge: let the last actual point seed the dashed projection lines.
+      const bridge = actual[actual.length - 1]
+      bridge.ctlProj = bridge.ctl
+      bridge.tsbProj = bridge.tsb
+    }
+    const proj: Row[] = projection.map((p) => ({
+      date: p.date,
+      label: monthDayLabel(p.date),
+      ctl: null,
+      atl: null,
+      tsb: null,
+      ctlProj: p.ctl,
+      tsbProj: p.tsb,
+    }))
+    return [...actual, ...proj]
+  }, [pmc, projection, rangeDays])
 
   if (pmc.length === 0) {
     return (
@@ -73,6 +104,8 @@ export default function FormFitnessSection() {
 
   const current = pmc[pmc.length - 1]
   const fs = formState(current.tsb)
+  const projEnd = projection.length ? projection[projection.length - 1] : null
+  const projFs = projEnd ? formState(projEnd.tsb) : null
 
   async function handleExplain() {
     setExplainOpen(true)
@@ -83,7 +116,10 @@ export default function FormFitnessSection() {
       `Fitness (CTL, 42-day load avg): ${current.ctl.toFixed(0)}`,
       `Fatigue (ATL, 7-day load avg): ${current.atl.toFixed(0)}`,
       `Form (TSB = fitness − fatigue): ${current.tsb.toFixed(0)} → ${fs.label}`,
-      `(Load is estimated from activity calories, TSS-like units.)`,
+      calibrated
+        ? '(Load uses Garmin training-load values.)'
+        : '(Load is estimated from activity calories, TSS-like units.)',
+      projEnd ? `Projected in ${PROJECTION_DAYS} days at current load: Fitness ${projEnd.ctl.toFixed(0)}, Form ${projEnd.tsb.toFixed(0)} (${projFs?.label}).` : '',
       '',
       'Recent recovery signals:',
       recent,
@@ -148,28 +184,34 @@ export default function FormFitnessSection() {
               formatter={(v: number, name: string) => [v.toFixed(0), name]}
             />
             <ReferenceLine yAxisId="tsb" y={0} stroke="#334155" strokeDasharray="3 3" />
-            <Area yAxisId="tsb" type="monotone" dataKey="tsb" name="Form" stroke="#34d399" fill="#34d399" fillOpacity={0.12} strokeWidth={1.5} />
-            <Line yAxisId="load" type="monotone" dataKey="ctl" name="Fitness" stroke="#38bdf8" strokeWidth={2} dot={false} />
-            <Line yAxisId="load" type="monotone" dataKey="atl" name="Fatigue" stroke="#fbbf24" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+            <Area yAxisId="tsb" type="monotone" dataKey="tsb" name="Form" stroke="#34d399" fill="#34d399" fillOpacity={0.12} strokeWidth={1.5} connectNulls={false} />
+            <Line yAxisId="load" type="monotone" dataKey="ctl" name="Fitness" stroke="#38bdf8" strokeWidth={2} dot={false} connectNulls={false} />
+            <Line yAxisId="load" type="monotone" dataKey="atl" name="Fatigue" stroke="#fbbf24" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />
+            <Line yAxisId="load" type="monotone" dataKey="ctlProj" name="Projected fitness" stroke="#38bdf8" strokeWidth={1.5} dot={false} strokeDasharray="2 3" strokeOpacity={0.7} connectNulls />
+            <Line yAxisId="tsb" type="monotone" dataKey="tsbProj" name="Projected form" stroke="#34d399" strokeWidth={1.5} dot={false} strokeDasharray="2 3" strokeOpacity={0.7} connectNulls />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-center justify-center gap-4 text-[11px] text-slate-400">
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
         <Legend color="#38bdf8" label="Fitness" />
         <Legend color="#fbbf24" label="Fatigue" />
         <Legend color="#34d399" label="Form" />
+        <span className="text-slate-500">— — projected</span>
       </div>
 
-      {signals.length > 0 && (
-        <div className="space-y-2 pt-1">
-          {signals.map((sig, i) => (
-            <div key={i} className={`rounded-lg border p-2.5 ${SIGNAL_CLASSES[sig.level]}`}>
-              <p className="text-xs font-semibold text-slate-100">{sig.title}</p>
-              <p className="text-[11px] text-slate-300">{sig.detail}</p>
-            </div>
-          ))}
+      {projEnd && projFs && (
+        <div className="rounded-lg bg-slate-800/60 p-2.5 text-xs text-slate-300">
+          <span className="font-semibold text-slate-100">Forward view:</span> if you keep your current load,
+          in {PROJECTION_DAYS} days your fitness trends to <span className="font-semibold text-sky-400">{projEnd.ctl.toFixed(0)}</span> and
+          form to <span className={`font-semibold ${TONE_CLASSES[projFs.tone]}`}>{projEnd.tsb > 0 ? '+' : ''}{projEnd.tsb.toFixed(0)}</span> ({projFs.label}).
         </div>
+      )}
+
+      {!calibrated && (
+        <p className="text-[10px] text-slate-500">
+          Load estimated from activity calories. Re-run garmin-sync.py to pull Garmin's exact training load.
+        </p>
       )}
 
       <Sheet open={explainOpen} onClose={() => setExplainOpen(false)} title="Coach interpretation">

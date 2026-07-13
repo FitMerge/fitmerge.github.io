@@ -103,6 +103,9 @@ export type WorkoutSession = {
   durationMin?: number
   /** Calories burned, when reported by the import source. */
   kcal?: number
+  /** Garmin's training-load (TSS-like) value for the activity, when available.
+   * Used to calibrate the CTL/ATL/TSB performance-management chart. */
+  trainingLoad?: number
 }
 
 export type BodyEntry = {

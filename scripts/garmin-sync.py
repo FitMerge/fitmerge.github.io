@@ -18,7 +18,8 @@ Output schema (FitMerge JSON, version 1):
     {
       "version": 1,
       "weights": [{"date": "YYYY-MM-DD", "weightKg": number, "bodyFatPct"?: number}],
-      "sessions": [{"name": string, "date": "YYYY-MM-DD", "durationMin"?: number, "kcal"?: number}],
+      "sessions": [{"name": string, "date": "YYYY-MM-DD", "durationMin"?: number, "kcal"?: number,
+                    "trainingLoad"?: number}],
       "health":  [{"date": "YYYY-MM-DD", "metrics": {"steps": number, "restingHr": number,
                     "sleepMinutes": number, "sleepScore": number, "stress": number,
                     "bodyBattery": number, "hrv": number, "spo2": number, "vo2max": number, ...}}]
@@ -72,6 +73,9 @@ def build_payload(weights, sessions, health=None):
         kcal = s.get("kcal")
         if isinstance(kcal, (int, float)) and kcal >= 0:
             row["kcal"] = round(float(kcal))
+        training_load = s.get("trainingLoad")
+        if isinstance(training_load, (int, float)) and training_load >= 0:
+            row["trainingLoad"] = round(float(training_load), 1)
         clean_sessions.append(row)
 
     clean_health = []
@@ -154,6 +158,12 @@ def fetch_from_garmin(days):
         calories = act.get("calories")
         if isinstance(calories, (int, float)):
             row["kcal"] = calories
+        # Garmin's own training-load number for the activity (a proper TSS-like
+        # value). When present it calibrates the fitness/fatigue (PMC) curves far
+        # better than the calorie estimate the app falls back to.
+        training_load = act.get("activityTrainingLoad") or act.get("trainingLoad")
+        if isinstance(training_load, (int, float)) and training_load > 0:
+            row["trainingLoad"] = training_load
         sessions.append(row)
 
     health = fetch_daily_metrics(client, end, days)
@@ -206,6 +216,9 @@ def fetch_daily_metrics(client, end, days):
             vig = st.get("vigorousIntensityMinutes") or 0
             if mod or vig:
                 put(ds, "intensityMinutes", mod + vig)
+                # Split so the app can chart moderate vs vigorous distribution.
+                put(ds, "moderateIntensityMinutes", mod)
+                put(ds, "vigorousIntensityMinutes", vig)
             dist = st.get("totalDistanceMeters")
             if isinstance(dist, (int, float)) and dist > 0:
                 put(ds, "distanceKm", dist / 1000.0)
@@ -254,7 +267,7 @@ def self_test():
         {"date": "2026-07-01", "weightKg": 81.2, "bodyFatPct": 20.8},
     ]
     canned_sessions = [
-        {"name": "Running", "date": "2026-06-20", "durationMin": 32.5, "kcal": 320},
+        {"name": "Running", "date": "2026-06-20", "durationMin": 32.5, "kcal": 320, "trainingLoad": 88.0},
         {"name": "Strength Training", "date": "2026-06-25", "durationMin": 48.0, "kcal": 410},
     ]
     canned_health = [
@@ -281,6 +294,8 @@ def self_test():
         all(isinstance(s["name"], str) and s["name"] for s in payload["sessions"]),
         payload["weights"][0].get("bodyFatPct") == 21.5,
         payload["sessions"][0].get("durationMin") == 32.5,
+        payload["sessions"][0].get("trainingLoad") == 88.0,
+        "trainingLoad" not in payload["sessions"][1],  # absent when not provided
     ]
 
     # JSON round-trip sanity check.

@@ -18,6 +18,8 @@ const CATALOG: Record<string, Omit<MetricMeta, 'key'>> = {
   distanceKm: { label: 'Distance', unit: 'km', order: 2, format: (v) => v.toFixed(2) },
   floors: { label: 'Floors climbed', order: 3, format: round },
   intensityMinutes: { label: 'Intensity minutes', unit: 'min', order: 4, format: round },
+  moderateIntensityMinutes: { label: 'Moderate intensity', unit: 'min', order: 4.1, format: round },
+  vigorousIntensityMinutes: { label: 'Vigorous intensity', unit: 'min', order: 4.2, format: round },
   activeCalories: { label: 'Active calories', unit: 'kcal', order: 5, format: commas },
   totalCalories: { label: 'Total calories', unit: 'kcal', order: 6, format: commas },
   restingHr: { label: 'Resting heart rate', unit: 'bpm', order: 7, format: round },

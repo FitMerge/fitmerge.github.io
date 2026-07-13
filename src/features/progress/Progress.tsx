@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import RangeSelector from './RangeSelector'
 import FormFitnessSection from './FormFitnessSection'
+import RecoveryRiskSection from './RecoveryRiskSection'
+import RestingHrHrvSection from './RestingHrHrvSection'
+import IntensityDistributionSection from './IntensityDistributionSection'
 import WeightSection from './WeightSection'
 import HealthMetricsSection from './HealthMetricsSection'
 import CaloriesSection from './CaloriesSection'
@@ -20,6 +23,9 @@ export default function Progress() {
       </header>
 
       <FormFitnessSection />
+      <RecoveryRiskSection />
+      <RestingHrHrvSection />
+      <IntensityDistributionSection />
 
       <RangeSelector value={range} onChange={setRange} />
 
