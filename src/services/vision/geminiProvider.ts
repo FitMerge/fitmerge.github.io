@@ -79,9 +79,17 @@ function parseItems(raw: unknown): FoodAnalysisItem[] {
 
 function statusMessage(status: number): string {
   if (status === 400 || status === 403) return 'Invalid Gemini API key — check Settings'
-  if (status === 429) return 'Gemini free-tier rate limit hit — try again in a minute'
+  if (status === 429) return 'Gemini is busy (free-tier rate limit) — wait a moment and try again'
   return 'Gemini request failed — please try again'
 }
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Free-tier rate limits (429) are usually a short burst; back off and retry a
+// couple of times so a transient limit recovers on its own instead of erroring.
+const RETRY_DELAYS_MS = [2500, 6000]
 
 export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promise<FoodAnalysis> {
   const body = {
@@ -104,15 +112,23 @@ export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promi
     },
   }
 
-  let res: Response
-  try {
-    res = await fetch(`${MODEL_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  } catch (err) {
-    throw new VisionError('Network error — check your connection', err)
+  let res: Response | undefined
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(`${MODEL_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } catch (err) {
+      throw new VisionError('Network error — check your connection', err)
+    }
+    // Retry only on a rate limit, with backoff; any other status is final.
+    if (res.status === 429 && attempt < RETRY_DELAYS_MS.length) {
+      await sleep(RETRY_DELAYS_MS[attempt])
+      continue
+    }
+    break
   }
 
   if (!res.ok) {
