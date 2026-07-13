@@ -33,3 +33,26 @@ export async function checkForUpdate(): Promise<boolean> {
   window.location.reload()
   return true
 }
+
+/**
+ * Nuclear option for a service worker that refuses to update: unregister every
+ * worker, delete all Cache Storage entries (the precached old build), then reload
+ * straight from the network. Use when "Check for updates" keeps saying you're
+ * current but the app still looks stale.
+ */
+export async function forceReload(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map((r) => r.unregister()))
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    }
+  } catch {
+    /* best effort — reload regardless */
+  }
+  // Bypass the HTTP cache for the navigation itself.
+  window.location.replace(`${window.location.pathname}${window.location.hash || ''}?v=${Date.now()}`)
+}

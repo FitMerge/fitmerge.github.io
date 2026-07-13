@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
-import { checkForUpdate } from '../../lib/appUpdate'
+import { checkForUpdate, forceReload } from '../../lib/appUpdate'
 
 export default function AboutSection() {
   const [status, setStatus] = useState<'idle' | 'checking' | 'current'>('idle')
@@ -36,7 +36,18 @@ export default function AboutSection() {
         </span>
       </Button>
       {status === 'current' && (
-        <p className="text-center text-xs text-emerald-400">You&apos;re on the latest version.</p>
+        <div className="space-y-2 text-center">
+          <p className="text-xs text-emerald-400">
+            You&apos;re on build {__BUILD_TIME__}.
+          </p>
+          <button
+            type="button"
+            onClick={forceReload}
+            className="text-xs font-medium text-slate-400 underline underline-offset-2 active:text-slate-200"
+          >
+            Still looks old? Force a clean reload
+          </button>
+        </div>
       )}
     </Card>
   )
