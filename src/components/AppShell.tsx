@@ -1,11 +1,12 @@
 import { Suspense } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Home, UtensilsCrossed, Dumbbell, TrendingUp, Plus, Loader2 } from 'lucide-react'
+import { Home, UtensilsCrossed, Dumbbell, HeartPulse, TrendingUp, Plus, Loader2 } from 'lucide-react'
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/nutrition', label: 'Diary', icon: UtensilsCrossed, end: false },
   { to: '/workouts', label: 'Workouts', icon: Dumbbell, end: false },
+  { to: '/health', label: 'Health', icon: HeartPulse, end: false },
   { to: '/progress', label: 'Progress', icon: TrendingUp, end: false },
 ]
 
@@ -35,13 +36,13 @@ export default function AppShell() {
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-1 py-2 text-xs ${
+                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${
                   isActive ? 'text-emerald-400' : 'text-slate-500'
                 }`
               }
             >
-              <Icon size={22} />
-              <span>{label}</span>
+              <Icon size={20} />
+              <span className="whitespace-nowrap">{label}</span>
             </NavLink>
           ))}
 
@@ -63,13 +64,13 @@ export default function AppShell() {
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-1 py-2 text-xs ${
+                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${
                   isActive ? 'text-emerald-400' : 'text-slate-500'
                 }`
               }
             >
-              <Icon size={22} />
-              <span>{label}</span>
+              <Icon size={20} />
+              <span className="whitespace-nowrap">{label}</span>
             </NavLink>
           ))}
         </div>

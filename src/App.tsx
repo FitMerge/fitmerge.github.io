@@ -7,6 +7,7 @@ import AppShell from './components/AppShell'
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard'))
 const Diary = lazy(() => import('./features/nutrition/Diary'))
 const Workouts = lazy(() => import('./features/workouts/Workouts'))
+const Health = lazy(() => import('./features/health/Health'))
 const Progress = lazy(() => import('./features/progress/Progress'))
 const Settings = lazy(() => import('./features/settings/Settings'))
 import OnboardingWizard from './features/onboarding/OnboardingWizard'
@@ -22,6 +23,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="nutrition" element={<Diary />} />
           <Route path="workouts" element={<Workouts />} />
+          <Route path="health" element={<Health />} />
           <Route path="progress" element={<Progress />} />
           <Route path="settings" element={<Settings />} />
         </Route>
