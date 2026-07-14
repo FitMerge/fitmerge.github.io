@@ -1,18 +1,35 @@
 #!/usr/bin/env python3
-"""garmin-sync.py — pull recent weigh-ins and activities from Garmin Connect and emit a
-FitMerge health-import JSON file (version 1), importable from FitMerge's Settings ->
-"Connect health data".
+"""garmin-sync.py — pull recent weigh-ins and activities from Garmin Connect and either write a
+FitMerge health-import JSON file (version 1) OR push straight into your FitMerge account so the
+app updates itself with no manual import.
 
-Usage:
-    pip install garminconnect
-    python3 scripts/garmin-sync.py --days 90 --out fitmerge-import.json
+Two modes:
+
+  1) File mode (default) — writes a JSON file you import from Settings -> "Connect health data":
+         pip install garminconnect
+         python3 scripts/garmin-sync.py --days 90 --out fitmerge-import.json
+
+  2) Auto-sync mode (--firebase) — writes directly to your FitMerge cloud data. The app picks it
+     up automatically on every device via the existing realtime sync — no file, no import step:
+         pip install garminconnect firebase-admin
+         python3 scripts/garmin-sync.py --days 90 --firebase \
+             --service-account serviceAccount.json --uid YOUR_FITMERGE_UID
+
+     - serviceAccount.json comes from the Firebase console: Project settings -> Service accounts
+       -> "Generate new private key". Keep it private; it never leaves your machine.
+     - YOUR_FITMERGE_UID is shown in FitMerge under Settings -> Sync (once signed in with Google),
+       and in the Firebase console under Authentication -> Users.
+     - Both can also be supplied via the FIREBASE_SERVICE_ACCOUNT / FIREBASE_UID env vars.
+     - The push is READ-MERGE-WRITE: your existing cloud data (app-created workouts, weigh-ins,
+       other days of metrics) is preserved; Garmin data is folded in and re-runs are idempotent
+       (no duplicate activities). Schedule it nightly with cron / Windows Task Scheduler.
 
 Credentials come from the GARMIN_EMAIL / GARMIN_PASSWORD environment variables, or you'll be
 prompted for them. Session tokens are cached by the underlying `garth` library at
 ~/.garminconnect so you won't be re-prompted every run.
 
-Run `python3 scripts/garmin-sync.py --self-test` to validate the JSON-building logic offline
-(no network, no garminconnect dependency needed) — this is what CI / verification runs.
+Run `python3 scripts/garmin-sync.py --self-test` to validate the JSON-building and cloud-merge
+logic offline (no network, no garminconnect/firebase dependency needed) — this is what CI runs.
 
 Output schema (FitMerge JSON, version 1):
     {
@@ -44,11 +61,17 @@ import getpass
 import json
 import os
 import re
+import secrets
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# Identifies writes made by this script so they're distinguishable from the app's own
+# writes in the sync log. The app only ignores echoes of ITS OWN per-tab client id, so a
+# distinct id here means every device applies the script's writes via its realtime listener.
+SYNC_CLIENT_ID = "garmin-sync-script"
 
 
 def build_payload(weights, sessions, health=None):
@@ -106,6 +129,165 @@ def build_payload(weights, sessions, health=None):
             clean_health.append({"date": d, "metrics": metrics})
 
     return {"version": 1, "weights": clean_weights, "sessions": clean_sessions, "health": clean_health}
+
+
+# --- auto-sync (direct Firestore push) -------------------------------------
+# These merge helpers mirror the app's per-store cloud shapes exactly (see
+# src/services/sync/storeAdapters.ts). They are PURE so the self-test can exercise
+# them offline. The app HARD-REPLACES the body and workouts stores when it receives
+# a cloud update, so the script must write the FULL merged set — never just the new
+# rows — or it would wipe app-created data. Health days are unioned by the app, but we
+# merge them here too so the write is self-consistent and re-runs stay idempotent.
+
+
+def _js_num_str(v):
+    """Format a number the way JS String()/JSON does — integers lose the trailing '.0'.
+    The app's imported-session dedupe key is built in JS, so matching its formatting is
+    what keeps re-runs from creating duplicate activities."""
+    if v is None:
+        return ""
+    f = float(v)
+    return str(int(f)) if f == int(f) else repr(f)
+
+
+def _session_key(s):
+    """Dedupe key for an imported session — must match the app's
+    `${date}::${name}::${durationMin ?? ''}::${kcal ?? ''}` (workouts store)."""
+    return "::".join([
+        str(s.get("date")),
+        str(s.get("name")),
+        _js_num_str(s.get("durationMin")),
+        _js_num_str(s.get("kcal")),
+    ])
+
+
+def _epoch_noon_ms(ds):
+    """Milliseconds since epoch at noon UTC on the given YYYY-MM-DD — a stable stand-in
+    for the app's `Date.parse(`${date}T12:00:00`)` used only for sorting/display."""
+    y, m, d = (int(x) for x in ds.split("-"))
+    return int(datetime(y, m, d, 12, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
+
+
+def merge_body(existing, weights):
+    """Upsert Garmin weigh-ins into the body store by date (Garmin wins the weight fields,
+    any existing note on that date is preserved); untouched dates and measurements stay."""
+    ex = existing if isinstance(existing, dict) else {}
+    measurements = ex.get("measurements") if isinstance(ex.get("measurements"), list) else []
+    by_date = {}
+    for e in ex.get("entries") or []:
+        if isinstance(e, dict) and isinstance(e.get("date"), str):
+            by_date[e["date"]] = dict(e)
+    for w in weights:
+        by_date[w["date"]] = {**by_date.get(w["date"], {}), **w}
+    entries = [by_date[d] for d in sorted(by_date)]
+    return {"entries": entries, "measurements": measurements}
+
+
+def merge_workouts(existing, sessions):
+    """Append Garmin activities as imported sessions, skipping ones that duplicate an
+    existing imported session (same date+name+duration+kcal). Routines/programs and
+    app-logged sessions are left untouched. Returns (merged_store, added_count)."""
+    ex = existing if isinstance(existing, dict) else {}
+    routines = ex.get("routines") if isinstance(ex.get("routines"), list) else []
+    programs = ex.get("programs") if isinstance(ex.get("programs"), list) else []
+    existing_sessions = ex.get("sessions") if isinstance(ex.get("sessions"), list) else []
+
+    seen = {
+        _session_key(s)
+        for s in existing_sessions
+        if isinstance(s, dict) and s.get("imported")
+    }
+    added = []
+    for s in sessions:
+        key = _session_key(s)
+        if key in seen:
+            continue
+        seen.add(key)
+        started = _epoch_noon_ms(s["date"])
+        row = {
+            "id": secrets.token_hex(8),
+            "name": s["name"],
+            "date": s["date"],
+            "startedAt": started,
+            "finishedAt": started + int(round((s.get("durationMin") or 0) * 60000)),
+            "entries": [],
+            "imported": True,
+        }
+        for k in ("durationMin", "kcal", "trainingLoad", "distanceKm"):
+            if k in s:
+                row[k] = s[k]
+        added.append(row)
+
+    return {"routines": routines, "sessions": list(existing_sessions) + added, "programs": programs}, len(added)
+
+
+def merge_health(existing, health):
+    """Union health days into the store, merging metric bags per date (Garmin wins a
+    per-metric conflict since it's the source of truth for wearable data)."""
+    ex = existing if isinstance(existing, dict) else {}
+    out = {}
+    for d, day in (ex.get("days") or {}).items():
+        if isinstance(day, dict) and isinstance(day.get("metrics"), dict):
+            out[d] = {"date": d, "metrics": dict(day["metrics"])}
+    for h in health:
+        d = h["date"]
+        cur = out.get(d, {"date": d, "metrics": {}})
+        cur["metrics"] = {**cur["metrics"], **h["metrics"]}
+        out[d] = cur
+    return {"days": out}
+
+
+def push_to_firebase(payload, service_account, uid):
+    """Read-merge-write the payload into users/{uid}/state/{body,workouts,health}."""
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+    except ImportError:
+        print("error: the firebase-admin package is required for --firebase — run: "
+              "pip install firebase-admin", file=sys.stderr)
+        sys.exit(1)
+
+    if not os.path.exists(service_account):
+        print(f"error: service-account file not found: {service_account}", file=sys.stderr)
+        sys.exit(1)
+
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(credentials.Certificate(service_account))
+    db = firestore.client()
+
+    def ref(store):
+        return db.collection("users").document(uid).collection("state").document(store)
+
+    def read(store):
+        snap = ref(store).get()
+        if not getattr(snap, "exists", False):
+            return None
+        data = snap.to_dict() or {}
+        p = data.get("payload")
+        if isinstance(p, str):
+            try:
+                return json.loads(p)
+            except json.JSONDecodeError:
+                return None
+        return p if isinstance(p, dict) else None
+
+    def write(store, obj):
+        ref(store).set({
+            "payload": json.dumps(obj, separators=(",", ":")),
+            "clientId": SYNC_CLIENT_ID,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+
+    body = merge_body(read("body"), payload["weights"])
+    write("body", body)
+
+    workouts, added = merge_workouts(read("workouts"), payload["sessions"])
+    write("workouts", workouts)
+
+    health = merge_health(read("health"), payload["health"])
+    write("health", health)
+
+    return len(body["entries"]), added, len(health["days"])
 
 
 def fetch_from_garmin(days):
@@ -485,23 +667,119 @@ def self_test():
     except Exception:
         checks.append(False)
 
+    # --- auto-sync merge helpers (pure, offline) ---------------------------
+    # JS-style number formatting for dedupe keys: integers drop the ".0".
+    checks += [
+        _js_num_str(48.0) == "48",
+        _js_num_str(32.5) == "32.5",
+        _js_num_str(None) == "",
+        _js_num_str(320) == "320",
+    ]
+
+    # body: Garmin weight upserts by date, existing note + other dates preserved.
+    existing_body = {
+        "entries": [
+            {"date": "2026-06-01", "weightKg": 99.9, "note": "manual"},
+            {"date": "2026-05-01", "weightKg": 83.0},
+        ],
+        "measurements": [{"date": "2026-06-01", "chest": 100}],
+    }
+    mb = merge_body(existing_body, payload["weights"])
+    b_by_date = {e["date"]: e for e in mb["entries"]}
+    checks += [
+        len(mb["entries"]) == 4,  # 3 Garmin dates + the untouched 2026-05-01
+        b_by_date["2026-06-01"]["weightKg"] == 82.4,  # Garmin overrode the weight
+        b_by_date["2026-06-01"].get("note") == "manual",  # ...but kept the note
+        b_by_date["2026-05-01"]["weightKg"] == 83.0,  # untouched date preserved
+        mb["measurements"] == existing_body["measurements"],  # measurements untouched
+        [e["date"] for e in mb["entries"]] == sorted(b_by_date),  # sorted by date
+    ]
+
+    # workouts: dedupe imported sessions; keep routines/programs + app-logged sessions.
+    existing_workouts = {
+        "routines": [{"id": "r1"}],
+        "programs": [{"id": "p1"}],
+        "sessions": [
+            {"id": "app1", "name": "Bench", "date": "2026-06-25", "imported": False},
+            # An already-imported Running matching one of the payload sessions.
+            {"id": "imp1", "name": "Running", "date": "2026-06-20", "durationMin": 32.5,
+             "kcal": 320, "imported": True},
+        ],
+    }
+    mw, added = merge_workouts(existing_workouts, payload["sessions"])
+    imported_names = [s["name"] for s in mw["sessions"] if s.get("imported")]
+    checks += [
+        added == 1,  # Running is a dup; only Strength Training is new
+        mw["routines"] == existing_workouts["routines"],
+        mw["programs"] == existing_workouts["programs"],
+        any(s["id"] == "app1" for s in mw["sessions"]),  # app session preserved
+        imported_names.count("Running") == 1,  # not duplicated
+        "Strength Training" in imported_names,
+        all(s.get("entries") == [] for s in mw["sessions"] if s.get("imported") and s["id"] != "imp1"),
+    ]
+    # Re-running against the already-merged store adds nothing (idempotent).
+    _, added_again = merge_workouts(mw, payload["sessions"])
+    checks.append(added_again == 0)
+
+    # health: union days, merge metric bags per date (Garmin wins on conflict).
+    existing_health = {"days": {
+        "2026-07-01": {"date": "2026-07-01", "metrics": {"steps": 1, "customMetric": 5}},
+        "2026-01-01": {"date": "2026-01-01", "metrics": {"steps": 100}},
+    }}
+    mh = merge_health(existing_health, payload["health"])
+    checks += [
+        len(mh["days"]) == 2,  # 2026-07-01 (merged) + untouched 2026-01-01
+        mh["days"]["2026-07-01"]["metrics"]["steps"] == 8421,  # Garmin overrode
+        mh["days"]["2026-07-01"]["metrics"]["customMetric"] == 5,  # kept existing extra
+        mh["days"]["2026-01-01"]["metrics"]["steps"] == 100,  # untouched day preserved
+    ]
+
+    # Merge helpers tolerate an empty/absent cloud doc (first-ever sync).
+    checks += [
+        merge_body(None, payload["weights"])["entries"] and True,
+        merge_workouts(None, payload["sessions"])[1] == 2,  # both sessions new
+        len(merge_health(None, payload["health"])["days"]) == 1,
+    ]
+
     passed = all(checks)
     print("PASS" if passed else "FAIL")
     return 0 if passed else 1
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sync Garmin Connect weigh-ins and activities to a FitMerge JSON import file.")
+    parser = argparse.ArgumentParser(description="Sync Garmin Connect weigh-ins and activities to FitMerge — as a JSON file or straight to your account.")
     parser.add_argument("--days", type=int, default=90, help="How many days back to pull (default 90)")
-    parser.add_argument("--out", type=str, default="fitmerge-import.json", help="Output file path")
+    parser.add_argument("--out", type=str, default="fitmerge-import.json", help="Output file path (file mode)")
+    parser.add_argument("--firebase", action="store_true",
+                        help="Push straight to your FitMerge account (auto-sync) instead of writing a file")
+    parser.add_argument("--service-account", type=str, default=os.environ.get("FIREBASE_SERVICE_ACCOUNT"),
+                        help="Path to your Firebase service-account JSON (auto-sync; or FIREBASE_SERVICE_ACCOUNT)")
+    parser.add_argument("--uid", type=str, default=os.environ.get("FIREBASE_UID"),
+                        help="Your FitMerge account user id, from Settings -> Sync (auto-sync; or FIREBASE_UID)")
     parser.add_argument("--self-test", action="store_true", help="Run offline validation and exit (no network)")
     args = parser.parse_args()
 
     if args.self_test:
         sys.exit(self_test())
 
+    if args.firebase:
+        if not args.service_account or not args.uid:
+            print("error: --firebase requires --service-account and --uid (or the FIREBASE_SERVICE_ACCOUNT "
+                  "/ FIREBASE_UID env vars). Your uid is shown in FitMerge under Settings -> Sync.",
+                  file=sys.stderr)
+            sys.exit(2)
+
     weights, sessions, health = fetch_from_garmin(args.days)
     payload = build_payload(weights, sessions, health)
+
+    if args.firebase:
+        n_weights, n_sessions, n_health = push_to_firebase(payload, args.service_account, args.uid)
+        print(
+            f"Auto-synced to your FitMerge account: {n_weights} weigh-ins and {n_health} days of "
+            f"metrics in the cloud; added {n_sessions} new activit{'y' if n_sessions == 1 else 'ies'}. "
+            "Open the app — it updates automatically."
+        )
+        return
 
     with open(args.out, "w") as f:
         json.dump(payload, f, indent=2)

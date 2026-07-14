@@ -104,8 +104,34 @@ Credentials come from the `GARMIN_EMAIL` / `GARMIN_PASSWORD` environment variabl
 be prompted). The session token is cached locally so you won't be re-prompted every run. Then
 import the resulting `fitmerge-import.json` the same way as any other file.
 
-Run `python3 scripts/garmin-sync.py --self-test` to sanity-check the script offline (no
-network or `garminconnect` install needed) — this is what CI runs to validate the script.
+#### Auto-sync (no manual import)
+
+If you've connected sync (see below), the same script can write **straight into your FitMerge
+account** with `--firebase`, so every device updates itself automatically — no file, no import
+step. Schedule it nightly and your Garmin data just shows up.
+
+```bash
+pip install garminconnect firebase-admin
+python3 scripts/garmin-sync.py --days 90 --firebase \
+    --service-account serviceAccount.json --uid YOUR_FITMERGE_UID
+```
+
+- **`serviceAccount.json`** — in the [Firebase console](https://console.firebase.google.com/),
+  open **Project settings → Service accounts → Generate new private key**. Keep it private; it
+  stays on your computer.
+- **`YOUR_FITMERGE_UID`** — shown in the app under **Settings → Sync → Automate Garmin import**
+  (tap to copy) once you're signed in, and in the Firebase console under **Authentication → Users**.
+  Both values can also be passed via the `FIREBASE_SERVICE_ACCOUNT` / `FIREBASE_UID` env vars.
+- The push is **read-merge-write**: your existing cloud data (app-logged workouts, weigh-ins, other
+  days of metrics) is preserved, Garmin data is folded in, and re-runs are **idempotent** — the
+  same activity is never imported twice.
+- **Schedule it:** on Windows use Task Scheduler to run the command daily; on macOS/Linux add a
+  `cron` entry (e.g. `0 6 * * * cd /path/to/FitMerge && python3 scripts/garmin-sync.py --days 3
+  --firebase --service-account serviceAccount.json --uid YOUR_FITMERGE_UID`).
+
+Run `python3 scripts/garmin-sync.py --self-test` to sanity-check the script offline (no network
+or `garminconnect`/`firebase-admin` install needed) — this validates both the JSON-building and
+the cloud-merge logic, and is what CI runs.
 
 ### Claude / MCP route
 

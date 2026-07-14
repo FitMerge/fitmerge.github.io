@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Cloud, LogIn, LogOut } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Cloud, Copy, LogIn, LogOut } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { useAuth } from '../../auth/AuthProvider'
@@ -129,6 +129,7 @@ export default function SyncSection() {
         <div className="space-y-2">
           <p className="text-sm text-slate-200">{user.email ?? 'Signed in'}</p>
           <SyncStatusLine syncState={syncState} />
+          <AutoSyncSection uid={user.uid} />
           <Button variant="ghost" full onClick={() => void signOut()}>
             <span className="flex items-center justify-center gap-1.5">
               <LogOut size={16} />
@@ -138,6 +139,95 @@ export default function SyncSection() {
         </div>
       )}
     </Card>
+  )
+}
+
+/** Surfaces the account UID and instructions for the Garmin auto-sync script
+ * (scripts/garmin-sync.py --firebase), which writes wearable data straight to this
+ * account so every device updates itself with no manual import. */
+function AutoSyncSection({ uid }: { uid: string }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  function copyUid() {
+    void navigator.clipboard?.writeText(uid).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-800 p-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-sm text-slate-300"
+      >
+        <span>Automate Garmin import</span>
+        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+
+      {open && (
+        <div className="mt-2.5 space-y-2.5 text-xs text-slate-400">
+          <p>
+            Run <code className="rounded bg-slate-800 px-1 py-0.5">scripts/garmin-sync.py --firebase</code>{' '}
+            on your computer to pull your Garmin data straight into this account on a schedule — no
+            file, no manual import. Every device updates automatically.
+          </p>
+
+          <div>
+            <p className="mb-1 text-slate-500">Your account id (the script needs this):</p>
+            <div className="flex items-center gap-1.5">
+              <code className="flex-1 overflow-x-auto rounded bg-slate-800 px-2 py-1.5 text-[11px] text-slate-200">
+                {uid}
+              </code>
+              <button
+                type="button"
+                onClick={copyUid}
+                aria-label="Copy account id"
+                className="shrink-0 rounded bg-slate-800 p-1.5 text-slate-300 active:bg-slate-700"
+              >
+                {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              </button>
+            </div>
+          </div>
+
+          <ol className="list-decimal space-y-1.5 pl-4">
+            <li>
+              In the{' '}
+              <a
+                href="https://console.firebase.google.com/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary-400 underline"
+              >
+                Firebase console
+              </a>
+              , open <span className="text-slate-300">Project settings → Service accounts</span> and
+              click <span className="text-slate-300">Generate new private key</span> — save the file
+              as <code className="rounded bg-slate-800 px-1 py-0.5">serviceAccount.json</code>.
+            </li>
+            <li>
+              Install the tools:{' '}
+              <code className="rounded bg-slate-800 px-1 py-0.5">pip install garminconnect firebase-admin</code>
+            </li>
+            <li>Run it (copy your id from above):</li>
+          </ol>
+
+          <pre className="overflow-x-auto rounded-lg bg-slate-800 p-2 text-[11px] leading-relaxed text-slate-300">
+            {`python3 scripts/garmin-sync.py --days 90 \\
+  --firebase \\
+  --service-account serviceAccount.json \\
+  --uid ${uid}`}
+          </pre>
+
+          <p>
+            To run it nightly, schedule that command with Task Scheduler (Windows) or cron
+            (Mac/Linux). Your service-account key and Garmin credentials never leave your computer.
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 
