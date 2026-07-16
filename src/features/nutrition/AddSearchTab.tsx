@@ -29,6 +29,7 @@ type SelectedFood = {
   extras100g?: SearchFood['extras100g']
   extrasServing?: SearchFood['extrasServing']
   isCustom: boolean
+  defaultQty?: number
 }
 
 type AddSearchTabProps = {
@@ -225,6 +226,26 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
     })
   }
 
+  // Tapping a recent/frequent row opens its detail at the remembered portion so
+  // you can adjust servings — the row's "+" still logs it in one tap. This keeps
+  // tap behaviour consistent with search results (tap = detail, + = quick log).
+  function selectRecentItem(item: SavedMealItem) {
+    const q = item.qty > 0 ? item.qty : 1
+    setSelected({
+      name: item.name,
+      servingText: item.unit,
+      per100g: undefined,
+      perServing: {
+        calories: item.calories / q,
+        protein: item.protein / q,
+        carbs: item.carbs / q,
+        fat: item.fat / q,
+      },
+      isCustom: true,
+      defaultQty: q,
+    })
+  }
+
   function selectCustomFood(food: CustomFood) {
     setSelected({
       name: food.name,
@@ -248,6 +269,7 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
         extrasServing={selected.extrasServing}
         date={date}
         defaultMealType={mealType}
+        defaultQty={selected.defaultQty}
         allowSaveToMyFoods={!selected.isCustom}
         onClose={onClose}
         onBack={() => setSelected(null)}
@@ -326,7 +348,7 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
                       name={item.name}
                       subtitle={`${item.qty} ${item.unit}`}
                       calorieLabel={`${Math.round(item.calories)} kcal`}
-                      onClick={() => quickAddItem(item, key)}
+                      onClick={() => selectRecentItem(item)}
                       onQuickAdd={() => quickAddItem(item, key)}
                       added={justAdded.has(key)}
                     />
@@ -348,7 +370,7 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
                       name={item.name}
                       subtitle={`${item.qty} ${item.unit}`}
                       calorieLabel={`${Math.round(item.calories)} kcal`}
-                      onClick={() => quickAddItem(item, key)}
+                      onClick={() => selectRecentItem(item)}
                       onQuickAdd={() => quickAddItem(item, key)}
                       added={justAdded.has(key)}
                     />
@@ -385,7 +407,7 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
               className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 py-3 text-sm text-slate-300 active:bg-slate-800/60"
             >
               <PencilLine size={16} />
-              {hasHistory ? 'Create a food' : 'Quick add / create a food'}
+              Create a food
             </button>
           )}
 

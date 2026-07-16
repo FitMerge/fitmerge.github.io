@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Camera, ChevronLeft, X } from 'lucide-react'
+import { Camera, ChevronLeft, X, Zap } from 'lucide-react'
 import AddManualTab from './AddManualTab'
 import AddPhotoTab from './AddPhotoTab'
 import AddSearchTab from './AddSearchTab'
+import QuickAddTab from './QuickAddTab'
 import type { MealType } from '../../types'
 
 const MEALS: { type: MealType; label: string }[] = [
@@ -12,7 +13,7 @@ const MEALS: { type: MealType; label: string }[] = [
   { type: 'snack', label: 'Snacks' },
 ]
 
-type View = 'browse' | 'manual' | 'photo'
+type View = 'browse' | 'manual' | 'photo' | 'quickadd'
 
 type AddFoodSheetProps = {
   open: boolean
@@ -113,13 +114,35 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
         {view === 'browse' && (
           <div className="space-y-4">
             <AddSearchTab date={date} mealType={mealType} onClose={onClose} onManual={() => setView('manual')} />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setView('quickadd')}
+                className="flex items-center justify-center gap-2 rounded-lg bg-slate-800 py-3 text-sm text-slate-200 active:bg-slate-700"
+              >
+                <Zap size={16} /> Quick add
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('photo')}
+                className="flex items-center justify-center gap-2 rounded-lg bg-slate-800 py-3 text-sm text-slate-200 active:bg-slate-700"
+              >
+                <Camera size={16} /> Photo
+              </button>
+            </div>
+          </div>
+        )}
+
+        {view === 'quickadd' && (
+          <div className="space-y-3">
             <button
               type="button"
-              onClick={() => setView('photo')}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-800 py-3 text-sm text-slate-200 active:bg-slate-700"
+              onClick={() => setView('browse')}
+              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
             >
-              <Camera size={16} /> Log with a photo
+              <ChevronLeft size={16} /> Back to search
             </button>
+            <QuickAddTab date={date} mealType={mealType} onClose={onClose} />
           </div>
         )}
 

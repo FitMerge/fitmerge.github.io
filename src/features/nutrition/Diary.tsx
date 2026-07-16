@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Card from '../../components/Card'
-import RingChart from '../../components/RingChart'
 import MacroBar from '../../components/MacroBar'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
@@ -142,26 +141,38 @@ export default function Diary() {
         </button>
       </header>
 
-      <Card className="flex flex-col items-center gap-4">
-        <RingChart
-          value={macroPct(totals.calories, goals.calories)}
-          label={`${Math.round(totals.calories)}`}
-          sublabel={`of ${goals.calories} kcal`}
-          color="#34d399"
-        />
-        <div className="w-full space-y-3">
+      {/* Compact calorie summary — "Remaining" is the number that matters most, so
+          it leads (MyFitnessPal's Goal − Food + Exercise = Remaining), backed by a
+          slim progress bar. Keeping this short lets the meals sit near the top. */}
+      <Card className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {remaining >= 0 ? 'Remaining' : 'Over'}
+            </p>
+            <p className={`text-3xl font-bold leading-tight ${remaining < 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {Math.abs(remaining).toLocaleString()}
+              <span className="ml-1 text-sm font-medium text-slate-500">kcal</span>
+            </p>
+          </div>
+          <div className="text-right text-xs leading-relaxed text-slate-400">
+            <p>{Math.round(goals.calories).toLocaleString()} goal</p>
+            <p>− {Math.round(totals.calories).toLocaleString()} food</p>
+            {burned > 0 && <p className="text-emerald-400/80">+ {burned.toLocaleString()} exercise</p>}
+          </div>
+        </div>
+
+        <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+          <div
+            className={`h-full rounded-full ${totals.calories > goals.calories ? 'bg-amber-400' : 'bg-emerald-400'}`}
+            style={{ width: `${Math.min(100, macroPct(totals.calories, goals.calories) * 100)}%` }}
+          />
+        </div>
+
+        <div className="space-y-2 pt-1">
           <MacroBar label="Protein" value={totals.protein} goal={goals.protein} color="bg-emerald-400" />
           <MacroBar label="Carbs" value={totals.carbs} goal={goals.carbs} color="bg-sky-400" />
           <MacroBar label="Fat" value={totals.fat} goal={goals.fat} color="bg-amber-400" />
-        </div>
-        <div className="w-full border-t border-slate-800 pt-3 flex items-center justify-between text-xs">
-          <span className="text-slate-400">
-            {Math.round(goals.calories)} goal − {Math.round(totals.calories)} food
-            {burned > 0 ? ` + ${burned} exercise` : ''}
-          </span>
-          <span className={`font-semibold ${remaining < 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-            {remaining >= 0 ? `${remaining} left` : `${Math.abs(remaining)} over`}
-          </span>
         </div>
         {extrasSummary && <p className="text-xs text-slate-500">{extrasSummary}</p>}
       </Card>

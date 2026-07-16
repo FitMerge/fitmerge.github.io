@@ -49,6 +49,8 @@ type FoodDetailPanelProps = {
   extrasServing?: Extras
   date: string
   defaultMealType?: MealType
+  /** Pre-fill the quantity (used when re-opening a recent at its remembered portion). */
+  defaultQty?: number
   allowSaveToMyFoods: boolean
   onClose: () => void
   onBack: () => void
@@ -86,6 +88,7 @@ export default function FoodDetailPanel({
   extrasServing,
   date,
   defaultMealType,
+  defaultQty,
   allowSaveToMyFoods,
   onClose,
   onBack,
@@ -102,7 +105,7 @@ export default function FoodDetailPanel({
   if (per100g) for (const m of GRAM_UNIT_ORDER) unitOptions.push({ mode: m, label: UNIT_LABEL[m] })
 
   const [unit, setUnit] = useState<UnitMode>(unitOptions[0]?.mode ?? 'serving')
-  const [qty, setQty] = useState(defaultQtyFor(unitOptions[0]?.mode ?? 'serving'))
+  const [qty, setQty] = useState(defaultQty ?? defaultQtyFor(unitOptions[0]?.mode ?? 'serving'))
   const [mealType, setMealType] = useState<MealType>(defaultMealType ?? 'breakfast')
   const [saved, setSaved] = useState(false)
 
