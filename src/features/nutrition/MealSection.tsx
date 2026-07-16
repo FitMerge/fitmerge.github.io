@@ -12,47 +12,49 @@ type MealSectionProps = {
   onSaveMeal: () => void
 }
 
+/**
+ * One meal block in the food diary — MyFitnessPal's "Today" layout: the meal is
+ * always shown (even empty) with its calorie subtotal, the logged foods, and a
+ * clear full-width "Add food" button so logging into a specific meal is one tap.
+ */
 export default function MealSection({ label, entries, onAdd, onSelectEntry, onSaveMeal }: MealSectionProps) {
   const totals = sumMacros(entries)
 
   return (
-    <Card>
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-        <div>
+    <Card className="!p-0 overflow-hidden">
+      <div className="flex items-center justify-between px-4 pt-3 pb-2">
+        <div className="flex items-baseline gap-2">
           <h3 className="text-sm font-semibold text-slate-100">{label}</h3>
-          <p className="text-xs text-slate-500">{Math.round(totals.calories)} kcal</p>
+          <span className="text-xs text-slate-500">{Math.round(totals.calories)} kcal</span>
         </div>
-        <div className="flex items-center gap-2">
-          {entries.length > 0 && (
-            <button
-              type="button"
-              onClick={onSaveMeal}
-              aria-label={`Save ${label} as meal`}
-              className="w-9 h-9 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-300"
-            >
-              <BookmarkPlus size={16} />
-            </button>
-          )}
+        {entries.length > 0 && (
           <button
             type="button"
-            onClick={onAdd}
-            aria-label={`Add food to ${label}`}
-            className="w-9 h-9 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-primary-400"
+            onClick={onSaveMeal}
+            aria-label={`Save ${label} as a meal`}
+            className="-mr-1 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 active:bg-slate-800"
           >
-            <Plus size={16} />
+            <BookmarkPlus size={17} />
           </button>
-        </div>
+        )}
       </div>
 
-      {entries.length === 0 ? (
-        <p className="pt-2.5 text-xs text-slate-500">No entries yet</p>
-      ) : (
-        <div className="divide-y divide-slate-800/60">
+      {entries.length > 0 && (
+        <div className="divide-y divide-slate-800/60 px-4">
           {entries.map((entry) => (
             <FoodEntryRow key={entry.id} entry={entry} onClick={() => onSelectEntry(entry)} />
           ))}
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex w-full items-center gap-2 border-t border-slate-800/60 px-4 py-3 text-sm font-medium text-primary-400 active:bg-slate-800/50"
+      >
+        <Plus size={17} strokeWidth={2.5} />
+        Add food
+      </button>
     </Card>
   )
 }

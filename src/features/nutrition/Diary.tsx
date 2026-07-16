@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, UtensilsCrossed } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Card from '../../components/Card'
 import RingChart from '../../components/RingChart'
 import MacroBar from '../../components/MacroBar'
-import EmptyState from '../../components/EmptyState'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
 import MealSection from './MealSection'
@@ -167,42 +166,33 @@ export default function Diary() {
         {extrasSummary && <p className="text-xs text-slate-500">{extrasSummary}</p>}
       </Card>
 
+      {/* Food comes first — MyFitnessPal's "Today" layout keeps the meals right
+          under the calorie summary so logging is never more than a scroll away.
+          Every meal is always shown (even empty) with its own Add-food button. */}
+      <div className="space-y-3">
+        {MEALS.map(({ type, label }) => (
+          <MealSection
+            key={type}
+            label={label}
+            entries={dayEntries.filter((e) => e.mealType === type)}
+            onAdd={() => openAdd(type)}
+            onSelectEntry={(entry) => setEditingEntry(entry)}
+            onSaveMeal={() => setSavingMealType(type)}
+          />
+        ))}
+      </div>
+
+      {dayEntries.length === 0 && yesterdayEntries.length > 0 && (
+        <Button variant="ghost" full onClick={copyYesterday}>
+          Copy yesterday's food
+        </Button>
+      )}
+
+      {/* Exercise and water sit below the food log — quick to reach, but not in
+          the way of the primary task. */}
       <ExerciseCard date={selectedDate} />
 
       <WaterCard date={selectedDate} />
-
-      {dayEntries.length === 0 ? (
-        <EmptyState
-          icon={UtensilsCrossed}
-          title="No food logged yet"
-          subtitle="Add your first meal for this day."
-          action={
-            <div className="flex flex-col gap-2 w-full">
-              <Button variant="primary" full onClick={() => openAdd('breakfast')}>
-                Add food
-              </Button>
-              {yesterdayEntries.length > 0 && (
-                <Button variant="ghost" full onClick={copyYesterday}>
-                  Copy yesterday
-                </Button>
-              )}
-            </div>
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          {MEALS.map(({ type, label }) => (
-            <MealSection
-              key={type}
-              label={label}
-              entries={dayEntries.filter((e) => e.mealType === type)}
-              onAdd={() => openAdd(type)}
-              onSelectEntry={(entry) => setEditingEntry(entry)}
-              onSaveMeal={() => setSavingMealType(type)}
-            />
-          ))}
-        </div>
-      )}
 
       <AddFoodSheet
         open={addOpen}
