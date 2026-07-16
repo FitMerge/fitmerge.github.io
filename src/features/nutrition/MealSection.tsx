@@ -28,7 +28,7 @@ export default function MealSection({ label, entries, onAdd, onSelectEntry, onSa
               type="button"
               onClick={onSaveMeal}
               aria-label={`Save ${label} as meal`}
-              className="w-8 h-8 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-300"
+              className="w-9 h-9 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-300"
             >
               <BookmarkPlus size={16} />
             </button>
@@ -37,7 +37,7 @@ export default function MealSection({ label, entries, onAdd, onSelectEntry, onSa
             type="button"
             onClick={onAdd}
             aria-label={`Add food to ${label}`}
-            className="w-8 h-8 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-primary-400"
+            className="w-9 h-9 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-primary-400"
           >
             <Plus size={16} />
           </button>

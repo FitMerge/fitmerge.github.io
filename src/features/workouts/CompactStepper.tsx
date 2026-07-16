@@ -19,7 +19,7 @@ export default function CompactStepper({ label, value, onChange, step = 1, min =
           type="button"
           onClick={() => onChange(clamp(value - step))}
           aria-label={`Decrease ${label}`}
-          className="w-7 h-7 shrink-0 rounded-lg bg-slate-800 active:bg-slate-700 flex items-center justify-center text-sm"
+          className="w-9 h-9 shrink-0 rounded-lg bg-slate-800 active:bg-slate-700 flex items-center justify-center text-base"
         >
           -
         </button>
@@ -31,7 +31,7 @@ export default function CompactStepper({ label, value, onChange, step = 1, min =
           type="button"
           onClick={() => onChange(clamp(value + step))}
           aria-label={`Increase ${label}`}
-          className="w-7 h-7 shrink-0 rounded-lg bg-slate-800 active:bg-slate-700 flex items-center justify-center text-sm"
+          className="w-9 h-9 shrink-0 rounded-lg bg-slate-800 active:bg-slate-700 flex items-center justify-center text-base"
         >
           +
         </button>

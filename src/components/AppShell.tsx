@@ -15,7 +15,7 @@ export default function AppShell() {
 
   return (
     <div className="h-dvh flex flex-col">
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto overscroll-contain">
         <div className="max-w-md mx-auto w-full">
           <Suspense
             fallback={

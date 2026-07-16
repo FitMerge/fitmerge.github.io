@@ -22,7 +22,26 @@
   textarea,
   select {
     @apply bg-transparent;
+    /* iOS Safari zooms the whole page in when a focused control's text is under
+       16px, which jerks the layout around. Anchor form controls at 16px so
+       focusing an input never triggers that zoom-and-jump. */
+    font-size: 16px;
   }
+}
+
+/* Unlayered on purpose: Tailwind's `utilities` cascade layer beats anything in
+   `@layer base`, so the 16px floor above is overridden on any input that carries a
+   `text-sm`/`text-xs` class — and those (<16px) are exactly what makes iOS Safari
+   zoom-and-jump on focus. An unlayered rule beats every layered rule regardless of
+   specificity, so this reliably holds form controls at 16px without per-file edits
+   and without disturbing inputs that intentionally use a larger size. */
+input.text-xs,
+textarea.text-xs,
+select.text-xs,
+input.text-sm,
+textarea.text-sm,
+select.text-sm {
+  font-size: 16px;
 }
 
 @layer utilities {

@@ -38,7 +38,7 @@ export default function RoutineItemRow({
             onClick={onMoveUp}
             disabled={isFirst}
             aria-label="Move up"
-            className="w-7 h-7 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-400 disabled:opacity-30"
+            className="w-9 h-9 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-400 disabled:opacity-30"
           >
             <ChevronUp size={14} />
           </button>
@@ -47,7 +47,7 @@ export default function RoutineItemRow({
             onClick={onMoveDown}
             disabled={isLast}
             aria-label="Move down"
-            className="w-7 h-7 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-400 disabled:opacity-30"
+            className="w-9 h-9 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-slate-400 disabled:opacity-30"
           >
             <ChevronDown size={14} />
           </button>
@@ -55,7 +55,7 @@ export default function RoutineItemRow({
             type="button"
             onClick={onRemove}
             aria-label="Remove exercise"
-            className="w-7 h-7 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-red-400"
+            className="w-9 h-9 rounded-full bg-slate-800 active:bg-slate-700 flex items-center justify-center text-red-400"
           >
             <X size={14} />
           </button>

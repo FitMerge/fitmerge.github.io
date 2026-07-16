@@ -24,6 +24,11 @@ type AddFoodSheetProps = {
 export default function AddFoodSheet({ open, onClose, date, defaultMealType }: AddFoodSheetProps) {
   const [mealType, setMealType] = useState<MealType>(defaultMealType)
   const [view, setView] = useState<View>('browse')
+  // `mounted` keeps the page in the DOM through its exit slide; `shown` drives the
+  // transform so it slides UP from the bottom (MFP's full-screen add flow) instead
+  // of hard-popping into place.
+  const [mounted, setMounted] = useState(open)
+  const [shown, setShown] = useState(false)
 
   // Reset meal + view each time the screen opens.
   useEffect(() => {
@@ -33,10 +38,37 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
     }
   }, [open, defaultMealType])
 
-  if (!open) return null
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      const id = requestAnimationFrame(() => setShown(true))
+      return () => cancelAnimationFrame(id)
+    }
+    setShown(false)
+    const t = setTimeout(() => setMounted(false), 240)
+    return () => clearTimeout(t)
+  }, [open])
+
+  // Lock the page behind from scrolling while this full-screen sheet is up.
+  useEffect(() => {
+    if (!mounted) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mounted])
+
+  if (!mounted) return null
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-slate-950 will-change-transform"
+      style={{
+        transform: shown ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 260ms cubic-bezier(0.32, 0.72, 0, 1)',
+      }}
+    >
       {/* Header: close, title, done, and the meal selector — always visible so you
           always know (and can change) which meal you're logging into. */}
       <div className="shrink-0 border-b border-slate-800" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -75,7 +107,7 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
       </div>
 
       <div
-        className="flex-1 overflow-y-auto p-4"
+        className="flex-1 overflow-y-auto overscroll-contain p-4"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
       >
         {view === 'browse' && (

@@ -8,13 +8,14 @@ import type { Macros, MealType } from '../../types'
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
 
-type UnitMode = 'serving' | 'g' | 'oz' | 'cup' | 'tbsp' | 'tsp' | 'floz'
+type UnitMode = 'serving' | 'g' | 'oz' | 'lb' | 'cup' | 'tbsp' | 'tsp' | 'floz'
 
-// Grams per one of each measure. Weight units (g, oz) are exact; volume units are
+// Grams per one of each measure. Weight units (g, oz, lb) are exact; volume units are
 // standard approximations for quick estimating (real grams-per-cup vary by food).
 const UNIT_GRAMS: Record<Exclude<UnitMode, 'serving'>, number> = {
   g: 1,
   oz: 28.3495,
+  lb: 453.592,
   cup: 240,
   tbsp: 15,
   tsp: 5,
@@ -24,6 +25,7 @@ const UNIT_LABEL: Record<UnitMode, string> = {
   serving: 'serving',
   g: 'g',
   oz: 'oz',
+  lb: 'lb',
   cup: 'cup',
   tbsp: 'tbsp',
   tsp: 'tsp',
@@ -31,7 +33,7 @@ const UNIT_LABEL: Record<UnitMode, string> = {
 }
 const VOLUME_UNITS = new Set<UnitMode>(['cup', 'tbsp', 'tsp', 'floz'])
 // Order shown in the picker after "serving".
-const GRAM_UNIT_ORDER: Exclude<UnitMode, 'serving'>[] = ['g', 'oz', 'cup', 'tbsp', 'tsp', 'floz']
+const GRAM_UNIT_ORDER: Exclude<UnitMode, 'serving'>[] = ['g', 'oz', 'lb', 'cup', 'tbsp', 'tsp', 'floz']
 
 function defaultQtyFor(mode: UnitMode): number {
   return mode === 'g' ? 100 : 1

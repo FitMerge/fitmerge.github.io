@@ -75,7 +75,7 @@ export default function ExerciseCard({ date }: { date: string }) {
             type="button"
             onClick={() => removeExercise(date, e.id)}
             aria-label={`Remove ${e.name}`}
-            className="w-7 h-7 rounded-md bg-slate-800 text-slate-400 flex items-center justify-center active:bg-slate-700"
+            className="w-9 h-9 rounded-md bg-slate-800 text-slate-400 flex items-center justify-center active:bg-slate-700"
           >
             <Trash2 size={13} />
           </button>
