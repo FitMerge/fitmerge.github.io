@@ -303,19 +303,43 @@ def _garmin_login():
         print("error: the garminconnect package is required — run: pip install garminconnect", file=sys.stderr)
         sys.exit(1)
 
+    try:
+        import garth
+    except ImportError:
+        garth = None
+
     tokenstore = os.path.expanduser(os.environ.get("GARMINTOKENS", "~/.garminconnect"))
+    have_tokens = os.path.isdir(tokenstore) and bool(os.listdir(tokenstore))
 
     # 1) Try to resume from a saved session — no prompt, no password required.
-    #    Only attempt this when a token actually exists, so a missing store doesn't
-    #    depend on Garmin() being constructable without credentials.
-    if os.path.isdir(tokenstore) and os.listdir(tokenstore):
+    if have_tokens:
+        # Strategy A: garminconnect's own token login (newer builds that expose
+        # a per-instance garth client).
         try:
             client = Garmin()
             client.login(tokenstore)
-            print(f"Resumed saved Garmin session from {tokenstore}", file=sys.stderr)
+            print("Resumed saved Garmin session", file=sys.stderr)
             return client
-        except Exception as e:
-            print(f"(saved session couldn't be reused, logging in fresh: {e})", file=sys.stderr)
+        except Exception as e_a:
+            # Strategy B: drive garth at the module level. garminconnect 0.3.x has no
+            # per-instance `.garth`; its API calls use the module-level garth.client,
+            # so loading tokens there and setting the display name is enough to skip login.
+            if garth is not None:
+                try:
+                    _garth_load_tokens(garth, tokenstore)
+                    display, full = _garth_profile(garth)
+                    if not display:
+                        raise RuntimeError("resumed session returned no profile")
+                    client = Garmin()
+                    client.display_name = display
+                    if full:
+                        client.full_name = full
+                    print("Resumed saved Garmin session", file=sys.stderr)
+                    return client
+                except Exception as e_b:
+                    print(f"(saved session couldn't be reused: {e_a}; {e_b}) — logging in fresh", file=sys.stderr)
+            else:
+                print(f"(saved session couldn't be reused: {e_a}) — logging in fresh", file=sys.stderr)
 
     # 2) Full login with credentials (from env vars, else prompted once).
     email = os.environ.get("GARMIN_EMAIL") or input("Garmin email: ")
@@ -335,24 +359,27 @@ def _garmin_login():
 
     client.login()
 
-    # Save the session so the next run won't need to prompt again. Surface any
-    # failure loudly — a silently-unsaved token is exactly what causes a 2-factor
-    # prompt on every run (and the repeated logins that trigger Garmin's rate limit).
+    # Save the session so the next run won't need to prompt again. Try several save
+    # methods (garminconnect/garth versions differ) and report the outcome loudly — a
+    # silently-unsaved token is what causes a 2-factor prompt on every single run.
     saved = False
-    try:
-        os.makedirs(tokenstore, exist_ok=True)
-        client.garth.dump(tokenstore)
-        saved = os.path.isdir(tokenstore) and bool(os.listdir(tokenstore))
-    except Exception as e:
-        print(f"warning: could not save session via garth.dump ({e})", file=sys.stderr)
-    if not saved:
-        # Fallback for garminconnect/garth versions without Garmin.garth.dump.
+    if garth is not None:
         try:
-            import garth
-            garth.client.dump(tokenstore)
-            saved = os.path.isdir(tokenstore) and bool(os.listdir(tokenstore))
-        except Exception as e:
-            print(f"warning: fallback token save also failed ({e})", file=sys.stderr)
+            os.makedirs(tokenstore, exist_ok=True)
+        except Exception:
+            pass
+        for saver in (
+            lambda: getattr(client, "garth").dump(tokenstore),  # newer: per-instance client
+            lambda: garth.save(tokenstore),                      # module-level helper
+            lambda: garth.client.dump(tokenstore),               # module-level client
+        ):
+            try:
+                saver()
+            except Exception:
+                continue
+            if os.path.isdir(tokenstore) and os.listdir(tokenstore):
+                saved = True
+                break
     if saved:
         print(f"Saved Garmin session to {tokenstore} — future runs won't prompt.", file=sys.stderr)
     else:
@@ -363,6 +390,37 @@ def _garmin_login():
         )
 
     return client
+
+
+def _garth_load_tokens(garth, tokenstore):
+    """Load saved tokens into the module-level garth client, trying known APIs."""
+    for loader in (
+        lambda: garth.resume(tokenstore),
+        lambda: garth.client.load(tokenstore),
+    ):
+        try:
+            loader()
+            return
+        except Exception:
+            continue
+    raise RuntimeError("no usable garth token-load method")
+
+
+def _garth_profile(garth):
+    """(displayName, fullName) for the resumed garth session, or (None, None)."""
+    prof = None
+    try:
+        prof = garth.client.profile
+    except Exception:
+        prof = None
+    if not isinstance(prof, dict):
+        try:
+            prof = garth.connectapi("/userprofile-service/socialProfile")
+        except Exception:
+            prof = None
+    if isinstance(prof, dict):
+        return prof.get("displayName"), prof.get("fullName")
+    return None, None
 
 
 def fetch_from_garmin(days):
