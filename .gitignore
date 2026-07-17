@@ -5,3 +5,9 @@ vite.config.js
 vite.config.d.ts
 .frugal-fable/
 *.local
+
+# Garmin auto-sync secrets / output — never commit these
+serviceAccount.json
+scripts/serviceAccount.json
+fitmerge-import.json
+scripts/garmin-sync.log
