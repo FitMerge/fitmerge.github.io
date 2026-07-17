@@ -13,6 +13,7 @@ import { ArrowDown, ArrowUp, Flag, Plus, Scale, Target, Trash2 } from 'lucide-re
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
+import SegmentedControl from '../../components/SegmentedControl'
 import EmptyState from '../../components/EmptyState'
 import NumberField from '../../components/NumberField'
 import LogWeightSheet from './LogWeightSheet'
@@ -116,20 +117,14 @@ export default function WeightSection() {
       </div>
 
       {/* Range selector */}
-      <div className="mb-3 flex gap-1.5">
-        {WEIGHT_RANGE_OPTIONS.map((opt) => (
-          <button
-            key={opt.key}
-            type="button"
-            onClick={() => setRange(opt.key)}
-            className={`flex-1 rounded-full py-1 text-xs font-medium ${
-              range === opt.key ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-400'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        size="sm"
+        options={WEIGHT_RANGE_OPTIONS}
+        value={range}
+        onChange={setRange}
+        ariaLabel="Weight range"
+        className="mb-3"
+      />
 
       {/* Goal progress */}
       <button

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { HeartPulse } from 'lucide-react'
 import Card from '../../components/Card'
+import SegmentedControl from '../../components/SegmentedControl'
 import { useHealthStore } from '../../store/health'
 import { HEALTH_RANGE_OPTIONS, metricSamples, metricSeries, type HealthRangeKey } from './healthTrends'
 
@@ -40,20 +41,13 @@ export default function RestingHrHrvSection() {
             illness or overreaching.
           </p>
 
-          <div className="flex gap-2">
-            {HEALTH_RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setRange(opt.key)}
-                className={`flex-1 rounded-full py-1.5 text-sm font-medium ${
-                  range === opt.key ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            size="sm"
+            options={HEALTH_RANGE_OPTIONS}
+            value={range}
+            onChange={setRange}
+            ariaLabel="Recovery range"
+          />
 
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">

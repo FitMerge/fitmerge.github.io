@@ -14,6 +14,7 @@ import { Activity, Loader2, Sparkles } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
+import SegmentedControl from '../../components/SegmentedControl'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
@@ -22,11 +23,15 @@ import { coachSignals } from '../../lib/coachSignals'
 import { explainCoachData, CoachError } from '../../services/coach/explain'
 import { monthDayLabel } from './utils'
 
-const RANGES: { key: string; label: string; days: number }[] = [
+type RangeKey = '90d' | '180d' | '365d'
+
+const RANGES: { key: RangeKey; label: string; days: number }[] = [
   { key: '90d', label: '3mo', days: 90 },
   { key: '180d', label: '6mo', days: 180 },
   { key: '365d', label: '1y', days: 365 },
 ]
+
+const rangeToDays = (key: RangeKey): number => RANGES.find((r) => r.key === key)?.days ?? 180
 
 const PROJECTION_DAYS = 28
 
@@ -52,7 +57,8 @@ export default function FormFitnessSection() {
   const days = useHealthStore((s) => s.days)
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey)
 
-  const [rangeDays, setRangeDays] = useState(180)
+  const [rangeKey, setRangeKey] = useState<RangeKey>('180d')
+  const rangeDays = rangeToDays(rangeKey)
   const [explainOpen, setExplainOpen] = useState(false)
   const [explainState, setExplainState] = useState<'loading' | 'done' | 'error'>('loading')
   const [explainText, setExplainText] = useState('')
@@ -156,20 +162,7 @@ export default function FormFitnessSection() {
         <span className={`font-semibold ${TONE_CLASSES[fs.tone]}`}>{fs.label}.</span> {fs.detail}
       </p>
 
-      <div className="flex gap-2">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            type="button"
-            onClick={() => setRangeDays(r.days)}
-            className={`flex-1 rounded-full py-1.5 text-xs font-medium ${
-              rangeDays === r.days ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl size="sm" options={RANGES} value={rangeKey} onChange={setRangeKey} ariaLabel="Form & fitness range" />
 
       <div style={{ height: 200 }}>
         <ResponsiveContainer width="100%" height="100%">

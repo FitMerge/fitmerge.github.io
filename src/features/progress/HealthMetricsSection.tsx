@@ -3,7 +3,7 @@ import { Activity, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react'
 import Card from '../../components/Card'
 import Sparkline from '../../components/Sparkline'
 import { healthDaysDesc, useHealthStore } from '../../store/health'
-import { formatMetric, groupedMetricKeys, metricMeta } from '../../lib/healthMetrics'
+import { formatMetric, groupedMetricKeys, metricMeta, type MetricGroup } from '../../lib/healthMetrics'
 import { isoToLabel } from '../../lib/date'
 import HealthMetricDetailSheet from './HealthMetricDetailSheet'
 
@@ -15,7 +15,14 @@ type MetricSummary = {
   spark: number[]
 }
 
-export default function HealthMetricsSection() {
+type HealthMetricsSectionProps = {
+  /** Restrict to these metric groups (so each Health tab owns its domains). */
+  only?: MetricGroup[]
+  /** Card heading; defaults to "Health metrics". */
+  title?: string
+}
+
+export default function HealthMetricsSection({ only, title = 'Health metrics' }: HealthMetricsSectionProps = {}) {
   const days = useHealthStore((s) => s.days)
   const [selected, setSelected] = useState<string | null>(null)
   const desc = useMemo(() => healthDaysDesc(days), [days])
@@ -45,13 +52,16 @@ export default function HealthMetricsSection() {
     return out
   }, [desc])
 
-  const groups = useMemo(() => groupedMetricKeys(Object.keys(summary)), [summary])
+  const groups = useMemo(() => {
+    const all = groupedMetricKeys(Object.keys(summary))
+    return only ? all.filter((g) => only.includes(g.group)) : all
+  }, [summary, only])
 
   return (
     <Card className="space-y-4">
       <div className="flex items-center gap-2">
         <Activity size={16} className="text-emerald-400" />
-        <h2 className="text-sm font-semibold text-slate-200">Health metrics</h2>
+        <h2 className="text-sm font-semibold text-slate-200">{title}</h2>
       </div>
 
       {groups.length === 0 ? (

@@ -2,16 +2,21 @@ import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Flame } from 'lucide-react'
 import Card from '../../components/Card'
+import SegmentedControl from '../../components/SegmentedControl'
 import { useHealthStore } from '../../store/health'
 import { addDays, todayISO } from '../../lib/date'
 import { metricSamples } from './healthTrends'
 import { monthDayLabel } from './utils'
 
-const RANGES: { key: string; label: string; days: number }[] = [
+type RangeKey = '90d' | '180d' | '365d'
+
+const RANGES: { key: RangeKey; label: string; days: number }[] = [
   { key: '90d', label: '3mo', days: 90 },
   { key: '180d', label: '6mo', days: 180 },
   { key: '365d', label: '1y', days: 365 },
 ]
+
+const rangeToDays = (key: RangeKey): number => RANGES.find((r) => r.key === key)?.days ?? 90
 
 type SplitPoint = { label: string; moderate: number; vigorous: number }
 type TotalPoint = { label: string; total: number }
@@ -32,7 +37,8 @@ function sumWeek(byDate: Map<string, number>, start: string, end: string): numbe
 
 export default function IntensityDistributionSection() {
   const days = useHealthStore((s) => s.days)
-  const [rangeDays, setRangeDays] = useState(90)
+  const [rangeKey, setRangeKey] = useState<RangeKey>('90d')
+  const rangeDays = rangeToDays(rangeKey)
 
   const data = useMemo<IntensityData>(() => {
     const moderateSamples = metricSamples(days, 'moderateIntensityMinutes')
@@ -89,20 +95,7 @@ export default function IntensityDistributionSection() {
         vigorous load raise injury risk.
       </p>
 
-      <div className="flex gap-2">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            type="button"
-            onClick={() => setRangeDays(r.days)}
-            className={`flex-1 rounded-full py-1.5 text-xs font-medium ${
-              rangeDays === r.days ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl size="sm" options={RANGES} value={rangeKey} onChange={setRangeKey} ariaLabel="Intensity range" />
 
       <div style={{ height: 200 }}>
         <ResponsiveContainer width="100%" height="100%">

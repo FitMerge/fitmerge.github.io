@@ -3,6 +3,7 @@
 // convention used by Garmin Connect / Whoop status cards.
 
 import type { HealthDay } from '../../types'
+import { formatMetric } from '../../lib/healthMetrics'
 
 /** Daily activity goals used for the ring gauges (sensible defaults). */
 export const ACTIVITY_GOALS = { steps: 10_000, floors: 10, intensityMinutes: 30 }
@@ -60,4 +61,71 @@ export function heroScore(daysDesc: HealthDay[]): HeroPick | null {
     if (m) return { key: c.key, label: c.label, value: m.value, date: m.date }
   }
   return null
+}
+
+/** One-word read of a 0–100 score, for the hero sublabel. */
+export function scoreWord(v: number): string {
+  if (v >= 66) return 'Well recovered'
+  if (v >= 33) return 'Moderate'
+  return 'Low — take it easy'
+}
+
+export type Highlight = {
+  key: string
+  label: string
+  /** Latest value, formatted with its unit. */
+  value: string
+  /** Plain-language read vs the personal baseline, e.g. "3 bpm below normal". */
+  note: string
+  tone: 'good' | 'bad' | 'neutral'
+}
+
+/**
+ * "This morning" highlights for a curated set of recovery metrics, each interpreted
+ * against the user's own recent baseline (Apple Health "typical range" / Oura
+ * baseline pattern) so a value reads as better/worse than normal — not in the abstract.
+ */
+export function todayHighlights(daysDesc: HealthDay[]): Highlight[] {
+  const specs: { key: string; label: string; lowerIsBetter?: boolean }[] = [
+    { key: 'sleepMinutes', label: 'Sleep' },
+    { key: 'restingHr', label: 'Resting HR', lowerIsBetter: true },
+    { key: 'hrv', label: 'HRV' },
+    { key: 'stress', label: 'Stress', lowerIsBetter: true },
+  ]
+  const out: Highlight[] = []
+  for (const spec of specs) {
+    const latest = latestMetric(daysDesc, spec.key)
+    if (!latest) continue
+
+    // Baseline = mean of up to 28 prior samples, skipping the latest reading itself.
+    const prior: number[] = []
+    let skippedLatest = false
+    for (const day of daysDesc) {
+      const v = day.metrics[spec.key]
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue
+      if (!skippedLatest) {
+        skippedLatest = true
+        continue
+      }
+      prior.push(v)
+      if (prior.length >= 28) break
+    }
+
+    let note = 'logged today'
+    let tone: Highlight['tone'] = 'neutral'
+    if (prior.length >= 3) {
+      const base = prior.reduce((a, b) => a + b, 0) / prior.length
+      const delta = latest.value - base
+      const rel = base !== 0 ? Math.abs(delta) / Math.abs(base) : 0
+      if (rel < 0.05 || Math.abs(delta) < 0.5) {
+        note = 'in your normal range'
+      } else {
+        const improving = spec.lowerIsBetter ? delta < 0 : delta > 0
+        tone = improving ? 'good' : 'bad'
+        note = `${formatMetric(spec.key, Math.abs(delta))} ${delta > 0 ? 'above' : 'below'} normal`
+      }
+    }
+    out.push({ key: spec.key, label: spec.label, value: formatMetric(spec.key, latest.value), note, tone })
+  }
+  return out
 }
