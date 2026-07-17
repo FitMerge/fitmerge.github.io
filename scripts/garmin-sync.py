@@ -290,13 +290,30 @@ def push_to_firebase(payload, service_account, uid):
     return len(body["entries"]), added, len(health["days"])
 
 
-def fetch_from_garmin(days):
+def _garmin_login():
+    """Return a logged-in Garmin client, reusing a cached session when possible.
+
+    The session is saved to a token store (GARMINTOKENS env var, else ~/.garminconnect)
+    after the first successful login, so every later run — including the scheduled job —
+    resumes silently with NO email/password/2-factor prompt. Credentials are only asked
+    for on the very first run, or after the token expires (roughly yearly)."""
     try:
         from garminconnect import Garmin
     except ImportError:
         print("error: the garminconnect package is required — run: pip install garminconnect", file=sys.stderr)
         sys.exit(1)
 
+    tokenstore = os.path.expanduser(os.environ.get("GARMINTOKENS", "~/.garminconnect"))
+
+    # 1) Try to resume from a saved session — no prompt, no password required.
+    try:
+        client = Garmin()
+        client.login(tokenstore)
+        return client
+    except Exception:
+        pass  # no token yet, or it expired → fall through to a full login
+
+    # 2) Full login with credentials (from env vars, else prompted once).
     email = os.environ.get("GARMIN_EMAIL") or input("Garmin email: ")
     password = os.environ.get("GARMIN_PASSWORD") or getpass.getpass("Garmin password: ")
 
@@ -312,7 +329,19 @@ def fetch_from_garmin(days):
     except TypeError:
         client = Garmin(email, password)
 
-    client.login()  # garth caches the session token under ~/.garminconnect after this
+    client.login()
+
+    # Save the session so the next run won't need to prompt again.
+    try:
+        client.garth.dump(tokenstore)
+    except Exception:
+        pass
+
+    return client
+
+
+def fetch_from_garmin(days):
+    client = _garmin_login()
 
     end = date.today()
     start = end - timedelta(days=days)
