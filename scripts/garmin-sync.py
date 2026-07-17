@@ -306,12 +306,16 @@ def _garmin_login():
     tokenstore = os.path.expanduser(os.environ.get("GARMINTOKENS", "~/.garminconnect"))
 
     # 1) Try to resume from a saved session — no prompt, no password required.
-    try:
-        client = Garmin()
-        client.login(tokenstore)
-        return client
-    except Exception:
-        pass  # no token yet, or it expired → fall through to a full login
+    #    Only attempt this when a token actually exists, so a missing store doesn't
+    #    depend on Garmin() being constructable without credentials.
+    if os.path.isdir(tokenstore) and os.listdir(tokenstore):
+        try:
+            client = Garmin()
+            client.login(tokenstore)
+            print(f"Resumed saved Garmin session from {tokenstore}", file=sys.stderr)
+            return client
+        except Exception as e:
+            print(f"(saved session couldn't be reused, logging in fresh: {e})", file=sys.stderr)
 
     # 2) Full login with credentials (from env vars, else prompted once).
     email = os.environ.get("GARMIN_EMAIL") or input("Garmin email: ")
@@ -331,11 +335,32 @@ def _garmin_login():
 
     client.login()
 
-    # Save the session so the next run won't need to prompt again.
+    # Save the session so the next run won't need to prompt again. Surface any
+    # failure loudly — a silently-unsaved token is exactly what causes a 2-factor
+    # prompt on every run (and the repeated logins that trigger Garmin's rate limit).
+    saved = False
     try:
+        os.makedirs(tokenstore, exist_ok=True)
         client.garth.dump(tokenstore)
-    except Exception:
-        pass
+        saved = os.path.isdir(tokenstore) and bool(os.listdir(tokenstore))
+    except Exception as e:
+        print(f"warning: could not save session via garth.dump ({e})", file=sys.stderr)
+    if not saved:
+        # Fallback for garminconnect/garth versions without Garmin.garth.dump.
+        try:
+            import garth
+            garth.client.dump(tokenstore)
+            saved = os.path.isdir(tokenstore) and bool(os.listdir(tokenstore))
+        except Exception as e:
+            print(f"warning: fallback token save also failed ({e})", file=sys.stderr)
+    if saved:
+        print(f"Saved Garmin session to {tokenstore} — future runs won't prompt.", file=sys.stderr)
+    else:
+        print(
+            "warning: the login token was NOT saved, so you'll be prompted again next run. "
+            "Try: pip install -U garminconnect garth",
+            file=sys.stderr,
+        )
 
     return client
 
