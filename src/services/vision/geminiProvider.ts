@@ -3,9 +3,7 @@
 
 import type { FoodAnalysis, FoodAnalysisItem } from './types'
 import { VisionError } from './types'
-
-const MODEL_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+import { geminiEndpoint, readGeminiError } from '../gemini/client'
 
 const PROMPT = `You are a nutrition expert analyzing a photo of food. Identify each distinct food or drink item visible in the photo and estimate the visible portion size for each.
 
@@ -77,19 +75,15 @@ function parseItems(raw: unknown): FoodAnalysisItem[] {
   return items
 }
 
-function statusMessage(status: number): string {
-  if (status === 400 || status === 403) return 'Invalid Gemini API key — check Settings'
-  if (status === 429) return 'Gemini is busy (free-tier rate limit) — wait a moment and try again'
-  return 'Gemini request failed — please try again'
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// Free-tier rate limits (429) are usually a short burst; back off and retry a
-// couple of times so a transient limit recovers on its own instead of erroring.
-const RETRY_DELAYS_MS = [2500, 6000]
+// A transient (per-minute) rate limit is a short burst; back off and retry a couple
+// of times so it recovers on its own. Daily-quota exhaustion and other errors are
+// final — readGeminiError tells us which is which so we don't retry in vain.
+const MAX_RETRIES = 2
+const FALLBACK_RETRY_MS = [2500, 6000]
 
 export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promise<FoodAnalysis> {
   const body = {
@@ -115,7 +109,7 @@ export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promi
   let res: Response | undefined
   for (let attempt = 0; ; attempt++) {
     try {
-      res = await fetch(`${MODEL_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
+      res = await fetch(`${geminiEndpoint()}?key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -123,16 +117,15 @@ export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promi
     } catch (err) {
       throw new VisionError('Network error — check your connection', err)
     }
-    // Retry only on a rate limit, with backoff; any other status is final.
-    if (res.status === 429 && attempt < RETRY_DELAYS_MS.length) {
-      await sleep(RETRY_DELAYS_MS[attempt])
+    if (res.ok) break
+    // Retry only transient (retryable) failures — a per-minute rate limit or a 5xx —
+    // honoring the server's suggested delay when it gives one. Everything else is final.
+    const info = await readGeminiError(res)
+    if (info.retryable && attempt < MAX_RETRIES) {
+      await sleep(info.retryAfterMs ?? FALLBACK_RETRY_MS[attempt] ?? 6000)
       continue
     }
-    break
-  }
-
-  if (!res.ok) {
-    throw new VisionError(statusMessage(res.status))
+    throw new VisionError(info.message)
   }
 
   let payload: unknown

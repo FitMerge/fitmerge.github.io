@@ -3,8 +3,7 @@
 // a plain-English coach interpretation. Reuses the same Gemini key the photo
 // analyzer uses. Text in, text out — no JSON schema.
 
-const MODEL_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+import { geminiEndpoint, readGeminiError } from '../gemini/client'
 
 export class CoachError extends Error {}
 
@@ -22,7 +21,7 @@ export async function explainCoachData(summary: string, apiKey: string): Promise
 
   let res: Response
   try {
-    res = await fetch(`${MODEL_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
+    res = await fetch(`${geminiEndpoint()}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -31,9 +30,10 @@ export async function explainCoachData(summary: string, apiKey: string): Promise
     throw new CoachError('Network error — check your connection.')
   }
 
-  if (res.status === 400 || res.status === 403) throw new CoachError('Invalid Gemini API key — check Settings.')
-  if (res.status === 429) throw new CoachError('Gemini is busy (free-tier rate limit) — wait a moment and try again.')
-  if (!res.ok) throw new CoachError('Gemini request failed — please try again.')
+  if (!res.ok) {
+    const info = await readGeminiError(res)
+    throw new CoachError(info.message)
+  }
 
   let payload: unknown
   try {
