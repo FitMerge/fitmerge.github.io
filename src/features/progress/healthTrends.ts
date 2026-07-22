@@ -127,7 +127,11 @@ export type TypicalRange = { low: number; high: number; mid: number }
  * enough readings to define a normal.
  */
 export function typicalRange(samples: MetricSample[], range: HealthRangeKey): TypicalRange | null {
-  const values = valuesInRange(samples, range)
+  return typicalRangeOf(valuesInRange(samples, range))
+}
+
+/** typicalRange from a bare number series (e.g. a tile's sparkline values). */
+export function typicalRangeOf(values: number[]): TypicalRange | null {
   if (values.length < 6) return null
   const sorted = [...values].sort((a, b) => a - b)
   const at = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))]

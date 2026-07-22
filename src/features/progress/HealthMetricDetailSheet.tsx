@@ -1,13 +1,27 @@
 import { useMemo, useState } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceArea,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import Sheet from '../../components/Sheet'
+import SegmentedControl from '../../components/SegmentedControl'
 import { formatMetric, metricMeta } from '../../lib/healthMetrics'
 import {
   HEALTH_RANGE_OPTIONS,
+  bandPosition,
   metricSamples,
   metricSeries,
   metricStats,
+  typicalRange,
   withMovingAverage,
   type HealthRangeKey,
 } from './healthTrends'
@@ -25,6 +39,7 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
   const samples = useMemo(() => (metricKey ? metricSamples(days, metricKey) : []), [days, metricKey])
   const series = useMemo(() => withMovingAverage(metricSeries(samples, range)), [samples, range])
   const stats = useMemo(() => metricStats(samples, range), [samples, range])
+  const band = useMemo(() => typicalRange(samples, range), [samples, range])
 
   const meta = metricKey ? metricMeta(metricKey) : null
   const hasPoints = series.some((p) => p.value !== null)
@@ -36,24 +51,22 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
   const improving = meta?.lowerIsBetter ? delta < 0 : delta > 0
   const meaningful = stats ? Math.abs(delta) > Math.abs(stats.avg) * 0.01 : false
 
+  // Where the latest reading sits vs the user's own normal — the headline read.
+  const pos = stats && band ? bandPosition(stats.last, band) : null
+  const posLabel =
+    pos === 'above' ? 'above your typical range' : pos === 'below' ? 'below your typical range' : 'within your typical range'
+
   return (
     <Sheet open={metricKey !== null} onClose={onClose} title={meta?.label ?? 'Metric'}>
       {metricKey && (
         <div className="space-y-4">
-          <div className="flex gap-2">
-            {HEALTH_RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setRange(opt.key)}
-                className={`flex-1 rounded-full py-1.5 text-sm font-medium ${
-                  range === opt.key ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            size="sm"
+            options={HEALTH_RANGE_OPTIONS}
+            value={range}
+            onChange={setRange}
+            ariaLabel="History range"
+          />
 
           {hasPoints && stats ? (
             <>
@@ -62,6 +75,17 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
                 <Stat label="Low" value={formatMetric(metricKey, stats.min)} />
                 <Stat label="High" value={formatMetric(metricKey, stats.max)} />
               </div>
+
+              {band && (
+                <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
+                  Latest <span className="font-semibold text-slate-100">{formatMetric(metricKey, stats.last)}</span> ·{' '}
+                  <span className={pos === 'within' ? 'text-slate-400' : 'text-sky-300'}>{posLabel}</span>
+                  <span className="text-slate-500">
+                    {' '}
+                    ({formatMetric(metricKey, band.low)}–{formatMetric(metricKey, band.high)})
+                  </span>
+                </div>
+              )}
 
               {meaningful && (
                 <div
@@ -78,7 +102,13 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
 
               <div style={{ height: 200 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <ComposedChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="metricFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#34d399" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid stroke="#1e293b" vertical={false} />
                     <XAxis
                       dataKey="label"
@@ -103,6 +133,30 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
                         name === 'avg' ? '7-pt avg' : meta?.label ?? '',
                       ]}
                     />
+                    {/* Typical-range band (15th–85th pct) + median = "your normal". */}
+                    {band && (
+                      <ReferenceArea
+                        y1={band.low}
+                        y2={band.high}
+                        fill="#64748b"
+                        fillOpacity={0.14}
+                        stroke="none"
+                        ifOverflow="extendDomain"
+                      />
+                    )}
+                    {band && (
+                      <ReferenceLine y={band.mid} stroke="#64748b" strokeDasharray="4 3" ifOverflow="extendDomain" />
+                    )}
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#34d399"
+                      strokeWidth={2}
+                      fill="url(#metricFill)"
+                      dot={false}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
                     {showAvg && (
                       <Line
                         type="monotone"
@@ -112,23 +166,17 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
                         strokeDasharray="4 3"
                         dot={false}
                         connectNulls
+                        isAnimationActive={false}
                       />
                     )}
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#34d399"
-                      strokeWidth={2}
-                      dot={false}
-                      connectNulls
-                    />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
 
               <p className="text-center text-xs text-slate-500">
                 {stats.count} day{stats.count === 1 ? '' : 's'} of data
-                {showAvg ? ' · dashed line = 7-day average' : range === '1y' ? ' · weekly average' : ' · monthly average'}
+                {band ? ' · shaded = your typical range' : ''}
+                {showAvg ? ' · dashed blue = 7-day average' : range === '1y' ? ' · weekly average' : ' · monthly average'}
               </p>
             </>
           ) : (

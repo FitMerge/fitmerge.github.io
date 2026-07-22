@@ -5,6 +5,7 @@ import Sparkline from '../../components/Sparkline'
 import { healthDaysDesc, useHealthStore } from '../../store/health'
 import { formatMetric, groupedMetricKeys, metricMeta, type MetricGroup } from '../../lib/healthMetrics'
 import { isoToLabel } from '../../lib/date'
+import { typicalRangeOf } from './healthTrends'
 import HealthMetricDetailSheet from './HealthMetricDetailSheet'
 
 type MetricSummary = {
@@ -84,6 +85,10 @@ export default function HealthMetricsSection({ only, title = 'Health metrics' }:
                   const showTrend = prev !== undefined && Math.abs(delta) > Math.abs(value) * 0.005
                   const improving = meta.lowerIsBetter ? delta < 0 : delta > 0
                   const trendColor = !showTrend ? '' : improving ? 'text-emerald-400' : 'text-rose-400'
+                  const sparkStroke = showTrend ? (improving ? '#34d399' : '#f43f5e') : '#64748b'
+                  // Shade the metric's own typical range behind the tile spark so the
+                  // latest point reads as in / out of normal at a glance.
+                  const tband = typicalRangeOf(spark)
                   return (
                     <button
                       key={k}
@@ -106,7 +111,10 @@ export default function HealthMetricsSection({ only, title = 'Health metrics' }:
                       <div className="mt-1.5 flex items-end justify-between">
                         <Sparkline
                           values={spark}
-                          stroke={showTrend ? (improving ? '#34d399' : '#f43f5e') : '#64748b'}
+                          stroke={sparkStroke}
+                          band={tband ? [tband.low, tband.high] : undefined}
+                          baseline={tband?.mid}
+                          fill
                         />
                         <span className="ml-1 shrink-0 text-[9px] text-slate-600">{isoToLabel(date)}</span>
                       </div>
