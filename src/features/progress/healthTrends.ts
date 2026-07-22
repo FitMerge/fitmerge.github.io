@@ -108,6 +108,43 @@ export function metricSeries(samples: MetricSample[], range: HealthRangeKey): Tr
     .map(([ym, v]) => ({ date: `${ym}-01`, label: monthYearLabel(`${ym}-01`), value: v.sum / v.count }))
 }
 
+/** Raw values recorded within `range`, oldest→newest. */
+export function valuesInRange(samples: MetricSample[], range: HealthRangeKey): number[] {
+  const start =
+    range === 'all'
+      ? firstSampleDate(samples)
+      : addDays(todayISO(), -(range === '30d' ? 29 : range === '90d' ? 89 : 364))
+  return samples.filter((s) => s.date >= start && s.date <= todayISO()).map((s) => s.value)
+}
+
+export type TypicalRange = { low: number; high: number; mid: number }
+
+/**
+ * The user's "typical range" for a metric over `range` — the central band most of
+ * their readings fall in (15th–85th percentile) plus the median. Drawn as a shaded
+ * band behind trend charts so a value reads as in / above / below normal at a glance
+ * (the Apple Health "typical range" / Oura baseline pattern). Null until there are
+ * enough readings to define a normal.
+ */
+export function typicalRange(samples: MetricSample[], range: HealthRangeKey): TypicalRange | null {
+  const values = valuesInRange(samples, range)
+  if (values.length < 6) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const at = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))]
+  const mid =
+    sorted.length % 2
+      ? sorted[(sorted.length - 1) / 2]
+      : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+  return { low: at(0.15), high: at(0.85), mid }
+}
+
+/** Where the latest reading sits relative to the typical band. */
+export function bandPosition(value: number, band: TypicalRange): 'above' | 'below' | 'within' {
+  if (value > band.high) return 'above'
+  if (value < band.low) return 'below'
+  return 'within'
+}
+
 export type MetricStats = { min: number; max: number; avg: number; first: number; last: number; count: number }
 
 /** Min/avg/max and first→last delta over the raw samples within `range`. */
