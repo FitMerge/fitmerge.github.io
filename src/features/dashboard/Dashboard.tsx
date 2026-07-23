@@ -34,6 +34,23 @@ export default function Dashboard() {
   const hrvBand = useMemo(() => typicalRangeOf(hrvSpark), [hrvSpark])
   const rhrSpark = useMemo(() => metricSpark(d.healthDesc, 'restingHr', 14), [d.healthDesc])
   const rhrBand = useMemo(() => typicalRangeOf(rhrSpark), [rhrSpark])
+  const sleepSpark = useMemo(() => metricSpark(d.healthDesc, 'sleepMinutes', 14), [d.healthDesc])
+  const sleepBand = useMemo(() => typicalRangeOf(sleepSpark), [sleepSpark])
+  // Centered 5-point average over the raw weigh-ins — the tile-sized version of
+  // the Progress page's bold trend line.
+  const weightTrend = useMemo(() => {
+    const v = d.weightSpark
+    if (v.length < 2) return undefined
+    return v.map((_, i) => {
+      let sum = 0
+      let n = 0
+      for (let j = Math.max(0, i - 2); j <= Math.min(v.length - 1, i + 2); j++) {
+        sum += v[j]
+        n++
+      }
+      return sum / n
+    })
+  }, [d.weightSpark])
   const sleepHl = d.highlights.find((h) => h.key === 'sleepMinutes')
   const hrvHl = d.highlights.find((h) => h.key === 'hrv')
   const rhrHl = d.highlights.find((h) => h.key === 'restingHr')
@@ -151,7 +168,7 @@ export default function Dashboard() {
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
                   <Pill size={17} />
                 </span>
-                <p className="text-sm text-slate-200">Supplements</p>
+                <p className="text-sm text-slate-200">Daily goals</p>
               </div>
               <div className="flex items-center gap-1.5">
                 {d.supplements.slice(0, 6).map((s, i) => (
@@ -201,6 +218,8 @@ export default function Dashboard() {
           }
           subTone={d.weight && d.weight.ratePerWeek < 0 ? 'good' : undefined}
           spark={d.weightSpark}
+          sparkTrend={weightTrend}
+          span="last 14 weigh-ins"
           to="/progress"
         />
         <StatTile
@@ -208,6 +227,10 @@ export default function Dashboard() {
           value={d.sleepMinutes != null ? fmtSleep(d.sleepMinutes) : '—'}
           sub={sleepHl?.note ?? (d.sleepScore != null ? `score ${Math.round(d.sleepScore)}` : undefined)}
           subTone={sleepHl?.tone === 'good' ? 'good' : sleepHl?.tone === 'bad' ? 'warn' : undefined}
+          spark={sleepSpark}
+          sparkColor="#38bdf8"
+          sparkBand={sleepBand ? [sleepBand.low, sleepBand.high] : undefined}
+          span="14 nights"
           to="/health"
         />
         <StatTile
@@ -218,6 +241,7 @@ export default function Dashboard() {
           spark={hrvSpark}
           sparkColor="#a78bfa"
           sparkBand={hrvBand ? [hrvBand.low, hrvBand.high] : undefined}
+          span="14 days"
           to="/health"
         />
         <StatTile
@@ -228,6 +252,7 @@ export default function Dashboard() {
           spark={rhrSpark}
           sparkColor="#f87171"
           sparkBand={rhrBand ? [rhrBand.low, rhrBand.high] : undefined}
+          span="14 days"
           to="/health"
         />
         <StatTile
@@ -237,6 +262,7 @@ export default function Dashboard() {
           sub={`${d.week.sessions} workout${d.week.sessions === 1 ? '' : 's'}`}
           spark={d.week.weeklyVolumes}
           sparkColor="#818cf8"
+          span="8 weeks"
           to="/progress"
         />
         <StatTile

@@ -6,6 +6,7 @@ import SessionDetail from './SessionDetail'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { isoToLabel } from '../../lib/date'
+import { distanceUnitLabel, isCardioSession } from './cardio'
 import {
   formatDurationMin,
   monthYearLabel,
@@ -14,7 +15,17 @@ import {
   totalVolume,
   weightUnitLabel,
 } from './utils'
-import type { WorkoutSession } from '../../types'
+import type { Units, WorkoutSession } from '../../types'
+
+type HistoryFilter = 'all' | 'lifting' | 'cardio'
+
+const FILTERS: { key: HistoryFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'lifting', label: 'Lifting' },
+  { key: 'cardio', label: 'Cardio' },
+]
+
+const KM_PER_MILE = 1.60934
 
 type SessionHistoryProps = {
   onBack: () => void
@@ -27,13 +38,17 @@ export default function SessionHistory({ onBack, onRepeated }: SessionHistoryPro
   const units = useSettingsStore((s) => s.units)
   const unitLabel = weightUnitLabel(units)
   const [selected, setSelected] = useState<WorkoutSession | null>(null)
+  const [filter, setFilter] = useState<HistoryFilter>('all')
 
   const finished = useMemo(
     () =>
       sessions
         .filter((s) => s.finishedAt !== undefined)
+        .filter((s) =>
+          filter === 'all' ? true : filter === 'cardio' ? isCardioSession(s) : !isCardioSession(s),
+        )
         .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0)),
-    [sessions],
+    [sessions, filter],
   )
 
   const groups = useMemo(() => {
@@ -61,8 +76,27 @@ export default function SessionHistory({ onBack, onRepeated }: SessionHistoryPro
         <h1 className="text-lg font-bold text-slate-100">History</h1>
       </header>
 
+      <div className="flex gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className={`flex-1 rounded-full py-1.5 text-xs font-medium ${
+              filter === f.key ? 'bg-slate-700 text-slate-100' : 'bg-slate-800 text-slate-400'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {finished.length === 0 ? (
-        <EmptyState icon={History} title="No workouts yet" subtitle="Finish your first workout to see it here." />
+        <EmptyState
+          icon={History}
+          title={filter === 'all' ? 'No workouts yet' : `No ${filter} sessions yet`}
+          subtitle={filter === 'all' ? 'Finish your first workout to see it here.' : 'Try another filter.'}
+        />
       ) : (
         <div className="space-y-5">
           {groups.map(([label, groupSessions]) => (
@@ -91,12 +125,7 @@ export default function SessionHistory({ onBack, onRepeated }: SessionHistoryPro
                             {isoToLabel(session.date)} · {formatDurationMin(durationMs)}
                           </p>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm text-slate-200">{totalSetsDone(session)} sets</p>
-                          <p className="text-xs text-slate-500">
-                            {Math.round(totalVolume(session)).toLocaleString()} {unitLabel}
-                          </p>
-                        </div>
+                        <SessionStats session={session} unitLabel={unitLabel} units={units} />
                       </div>
                     </Card>
                   )
@@ -115,6 +144,30 @@ export default function SessionHistory({ onBack, onRepeated }: SessionHistoryPro
           onRepeated()
         }}
       />
+    </div>
+  )
+}
+
+/** Right-hand stats: sets + volume for lifts, distance + calories for cardio. */
+function SessionStats({ session, unitLabel, units }: { session: WorkoutSession; unitLabel: string; units: Units }) {
+  if (isCardioSession(session)) {
+    const km = session.distanceKm ?? 0
+    const dist = units === 'imperial' ? km / KM_PER_MILE : km
+    return (
+      <div className="text-right shrink-0">
+        <p className="text-sm text-slate-200">
+          {km > 0 ? `${dist.toFixed(1)} ${distanceUnitLabel(units)}` : `${session.durationMin ?? 0} min`}
+        </p>
+        <p className="text-xs text-slate-500">{session.kcal ? `${session.kcal} kcal` : 'cardio'}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="text-right shrink-0">
+      <p className="text-sm text-slate-200">{totalSetsDone(session)} sets</p>
+      <p className="text-xs text-slate-500">
+        {Math.round(totalVolume(session)).toLocaleString()} {unitLabel}
+      </p>
     </div>
   )
 }

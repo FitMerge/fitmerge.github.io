@@ -10,6 +10,10 @@ type SparklineProps = {
   band?: [number, number]
   /** Soft gradient fill under the line. */
   fill?: boolean
+  /** Smoothed trend series (same length as values). When set, the raw line fades
+   * to a backdrop and this is drawn bold — the same raw-vs-trend read the big
+   * charts use. */
+  trend?: number[]
 }
 
 /**
@@ -27,6 +31,7 @@ export default function Sparkline({
   baseline,
   band,
   fill,
+  trend,
 }: SparklineProps) {
   if (values.length < 2) return <div style={{ width, height }} className={className} />
 
@@ -34,6 +39,7 @@ export default function Sparkline({
   const domainVals = [...values]
   if (baseline !== undefined) domainVals.push(baseline)
   if (band) domainVals.push(band[0], band[1])
+  if (trend) domainVals.push(...trend)
   const min = Math.min(...domainVals)
   const max = Math.max(...domainVals)
   const span = max - min || 1
@@ -83,7 +89,25 @@ export default function Sparkline({
           fill={`url(#${gradId})`}
         />
       )}
-      <polyline points={points.join(' ')} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      <polyline
+        points={points.join(' ')}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={trend ? 1 : 1.5}
+        strokeOpacity={trend ? 0.35 : 1}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {trend && trend.length >= 2 && (
+        <polyline
+          points={trend.map((v, i) => `${(i * (width / (trend.length - 1))).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
       <circle cx={lastX} cy={lastY} r={1.8} fill={stroke} />
     </svg>
   )

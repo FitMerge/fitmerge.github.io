@@ -117,11 +117,29 @@ type StatTileProps = {
   sparkColor?: string
   sparkBand?: [number, number]
   sparkBaseline?: number
+  /** Bold smoothed trend drawn over a faded raw sparkline. */
+  sparkTrend?: number[]
+  /** Time window the sparkline covers (e.g. "14 days", "8 weeks") — gives the
+   * squiggle a time scale instead of looking like random noise. */
+  span?: string
   to?: string
 }
 
 /** Compact stat card with an optional sparkline — the grid unit of the home screen. */
-export function StatTile({ label, value, unit, sub, subTone, spark, sparkColor = '#34d399', sparkBand, sparkBaseline, to }: StatTileProps) {
+export function StatTile({
+  label,
+  value,
+  unit,
+  sub,
+  subTone,
+  spark,
+  sparkColor = '#34d399',
+  sparkBand,
+  sparkBaseline,
+  sparkTrend,
+  span,
+  to,
+}: StatTileProps) {
   const navigate = useNavigate()
   return (
     <button
@@ -129,7 +147,10 @@ export function StatTile({ label, value, unit, sub, subTone, spark, sparkColor =
       onClick={() => to && navigate(to)}
       className="flex flex-col items-start rounded-2xl bg-slate-900/80 border border-slate-800/80 p-3 text-left active:bg-slate-800/60"
     >
-      <span className="text-[11px] font-medium text-slate-400">{label}</span>
+      <span className="flex w-full items-baseline justify-between">
+        <span className="text-[11px] font-medium text-slate-400">{label}</span>
+        {span && spark && spark.length >= 2 && <span className="text-[9px] text-slate-600">{span}</span>}
+      </span>
       <span className="mt-0.5 text-lg font-bold leading-tight text-slate-100">
         {value}
         {unit && <span className="ml-1 text-xs font-medium text-slate-500">{unit}</span>}
@@ -143,6 +164,7 @@ export function StatTile({ label, value, unit, sub, subTone, spark, sparkColor =
           stroke={sparkColor}
           band={sparkBand}
           baseline={sparkBaseline}
+          trend={sparkTrend}
           fill
           className="mt-1.5 w-full"
         />

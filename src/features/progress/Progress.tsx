@@ -6,20 +6,24 @@ import CaloriesSection from './CaloriesSection'
 import MacroAveragesSection from './MacroAveragesSection'
 import VolumeSection from './VolumeSection'
 import PersonalRecordsSection from './PersonalRecordsSection'
+import ActiveTimeSection from './ActiveTimeSection'
+import CardioProgressSection from '../workouts/CardioProgressSection'
 import { RANGE_OPTIONS, type RangeKey } from './utils'
 
-type DomainKey = 'body' | 'nutrition' | 'training'
+type DomainKey = 'body' | 'nutrition' | 'lifting' | 'cardio'
 
 const DOMAIN_OPTIONS = [
   { key: 'body' as const, label: 'Body' },
-  { key: 'nutrition' as const, label: 'Nutrition' },
-  { key: 'training' as const, label: 'Training' },
+  { key: 'nutrition' as const, label: 'Food' },
+  { key: 'lifting' as const, label: 'Lifting' },
+  { key: 'cardio' as const, label: 'Cardio' },
 ]
 
 const DOMAIN_BLURB: Record<DomainKey, string> = {
   body: 'Weight trend and measurements.',
   nutrition: 'Calories and macros over time.',
-  training: 'Volume and personal records.',
+  lifting: 'Volume and personal records.',
+  cardio: 'Every activity — runs, walks, rides, soccer, hikes.',
 }
 
 export default function Progress() {
@@ -27,7 +31,7 @@ export default function Progress() {
   // Each domain that needs one keeps its own range so switching tabs doesn't
   // force an unrelated window. Weight self-manages a longer range internally.
   const [nutritionRange, setNutritionRange] = useState<RangeKey>('30d')
-  const [trainingRange, setTrainingRange] = useState<RangeKey>('30d')
+  const [liftingRange, setLiftingRange] = useState<RangeKey>('30d')
 
   return (
     <div className="space-y-4 p-4 pb-24">
@@ -64,17 +68,24 @@ export default function Progress() {
         </div>
       )}
 
-      {domain === 'training' && (
+      {domain === 'lifting' && (
         <div className="space-y-4">
           <SegmentedControl
             size="sm"
             options={RANGE_OPTIONS}
-            value={trainingRange}
-            onChange={setTrainingRange}
-            ariaLabel="Training range"
+            value={liftingRange}
+            onChange={setLiftingRange}
+            ariaLabel="Lifting range"
           />
-          <VolumeSection range={trainingRange} />
+          <VolumeSection range={liftingRange} />
           <PersonalRecordsSection />
+        </div>
+      )}
+
+      {domain === 'cardio' && (
+        <div className="space-y-4">
+          <ActiveTimeSection />
+          <CardioProgressSection />
         </div>
       )}
     </div>

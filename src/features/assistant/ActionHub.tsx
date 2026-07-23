@@ -5,8 +5,8 @@ import {
   Droplets,
   Dumbbell,
   ExternalLink,
+  ListChecks,
   Loader2,
-  Pill,
   RefreshCw,
   Scale,
   UtensilsCrossed,
@@ -36,7 +36,7 @@ const TITLES: Record<Screen, string> = {
   menu: 'Quick log',
   weight: 'Log weight',
   water: 'Log water',
-  supplement: 'Supplements & habits',
+  supplement: 'Daily goals',
   workout: 'Start a workout',
   garmin: 'Pull from Garmin',
 }
@@ -73,7 +73,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
               <Tile icon={Dumbbell} label="Workout" onClick={() => setScreen('workout')} />
               <Tile icon={Scale} label="Weight" onClick={() => setScreen('weight')} />
               <Tile icon={Droplets} label="Water" onClick={() => setScreen('water')} />
-              <Tile icon={Pill} label="Supplements" onClick={() => setScreen('supplement')} />
+              <Tile icon={ListChecks} label="Goals" onClick={() => setScreen('supplement')} />
               <Tile icon={RefreshCw} label="Garmin" onClick={() => setScreen('garmin')} />
             </div>
           </div>

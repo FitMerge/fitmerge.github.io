@@ -284,8 +284,8 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
       id: 'supplements-left',
       tone: 'info',
       icon: 'supplement',
-      title: `${left} supplement${left === 1 ? '' : 's'} left today`,
-      body: 'Tick them off from the + button before bed.',
+      title: `${left} daily goal${left === 1 ? '' : 's'} left today`,
+      body: 'Tick them off from the + button before bed — don\'t break the chain.',
       to: '/',
     })
   }

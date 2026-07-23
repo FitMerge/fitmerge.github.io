@@ -22,6 +22,8 @@ import {
 import FormFitnessSection from '../progress/FormFitnessSection'
 import RecoveryRiskSection from '../progress/RecoveryRiskSection'
 import RestingHrHrvSection from '../progress/RestingHrHrvSection'
+import SleepSection from '../progress/SleepSection'
+import FitnessTipsSection from './FitnessTipsSection'
 import IntensityDistributionSection from '../progress/IntensityDistributionSection'
 import HealthMetricsSection from '../progress/HealthMetricsSection'
 
@@ -76,6 +78,7 @@ export default function Health() {
 
       {tab === 'vitals' && (
         <div className="space-y-4">
+          <SleepSection />
           <RestingHrHrvSection />
           <HealthMetricsSection only={['heart', 'sleep', 'activity', 'body']} title="Vitals & body metrics" />
         </div>
@@ -84,6 +87,7 @@ export default function Health() {
       {tab === 'fitness' && (
         <div className="space-y-4">
           <FormFitnessSection />
+          <FitnessTipsSection />
           <RecoveryRiskSection />
           <IntensityDistributionSection />
           <HealthMetricsSection only={['training']} title="Performance metrics" />

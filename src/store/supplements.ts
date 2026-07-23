@@ -82,3 +82,25 @@ export const useSupplementStore = create<SupplementState>()(
 export function doseFor(log: SupplementState['log'], date: string, id: string): number {
   return log[date]?.[id] ?? 0
 }
+
+/**
+ * Consecutive days (ending today, or yesterday when today isn't finished yet)
+ * on which EVERY current goal was completed — the "Day N" counter for
+ * challenge-style checklists like 75 Hard.
+ */
+export function fullCompletionStreak(items: Supplement[], log: SupplementState['log'], today: string): number {
+  if (items.length === 0) return 0
+  const allDone = (date: string) => items.every((i) => doseFor(log, date, i.id) > 0)
+  const dayBefore = (date: string) => {
+    const [y, m, d] = date.split('-').map(Number)
+    const dt = new Date(y, (m ?? 1) - 1, (d ?? 1) - 1)
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  }
+  let streak = 0
+  let cursor = allDone(today) ? today : dayBefore(today)
+  while (allDone(cursor)) {
+    streak++
+    cursor = dayBefore(cursor)
+  }
+  return streak
+}

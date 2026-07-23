@@ -4,6 +4,7 @@ import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { weightUnitLabel } from '../workouts/utils'
+import { isCardioSession } from '../workouts/cardio'
 import { finishedSessionsInRange, totalSetsInRange, volumeSeries, type RangeKey } from './utils'
 
 type VolumeSectionProps = {
@@ -15,7 +16,11 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
   const units = useSettingsStore((s) => s.units)
   const unitLabel = weightUnitLabel(units)
 
-  const sessionsInRange = useMemo(() => finishedSessionsInRange(sessions, range), [sessions, range])
+  // Lifting only — cardio sessions (imported runs/rides/etc.) live on the Cardio tab.
+  const sessionsInRange = useMemo(
+    () => finishedSessionsInRange(sessions, range).filter((s) => !isCardioSession(s)),
+    [sessions, range],
+  )
   const chartData = useMemo(() => volumeSeries(range, sessions), [range, sessions])
   const totalSets = useMemo(() => totalSetsInRange(sessionsInRange), [sessionsInRange])
 
