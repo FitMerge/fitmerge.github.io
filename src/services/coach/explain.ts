@@ -3,7 +3,7 @@
 // a plain-English coach interpretation. Reuses the same Gemini key the photo
 // analyzer uses. Text in, text out — no JSON schema.
 
-import { geminiEndpoint, readGeminiError } from '../gemini/client'
+import { generateContent } from '../gemini/model'
 
 export class CoachError extends Error {}
 
@@ -19,45 +19,10 @@ export async function explainCoachData(summary: string, apiKey: string): Promise
     generationConfig: { temperature: 0.4 },
   }
 
-  let res: Response
   try {
-    res = await fetch(`${geminiEndpoint()}?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const text = await generateContent('text', apiKey, body)
+    return text.trim()
   } catch (err) {
-    throw new CoachError('Network error — check your connection.')
+    throw new CoachError(err instanceof Error ? err.message : 'Gemini request failed — please try again.')
   }
-
-  if (!res.ok) {
-    const info = await readGeminiError(res)
-    throw new CoachError(info.message)
-  }
-
-  let payload: unknown
-  try {
-    payload = await res.json()
-  } catch {
-    throw new CoachError('Gemini returned an unexpected response.')
-  }
-
-  const text = extractText(payload)
-  if (!text) throw new CoachError('Gemini returned an empty response.')
-  return text.trim()
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null
-}
-
-function extractText(payload: unknown): string | undefined {
-  if (!isRecord(payload)) return undefined
-  const candidates = payload.candidates
-  if (!Array.isArray(candidates) || candidates.length === 0) return undefined
-  const content = isRecord(candidates[0]) ? candidates[0].content : undefined
-  const parts = isRecord(content) ? content.parts : undefined
-  if (!Array.isArray(parts)) return undefined
-  const texts = parts.map((p) => (isRecord(p) && typeof p.text === 'string' ? p.text : '')).filter(Boolean)
-  return texts.join('\n')
 }

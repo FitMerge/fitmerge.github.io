@@ -3,7 +3,7 @@
 
 import type { FoodAnalysis, FoodAnalysisItem } from './types'
 import { VisionError } from './types'
-import { geminiEndpoint, readGeminiError } from '../gemini/client'
+import { generateContent } from '../gemini/model'
 
 const PROMPT = `You are a nutrition expert analyzing a photo of food. Identify each distinct food or drink item visible in the photo and estimate the visible portion size for each.
 
@@ -75,16 +75,6 @@ function parseItems(raw: unknown): FoodAnalysisItem[] {
   return items
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-// A transient (per-minute) rate limit is a short burst; back off and retry a couple
-// of times so it recovers on its own. Daily-quota exhaustion and other errors are
-// final — readGeminiError tells us which is which so we don't retry in vain.
-const MAX_RETRIES = 2
-const FALLBACK_RETRY_MS = [2500, 6000]
-
 export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promise<FoodAnalysis> {
   const body = {
     contents: [
@@ -106,38 +96,13 @@ export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promi
     },
   }
 
-  let res: Response | undefined
-  for (let attempt = 0; ; attempt++) {
-    try {
-      res = await fetch(`${geminiEndpoint()}?key=${encodeURIComponent(apiKey)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-    } catch (err) {
-      throw new VisionError('Network error — check your connection', err)
-    }
-    if (res.ok) break
-    // Retry only transient (retryable) failures — a per-minute rate limit or a 5xx —
-    // honoring the server's suggested delay when it gives one. Everything else is final.
-    const info = await readGeminiError(res)
-    if (info.retryable && attempt < MAX_RETRIES) {
-      await sleep(info.retryAfterMs ?? FALLBACK_RETRY_MS[attempt] ?? 6000)
-      continue
-    }
-    throw new VisionError(info.message)
-  }
-
-  let payload: unknown
+  // generateContent discovers a working vision model, POSTs, and self-heals on a
+  // 404/transient failure — so a retired or renamed model no longer breaks photos.
+  let text: string
   try {
-    payload = await res.json()
+    text = await generateContent('vision', apiKey, body)
   } catch (err) {
-    throw new VisionError('Gemini returned an unexpected response', err)
-  }
-
-  const text = extractText(payload)
-  if (!text) {
-    throw new VisionError('Gemini returned an unexpected response')
+    throw new VisionError(err instanceof Error ? err.message : 'Gemini request failed — please try again')
   }
 
   let parsed: unknown
@@ -150,22 +115,4 @@ export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promi
   const items = parseItems(parsed)
 
   return { items, provider: 'gemini' }
-}
-
-function extractText(payload: unknown): string | undefined {
-  if (!isRecord(payload)) return undefined
-  const candidates = payload.candidates
-  if (!Array.isArray(candidates) || candidates.length === 0) return undefined
-
-  const first = candidates[0]
-  if (!isRecord(first)) return undefined
-  const content = first.content
-  if (!isRecord(content)) return undefined
-  const parts = content.parts
-  if (!Array.isArray(parts) || parts.length === 0) return undefined
-
-  const firstPart = parts[0]
-  if (!isRecord(firstPart)) return undefined
-  const text = firstPart.text
-  return typeof text === 'string' ? text : undefined
 }

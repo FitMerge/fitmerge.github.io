@@ -3,7 +3,7 @@
 // of intents, which we then validate + resolve via intents.ts. Text in, structured
 // actions out — the model never sees or touches the stores.
 
-import { GEMINI_LITE_MODEL, geminiEndpoint, readGeminiError } from '../gemini/client'
+import { generateContent } from '../gemini/model'
 import { resolveActions, type ActionContext, type AssistantAction, type RawAction } from './intents'
 
 export class AssistantError extends Error {}
@@ -46,17 +46,6 @@ Rules:
 - Match supplement and routine names to the known lists above when possible; otherwise use the user's wording.`
 }
 
-function extractText(payload: unknown): string | undefined {
-  if (typeof payload !== 'object' || payload === null) return undefined
-  const candidates = (payload as { candidates?: unknown }).candidates
-  if (!Array.isArray(candidates) || !candidates.length) return undefined
-  const content = (candidates[0] as { content?: { parts?: unknown } }).content
-  const parts = content?.parts
-  if (!Array.isArray(parts) || !parts.length) return undefined
-  const text = (parts[0] as { text?: unknown }).text
-  return typeof text === 'string' ? text : undefined
-}
-
 function stripFences(text: string): string {
   const t = text.trim()
   const m = t.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
@@ -72,26 +61,12 @@ export async function parseCommand(text: string, ctx: ActionContext, apiKey: str
     generationConfig: { response_mime_type: 'application/json', temperature: 0 },
   }
 
-  let res: Response
+  let raw: string
   try {
-    res = await fetch(`${geminiEndpoint(GEMINI_LITE_MODEL)}?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  } catch {
-    throw new AssistantError('Network error — check your connection.')
+    raw = await generateContent('text', apiKey, body)
+  } catch (err) {
+    throw new AssistantError(err instanceof Error ? err.message : 'The assistant is unavailable.')
   }
-  if (!res.ok) throw new AssistantError((await readGeminiError(res)).message)
-
-  let payload: unknown
-  try {
-    payload = await res.json()
-  } catch {
-    throw new AssistantError('The assistant returned an unexpected response.')
-  }
-  const raw = extractText(payload)
-  if (!raw) throw new AssistantError('The assistant returned an empty response.')
 
   let parsed: unknown
   try {
