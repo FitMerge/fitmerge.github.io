@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
+import RulerPicker from '../../components/RulerPicker'
 import { useBodyStore } from '../../store/body'
 import { useSettingsStore } from '../../store/settings'
 import { todayISO } from '../../lib/date'
+import { latestBodyWeightKg } from '../../lib/exercise'
 import { convertWeight, lbToKg, weightUnit } from './utils'
 
 type LogWeightSheetProps = {
@@ -12,45 +14,48 @@ type LogWeightSheetProps = {
 
 export default function LogWeightSheet({ onClose }: LogWeightSheetProps) {
   const units = useSettingsStore((s) => s.units)
+  const entries = useBodyStore((s) => s.entries)
   const upsertEntry = useBodyStore((s) => s.upsertEntry)
 
+  const isImperial = units === 'imperial'
+  // Start the wheel at the last weight you logged — the most likely next value.
+  const startWeight = Math.round(convertWeight(latestBodyWeightKg(entries), units) * 10) / 10
+
   const [date, setDate] = useState(todayISO())
-  const [weight, setWeight] = useState(Math.round(convertWeight(75, units) * 10) / 10)
+  const [weight, setWeight] = useState(startWeight)
   const [trackBodyFat, setTrackBodyFat] = useState(false)
   const [bodyFatPct, setBodyFatPct] = useState(15)
 
   function handleSave() {
     if (weight <= 0) return
-    const weightKg = units === 'imperial' ? lbToKg(weight) : weight
-    upsertEntry({
-      date,
-      weightKg,
-      bodyFatPct: trackBodyFat ? bodyFatPct : undefined,
-    })
+    const weightKg = isImperial ? lbToKg(weight) : weight
+    upsertEntry({ date, weightKg, bodyFatPct: trackBodyFat ? bodyFatPct : undefined })
     onClose()
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm text-slate-400 mb-1">Date</label>
+        <label className="mb-1 block text-sm text-slate-400">Date</label>
         <input
           type="date"
           value={date}
           max={todayISO()}
           onChange={(e) => setDate(e.target.value)}
-          className="w-full bg-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-primary-500 [color-scheme:dark]"
+          className="w-full rounded-lg bg-slate-800 px-3 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-primary-500 [color-scheme:dark]"
         />
       </div>
 
-      <NumberField
-        label="Weight"
-        value={weight}
-        onChange={setWeight}
-        step={units === 'imperial' ? 0.5 : 0.1}
-        min={0}
-        suffix={weightUnit(units)}
-      />
+      <div className="pt-1">
+        <RulerPicker
+          value={weight}
+          onChange={setWeight}
+          min={isImperial ? 50 : 20}
+          max={isImperial ? 500 : 250}
+          step={0.1}
+          unit={weightUnit(units)}
+        />
+      </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-300">
         <input
