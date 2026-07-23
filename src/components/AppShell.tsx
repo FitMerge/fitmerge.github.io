@@ -2,6 +2,7 @@ import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Home, UtensilsCrossed, Dumbbell, HeartPulse, TrendingUp, Plus, Loader2 } from 'lucide-react'
 import ActionHub from '../features/assistant/ActionHub'
+import { useGoalAutoCheck } from '../features/assistant/goalAutoCheck'
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -14,6 +15,8 @@ const tabs = [
 export default function AppShell() {
   const navigate = useNavigate()
   const [hubOpen, setHubOpen] = useState(false)
+  // Data-driven goals: workout + gallon-of-water checks tick themselves.
+  useGoalAutoCheck()
 
   return (
     <div className="h-dvh flex flex-col">

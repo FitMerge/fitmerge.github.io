@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Check, Flame, Plus, Trash2 } from 'lucide-react'
+import { Check, Flame, Plus, Trash2, Zap } from 'lucide-react'
 import { doseFor, fullCompletionStreak, useSupplementStore } from '../../store/supplements'
+import { goalRuleFor } from './goalAutoCheck'
 import { todayISO } from '../../lib/date'
 
 /** The 75 Hard checklist, one tap to install. Water/diet/workouts are still
@@ -67,9 +68,16 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
         </div>
       )}
 
+      {!compact && items.some((i) => goalRuleFor(i.name) !== null) && (
+        <p className="flex items-center gap-1 text-[11px] text-slate-500">
+          <Zap size={11} className="text-sky-400" /> checks itself from your workout &amp; water logs
+        </p>
+      )}
+
       {items.map((s) => {
         const done = doseFor(log, date, s.id) > 0
         const dose = s.targetAmount ? `${s.targetAmount}${s.unit ?? ''}` : null
+        const auto = goalRuleFor(s.name) !== null
         return (
           <div key={s.id} className="flex items-center gap-2.5">
             <button
@@ -87,6 +95,7 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
                 {done && <Check size={13} />}
               </span>
               <span className={`flex-1 truncate text-sm ${done ? 'text-slate-100' : 'text-slate-300'}`}>{s.name}</span>
+              {auto && <Zap size={12} className="shrink-0 text-sky-400" aria-label="Auto-checked from your logs" />}
               {dose && <span className="shrink-0 text-[11px] text-slate-500">{dose}</span>}
             </button>
             {!compact && (
