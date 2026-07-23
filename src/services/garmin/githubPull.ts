@@ -42,10 +42,25 @@ async function ghError(res: Response): Promise<string> {
   return detail || `GitHub request failed (${res.status}).`
 }
 
+/** The repo's default branch — workflow_dispatch must target a real branch that
+ * has the workflow, and it's not always "main". */
+async function defaultBranch(token: string, owner: string, name: string): Promise<string> {
+  let res: Response
+  try {
+    res = await fetch(`${API}/repos/${owner}/${name}`, { headers: headers(token) })
+  } catch {
+    throw new GarminPullError('Network error reaching GitHub.')
+  }
+  if (!res.ok) throw new GarminPullError(await ghError(res))
+  const body = (await res.json()) as { default_branch?: string }
+  return body.default_branch || 'main'
+}
+
 /** Fire the workflow_dispatch event. Resolves when GitHub accepts it (HTTP 204). */
-export async function triggerGarminPull(token: string, repo: string, days = 14, ref = 'main'): Promise<void> {
+export async function triggerGarminPull(token: string, repo: string, days = 14): Promise<void> {
   if (!token.trim()) throw new GarminPullError('Add a GitHub token first.')
   const { owner, name } = parseRepo(repo)
+  const ref = await defaultBranch(token, owner, name)
   let res: Response
   try {
     res = await fetch(`${API}/repos/${owner}/${name}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
