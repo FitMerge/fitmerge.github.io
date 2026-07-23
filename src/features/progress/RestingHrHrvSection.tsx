@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Area, AreaChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { HeartPulse } from 'lucide-react'
 import Card from '../../components/Card'
 import SegmentedControl from '../../components/SegmentedControl'
@@ -11,6 +11,7 @@ import {
   metricSamples,
   metricSeries,
   typicalRange,
+  withMovingAverage,
   type HealthRangeKey,
   type MetricSample,
   type TypicalRange,
@@ -126,7 +127,10 @@ type RecoveryMetricProps = {
 }
 
 function RecoveryMetric({ label, unit, metricKey, samples, band, last, range, color, gradId, lowerIsBetter }: RecoveryMetricProps) {
-  const data = useMemo(() => metricSeries(samples, range), [samples, range])
+  // Daily readings are noisy (they swing several units day to day), so the bold line
+  // is the 7-day average — the actual trend — and raw days are kept as a faint
+  // backdrop, the same read the weight chart uses (dots + smoothed trend).
+  const data = useMemo(() => withMovingAverage(metricSeries(samples, range), 7), [samples, range])
   const hasPoints = data.some((p) => p.value !== null)
 
   const pos = last !== undefined && band ? bandPosition(last, band) : null
@@ -153,7 +157,7 @@ function RecoveryMetric({ label, unit, metricKey, samples, band, last, range, co
       <div style={{ height: 110 }}>
         {hasPoints ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={color} stopOpacity={0.3} />
@@ -177,7 +181,7 @@ function RecoveryMetric({ label, unit, metricKey, samples, band, last, range, co
               <Tooltip
                 contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: '#cbd5e1' }}
-                formatter={(v: number) => [`${formatMetric(metricKey, v)}`, label]}
+                formatter={(v: number, name: string) => [`${formatMetric(metricKey, v)}`, name]}
               />
               {band && (
                 <ReferenceArea
@@ -190,18 +194,34 @@ function RecoveryMetric({ label, unit, metricKey, samples, band, last, range, co
                 />
               )}
               {band && <ReferenceLine y={band.mid} stroke="#64748b" strokeDasharray="4 3" ifOverflow="extendDomain" />}
+              {/* Raw daily readings: faint backdrop, so day-to-day noise stays visible
+                  without dominating. */}
               <Area
                 type="monotone"
                 dataKey="value"
                 stroke={color}
-                strokeWidth={2}
+                strokeWidth={1}
+                strokeOpacity={0.3}
                 fill={`url(#${gradId})`}
                 dot={false}
                 connectNulls
                 isAnimationActive={false}
                 unit={unit}
+                name={label}
               />
-            </AreaChart>
+              {/* The story: the 7-day average trend. */}
+              <Line
+                type="monotone"
+                dataKey="avg"
+                stroke={color}
+                strokeWidth={2.5}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+                unit={unit}
+                name="7-day avg"
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         ) : (
           <p className="pt-6 text-center text-xs text-slate-600">No {label.toLowerCase()} data in this range.</p>
