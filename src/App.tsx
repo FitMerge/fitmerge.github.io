@@ -10,10 +10,6 @@ const Workouts = lazy(() => import('./features/workouts/Workouts'))
 const Health = lazy(() => import('./features/health/Health'))
 const Progress = lazy(() => import('./features/progress/Progress'))
 const Settings = lazy(() => import('./features/settings/Settings'))
-// Temporary design-preview routes for the home-screen overhaul (not linked in nav).
-const HomeBriefing = lazy(() => import('./features/dashboard/home/HomeBriefing'))
-const HomeGlance = lazy(() => import('./features/dashboard/home/HomeGlance'))
-const HomeFeed = lazy(() => import('./features/dashboard/home/HomeFeed'))
 import OnboardingWizard from './features/onboarding/OnboardingWizard'
 import { useSettingsStore } from './store/settings'
 
@@ -30,9 +26,6 @@ export default function App() {
           <Route path="health" element={<Health />} />
           <Route path="progress" element={<Progress />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="home-preview/a" element={<HomeBriefing />} />
-          <Route path="home-preview/b" element={<HomeGlance />} />
-          <Route path="home-preview/c" element={<HomeFeed />} />
         </Route>
       </Routes>
       {!onboarded && <OnboardingWizard />}

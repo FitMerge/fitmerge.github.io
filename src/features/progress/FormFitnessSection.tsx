@@ -78,6 +78,23 @@ export default function FormFitnessSection() {
       ctlProj: null,
       tsbProj: null,
     }))
+    // Smooth Form for display: daily TSB sawtooths with every single workout,
+    // which buries the actual trend. A centered 5-day average keeps the shape
+    // without the noise (the stat tile still shows today's exact value).
+    const tsbVals = actual.map((r) => r.tsb)
+    actual.forEach((r, i) => {
+      if (r.tsb === null) return
+      let sum = 0
+      let n = 0
+      for (let j = Math.max(0, i - 2); j <= Math.min(tsbVals.length - 1, i + 2); j++) {
+        const x = tsbVals[j]
+        if (x !== null) {
+          sum += x
+          n++
+        }
+      }
+      if (n) r.tsb = sum / n
+    })
     if (actual.length && projection.length) {
       // Bridge: let the last actual point seed the dashed projection lines.
       const bridge = actual[actual.length - 1]
@@ -177,9 +194,9 @@ export default function FormFitnessSection() {
               formatter={(v: number, name: string) => [v.toFixed(0), name]}
             />
             <ReferenceLine yAxisId="tsb" y={0} stroke="#334155" strokeDasharray="3 3" />
-            <Area yAxisId="tsb" type="monotone" dataKey="tsb" name="Form" stroke="#34d399" fill="#34d399" fillOpacity={0.12} strokeWidth={1.5} connectNulls={false} />
-            <Line yAxisId="load" type="monotone" dataKey="ctl" name="Fitness" stroke="#38bdf8" strokeWidth={2} dot={false} connectNulls={false} />
-            <Line yAxisId="load" type="monotone" dataKey="atl" name="Fatigue" stroke="#fbbf24" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />
+            <Area yAxisId="tsb" type="monotone" dataKey="tsb" name="Form" stroke="#34d399" fill="#34d399" fillOpacity={0.14} strokeWidth={2} connectNulls={false} />
+            <Line yAxisId="load" type="monotone" dataKey="ctl" name="Fitness" stroke="#38bdf8" strokeWidth={2.5} dot={false} connectNulls={false} />
+            <Line yAxisId="load" type="monotone" dataKey="atl" name="Fatigue" stroke="#fbbf24" strokeWidth={1} strokeOpacity={0.65} dot={false} strokeDasharray="4 2" connectNulls={false} />
             <Line yAxisId="load" type="monotone" dataKey="ctlProj" name="Projected fitness" stroke="#38bdf8" strokeWidth={1.5} dot={false} strokeDasharray="2 3" strokeOpacity={0.7} connectNulls />
             <Line yAxisId="tsb" type="monotone" dataKey="tsbProj" name="Projected form" stroke="#34d399" strokeWidth={1.5} dot={false} strokeDasharray="2 3" strokeOpacity={0.7} connectNulls />
           </ComposedChart>

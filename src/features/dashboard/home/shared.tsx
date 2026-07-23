@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   BatteryCharging,
   BedDouble,
+  BrainCircuit,
   ChevronRight,
   Droplets,
   Dumbbell,
@@ -14,6 +15,7 @@ import {
   Pill,
   Scale,
   Settings,
+  Trophy,
   UtensilsCrossed,
 } from 'lucide-react'
 import Sparkline from '../../../components/Sparkline'
@@ -44,6 +46,8 @@ export const INSIGHT_ICONS: Record<InsightIcon, ComponentType<{ size?: number | 
   weight: Scale,
   streak: Flame,
   supplement: Pill,
+  pr: Trophy,
+  stress: BrainCircuit,
 }
 
 export const TONE_TEXT: Record<InsightTone, string> = {

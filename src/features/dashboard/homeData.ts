@@ -13,7 +13,9 @@ import { doseFor, useSupplementStore, type Supplement } from '../../store/supple
 import { addDays, todayISO, weekdayIndex } from '../../lib/date'
 import { sumMacros } from '../../lib/macros'
 import { burnedCaloriesForDate, latestBodyWeightKg } from '../../lib/exercise'
-import { totalVolume } from '../workouts/utils'
+import { isWorkingSet, totalVolume } from '../workouts/utils'
+import { epley1RM } from '../progress/utils'
+import { getExerciseById } from '../../data/exercises'
 import { weightStats, type WeightStats } from '../progress/weightTrends'
 import { ACTIVITY_GOALS, heroScore, latestMetric, metricSpark, todayHighlights, type Highlight, type HeroPick } from '../health/healthToday'
 import type { Goals, HealthDay, Routine, Units, WorkoutSession } from '../../types'
@@ -30,6 +32,8 @@ export type WeekTraining = {
   /** Per-week working volume for the last 8 weeks, oldest→newest (sparkline). */
   weeklyVolumes: number[]
 }
+
+export type RecentPR = { exerciseName: string; est1RM: number; weight: number; reps: number }
 
 export type HomeData = {
   today: string
@@ -63,6 +67,8 @@ export type HomeData = {
   activeSessionId: string | undefined
   trainedToday: boolean
   week: WeekTraining
+  /** A lift whose est. 1RM beat its all-time best within the last 7 days, if any. */
+  recentPR: RecentPR | null
   // Supplements
   supplements: Supplement[]
   supplementsTaken: number
@@ -156,6 +162,42 @@ export function useHomeData(): HomeData {
     }
   }, [sessions, today])
 
+  const recentPR = useMemo<RecentPR | null>(() => {
+    const weekStart = addDays(today, -6)
+    // Best est-1RM per exercise, split into "this week" vs "all time before".
+    const before = new Map<string, number>()
+    const thisWeek = new Map<string, RecentPR>()
+    for (const session of sessions) {
+      if (!session.finishedAt) continue
+      for (const entry of session.entries) {
+        for (const set of entry.sets) {
+          if (!set.done || !isWorkingSet(set) || set.reps <= 0 || set.weight <= 0) continue
+          const est = epley1RM(set.weight, set.reps)
+          if (session.date >= weekStart) {
+            const cur = thisWeek.get(entry.exerciseId)
+            if (!cur || est > cur.est1RM) {
+              thisWeek.set(entry.exerciseId, {
+                exerciseName: getExerciseById(entry.exerciseId)?.name ?? entry.exerciseId,
+                est1RM: est,
+                weight: set.weight,
+                reps: set.reps,
+              })
+            }
+          } else {
+            before.set(entry.exerciseId, Math.max(before.get(entry.exerciseId) ?? 0, est))
+          }
+        }
+      }
+    }
+    // The biggest lift that beat an established (pre-week) best wins the headline.
+    let bestPR: RecentPR | null = null
+    for (const [exerciseId, pr] of thisWeek) {
+      const prior = before.get(exerciseId)
+      if (prior !== undefined && pr.est1RM > prior && (!bestPR || pr.est1RM > bestPR.est1RM)) bestPR = pr
+    }
+    return bestPR
+  }, [sessions, today])
+
   const supplementsTaken = useMemo(
     () => supplements.filter((i) => doseFor(supplementLog, today, i.id) > 0).length,
     [supplements, supplementLog, today],
@@ -189,6 +231,7 @@ export function useHomeData(): HomeData {
     activeSessionId,
     trainedToday,
     week,
+    recentPR,
     supplements,
     supplementsTaken,
   }

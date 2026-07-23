@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
@@ -18,6 +18,11 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
   const sessionsInRange = useMemo(() => finishedSessionsInRange(sessions, range), [sessions, range])
   const chartData = useMemo(() => volumeSeries(range, sessions), [range, sessions])
   const totalSets = useMemo(() => totalSetsInRange(sessionsInRange), [sessionsInRange])
+
+  const nonZero = chartData.filter((p) => p.volume > 0)
+  const avgVolume = nonZero.length ? nonZero.reduce((s, p) => s + p.volume, 0) / nonZero.length : 0
+  // Raw pound/kilo totals get unreadable fast ("38000") — show "38k" instead.
+  const kFmt = (v: number): string => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${Math.round(v)}`)
 
   return (
     <Card>
@@ -42,13 +47,27 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
             <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#1e293b" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={44} />
+              <YAxis
+                tick={{ fill: '#64748b', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+                tickFormatter={kFmt}
+              />
               <Tooltip
                 contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: '#cbd5e1' }}
-                formatter={(value: number) => [`${Math.round(value)} ${unitLabel}`, 'Volume']}
+                formatter={(value: number) => [`${Math.round(value).toLocaleString()} ${unitLabel}`, 'Volume']}
               />
-              <Bar dataKey="volume" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              {avgVolume > 0 && (
+                <ReferenceLine
+                  y={avgVolume}
+                  stroke="#64748b"
+                  strokeDasharray="4 3"
+                  label={{ value: 'avg', position: 'insideTopRight', fill: '#64748b', fontSize: 10 }}
+                />
+              )}
+              <Bar dataKey="volume" fill="#818cf8" radius={[5, 5, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

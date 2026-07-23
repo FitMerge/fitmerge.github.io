@@ -19,6 +19,8 @@ export type InsightIcon =
   | 'weight'
   | 'streak'
   | 'supplement'
+  | 'pr'
+  | 'stress'
 
 export type Insight = {
   id: string
@@ -47,6 +49,19 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
   const rhr = d.highlights.find((h) => h.key === 'restingHr')
   const hrv = d.highlights.find((h) => h.key === 'hrv')
   const sleep = d.highlights.find((h) => h.key === 'sleepMinutes')
+  const stress = d.highlights.find((h) => h.key === 'stress')
+
+  // --- New personal record — always leads when it happened -----------------------------
+  if (d.recentPR) {
+    out.push({
+      id: 'pr',
+      tone: 'good',
+      icon: 'pr',
+      title: `New ${d.recentPR.exerciseName} PR 🎉`,
+      body: `${d.recentPR.weight} ${weightUnit(d.units)} × ${d.recentPR.reps} this week — a new best estimated 1RM of ${Math.round(d.recentPR.est1RM)} ${weightUnit(d.units)}.`,
+      to: '/progress',
+    })
+  }
 
   // --- Recovery verdict, fused with the training plan --------------------------------
   if (d.hero) {
@@ -106,6 +121,18 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
         to: '/health',
       })
     }
+  }
+
+  // --- Stress ------------------------------------------------------------------------
+  if (stress?.tone === 'bad') {
+    out.push({
+      id: 'stress-high',
+      tone: 'warn',
+      icon: 'stress',
+      title: `Stress running high — ${stress.value}`,
+      body: `That's ${stress.note}. A walk, some sun or 5 minutes of slow breathing genuinely moves this number.`,
+      to: '/health',
+    })
   }
 
   // --- Today's training status -------------------------------------------------------

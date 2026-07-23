@@ -1,230 +1,277 @@
+// Home — the "coach briefing" dashboard. Logging lives behind the + button, so
+// home is a read-and-decide surface: three status dials (recovery / fuel / move),
+// a prioritized rule-based coach, today's plan, and the key stat from every page.
+// Styled after the daily-brief homes of Whoop and Oura.
+
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Dumbbell, Flame, GlassWater, HeartPulse, Settings } from 'lucide-react'
+import { Check, Droplets, Dumbbell, Pill, Sparkles } from 'lucide-react'
 import Card from '../../components/Card'
-import RingChart from '../../components/RingChart'
 import Button from '../../components/Button'
-import { useNutritionStore, entriesForDate } from '../../store/nutrition'
-import { useSettingsStore } from '../../store/settings'
-import { useBodyStore } from '../../store/body'
-import { useWorkoutsStore } from '../../store/workouts'
-import { healthDaysDesc, useHealthStore } from '../../store/health'
-import { useSupplementStore } from '../../store/supplements'
-import SupplementList from '../assistant/SupplementList'
-import { heroScore, scoreColor } from '../health/healthToday'
-import { addDays, isoToLabel, todayISO, weekdayIndex } from '../../lib/date'
-import { macroPct, sumMacros } from '../../lib/macros'
-import { convertWeight, mlToFloz, weightUnit } from '../../lib/units'
-import { burnedCaloriesForDate, latestBodyWeightKg } from '../../lib/exercise'
-
-function greeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
-}
-
-/** Short status word for a 0–100 recovery score. */
-function scoreWord(v: number): string {
-  if (v >= 66) return 'Ready'
-  if (v >= 33) return 'Moderate'
-  return 'Low'
-}
+import RingChart from '../../components/RingChart'
+import { useHomeData } from './homeData'
+import { buildInsights } from './insights'
+import { metricSpark, scoreColor } from '../health/healthToday'
+import { typicalRangeOf } from '../progress/healthTrends'
+import { isoToLabel } from '../../lib/date'
+import { mlToFloz, weightUnit } from '../../lib/units'
+import { weightUnitLabel } from '../workouts/utils'
+import { fmtK, fmtSleep, HomeHeader, INSIGHT_ICONS, InsightRow, StatTile, TONE_BG, TONE_TEXT } from './home/shared'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const entries = useNutritionStore((s) => s.entries)
-  const goals = useSettingsStore((s) => s.goals)
-  const units = useSettingsStore((s) => s.units)
-  const bodyEntries = useBodyStore((s) => s.entries)
-  const routines = useWorkoutsStore((s) => s.routines)
-  const activeSessionId = useWorkoutsStore((s) => s.activeSessionId)
-  const sessions = useWorkoutsStore((s) => s.sessions)
-  const exerciseByDate = useNutritionStore((s) => s.exercise)
-  const healthDays = useHealthStore((s) => s.days)
+  const d = useHomeData()
+  const insights = useMemo(() => buildInsights(d, new Date().getHours()), [d])
+  const featured = insights[0]
+  const FeaturedIcon = featured ? INSIGHT_ICONS[featured.icon] : null
 
-  const today = todayISO()
-  const todayWaterMl = useNutritionStore((s) => s.water[today] ?? 0)
-  const todayEntries = useMemo(() => entriesForDate(entries, today), [entries, today])
-  const totals = useMemo(() => sumMacros(todayEntries), [todayEntries])
-  const burned = useMemo(
-    () => burnedCaloriesForDate(today, exerciseByDate, sessions, latestBodyWeightKg(bodyEntries)),
-    [today, exerciseByDate, sessions, bodyEntries],
-  )
-  // Net budget, MyFitnessPal-style: goal − food + exercise burned.
-  const remaining = Math.round(goals.calories - totals.calories + burned)
+  const fuelPct = Math.min(1, d.foodCalories / Math.max(1, d.goals.calories + d.burned))
+  const overBudget = d.remaining < 0
+  const stepsPct = d.steps != null ? Math.min(1, d.steps / d.stepsGoal) : 0
+  const waterPct = Math.min(1, d.waterMl / Math.max(1, d.waterGoalMl))
 
-  const streak = useMemo(() => {
-    let count = 0
-    let cursor = today
-    while (entriesForDate(entries, cursor).length > 0) {
-      count += 1
-      cursor = addDays(cursor, -1)
-    }
-    return count
-  }, [entries, today])
+  const hrvSpark = useMemo(() => metricSpark(d.healthDesc, 'hrv', 14), [d.healthDesc])
+  const hrvBand = useMemo(() => typicalRangeOf(hrvSpark), [hrvSpark])
+  const rhrSpark = useMemo(() => metricSpark(d.healthDesc, 'restingHr', 14), [d.healthDesc])
+  const rhrBand = useMemo(() => typicalRangeOf(rhrSpark), [rhrSpark])
+  const sleepHl = d.highlights.find((h) => h.key === 'sleepMinutes')
+  const hrvHl = d.highlights.find((h) => h.key === 'hrv')
+  const rhrHl = d.highlights.find((h) => h.key === 'restingHr')
 
-  const latestWeight = useMemo(() => {
-    if (bodyEntries.length === 0) return null
-    return [...bodyEntries].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
-  }, [bodyEntries])
+  // The hero's mood follows recovery: emerald glow when charged, amber when low.
+  const heroTint =
+    d.hero == null
+      ? 'from-slate-800/60'
+      : d.hero.value >= 66
+        ? 'from-emerald-500/15'
+        : d.hero.value >= 33
+          ? 'from-amber-500/10'
+          : 'from-rose-500/10'
 
-  const todaysRoutine = useMemo(() => {
-    const weekday = weekdayIndex(today)
-    return routines.find((r) => r.scheduleDays?.includes(weekday))
-  }, [routines, today])
-
-  const hero = useMemo(() => heroScore(healthDaysDesc(healthDays)), [healthDays])
-  const supplements = useSupplementStore((s) => s.items)
+  const headerSub = d.todaysRoutine && !d.trainedToday
+    ? `${isoToLabel(d.today)} · ${d.todaysRoutine.name} scheduled`
+    : isoToLabel(d.today)
 
   return (
-    <div className="p-4 pb-24 space-y-4">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-100">{greeting()}</h1>
-          <p className="text-sm text-slate-400">{isoToLabel(today)}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate('/settings')}
-          aria-label="Settings"
-          className="shrink-0 w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 active:bg-slate-700"
-        >
-          <Settings size={18} />
-        </button>
-      </header>
+    <div className="space-y-4 p-4 pb-24">
+      <HomeHeader sub={headerSub} />
 
-      {/* Nutrition at a glance — a compact summary that opens the full food diary,
-          rather than a second copy of the diary's calorie ring. */}
-      <Card onClick={() => navigate('/nutrition')} className="cursor-pointer active:bg-slate-800/40">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-100">Today&apos;s food</h2>
-          <span className="flex items-center text-xs text-slate-500">
-            Diary <ChevronRight size={14} />
-          </span>
-        </div>
-        <div className="mt-2 flex items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              {remaining >= 0 ? 'Remaining' : 'Over'}
-            </p>
-            <p className={`text-2xl font-bold leading-tight ${remaining < 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {Math.abs(remaining).toLocaleString()}
-              <span className="ml-1 text-sm font-medium text-slate-500">kcal</span>
-            </p>
-          </div>
-          <p className="text-right text-xs leading-relaxed text-slate-400">
-            {Math.round(goals.calories).toLocaleString()} goal − {Math.round(totals.calories).toLocaleString()} food
-            {burned > 0 ? ` + ${burned} exercise` : ''}
-          </p>
-        </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
-          <div
-            className={`h-full rounded-full ${totals.calories > goals.calories ? 'bg-amber-400' : 'bg-emerald-400'}`}
-            style={{ width: `${Math.min(100, macroPct(totals.calories, goals.calories) * 100)}%` }}
+      {/* Status hero — recovery, fuel and movement at a glance. */}
+      <Card className={`bg-gradient-to-br ${heroTint} via-slate-900 to-slate-900`}>
+        <div className="flex justify-around">
+          <Dial
+            pct={d.hero ? d.hero.value / 100 : 0}
+            color={d.hero ? scoreColor(d.hero.value) : '#334155'}
+            value={d.hero ? `${Math.round(d.hero.value)}` : '—'}
+            label="Recovery"
+            sub={d.hero ? d.hero.label : 'Connect data'}
+            onClick={() => navigate('/health')}
+          />
+          <Dial
+            pct={fuelPct}
+            color={overBudget ? '#fbbf24' : '#34d399'}
+            value={Math.abs(d.remaining).toLocaleString()}
+            label="Fuel"
+            sub={overBudget ? 'kcal over' : 'kcal left'}
+            onClick={() => navigate('/nutrition')}
+          />
+          <Dial
+            pct={stepsPct}
+            color="#38bdf8"
+            value={d.steps != null ? fmtK(d.steps) : '—'}
+            label="Move"
+            sub={d.steps != null ? `of ${fmtK(d.stepsGoal)} steps` : 'No data'}
+            onClick={() => navigate('/health')}
           />
         </div>
-        <p className="mt-2 text-xs text-slate-400">
-          Protein {Math.round(totals.protein)} · Carbs {Math.round(totals.carbs)} · Fat {Math.round(totals.fat)} g
-        </p>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Button variant="primary" onClick={() => navigate('/nutrition', { state: { openAdd: true } })}>
-          Log food
-        </Button>
-        <Button variant="ghost" onClick={() => navigate('/workouts')}>
-          Start workout
-        </Button>
+      {/* Coach — featured read up top, the rest as compact rows. */}
+      {insights.length > 0 && (
+        <Card className="space-y-2">
+          <h2 className="flex items-center gap-1.5 px-1 text-sm font-semibold text-slate-100">
+            <Sparkles size={14} className="text-primary-400" /> Coach
+          </h2>
+
+          {featured && FeaturedIcon && (
+            <button
+              type="button"
+              onClick={() => navigate(featured.to)}
+              className={`flex w-full items-start gap-3 rounded-xl p-3 text-left active:opacity-80 ${TONE_BG[featured.tone]}`}
+            >
+              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950/40">
+                <FeaturedIcon size={19} className={TONE_TEXT[featured.tone]} />
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-[15px] font-bold ${TONE_TEXT[featured.tone]}`}>{featured.title}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-slate-300">{featured.body}</span>
+              </span>
+            </button>
+          )}
+
+          {insights.slice(1, 4).map((i) => (
+            <InsightRow key={i.id} insight={i} />
+          ))}
+        </Card>
+      )}
+
+      {/* Today's plan — workout, supplements, water. */}
+      {(d.todaysRoutine || d.supplements.length > 0 || d.waterGoalMl > 0) && (
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-100">Today&apos;s plan</h2>
+
+          {d.todaysRoutine && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+                  {d.trainedToday ? <Check size={17} /> : <Dumbbell size={17} />}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-100">{d.todaysRoutine.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {d.trainedToday ? 'Done — nice work' : `${d.todaysRoutine.items.length} exercises`}
+                  </p>
+                </div>
+              </div>
+              {!d.trainedToday && !d.activeSessionId && (
+                <Button
+                  variant="primary"
+                  className="shrink-0 text-sm"
+                  onClick={() => navigate('/workouts', { state: { startRoutineId: d.todaysRoutine?.id } })}
+                >
+                  Start
+                </Button>
+              )}
+            </div>
+          )}
+
+          {d.supplements.length > 0 && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
+                  <Pill size={17} />
+                </span>
+                <p className="text-sm text-slate-200">Supplements</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {d.supplements.slice(0, 6).map((s, i) => (
+                  <span
+                    key={s.id}
+                    className={`h-2.5 w-2.5 rounded-full ${i < d.supplementsTaken ? 'bg-violet-400' : 'bg-slate-700'}`}
+                  />
+                ))}
+                <span className="ml-1 text-xs text-slate-500">
+                  {d.supplementsTaken}/{d.supplements.length}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-400">
+              <Droplets size={17} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between">
+                <p className="text-sm text-slate-200">Water</p>
+                <p className="text-xs text-slate-400">
+                  {d.units === 'imperial'
+                    ? `${Math.round(mlToFloz(d.waterMl))} / ${Math.round(mlToFloz(d.waterGoalMl))} oz`
+                    : `${(d.waterMl / 1000).toFixed(1)} / ${(d.waterGoalMl / 1000).toFixed(1)} L`}
+                </p>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-full rounded-full bg-sky-400" style={{ width: `${waterPct * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* The key stat from every page, with its recent shape. */}
+      <div className="grid grid-cols-2 gap-2">
+        <StatTile
+          label="Weight"
+          value={d.weight ? d.weight.latest.toFixed(1) : '—'}
+          unit={weightUnit(d.units)}
+          sub={
+            d.weight
+              ? `${d.weight.ratePerWeek < 0 ? '↓' : '↑'} ${Math.abs(d.weight.ratePerWeek).toFixed(1)} ${weightUnit(d.units)}/wk`
+              : 'Log with +'
+          }
+          subTone={d.weight && d.weight.ratePerWeek < 0 ? 'good' : undefined}
+          spark={d.weightSpark}
+          to="/progress"
+        />
+        <StatTile
+          label="Sleep"
+          value={d.sleepMinutes != null ? fmtSleep(d.sleepMinutes) : '—'}
+          sub={sleepHl?.note ?? (d.sleepScore != null ? `score ${Math.round(d.sleepScore)}` : undefined)}
+          subTone={sleepHl?.tone === 'good' ? 'good' : sleepHl?.tone === 'bad' ? 'warn' : undefined}
+          to="/health"
+        />
+        <StatTile
+          label="HRV"
+          value={hrvHl?.value ?? '—'}
+          sub={hrvHl?.note}
+          subTone={hrvHl?.tone === 'good' ? 'good' : hrvHl?.tone === 'bad' ? 'warn' : undefined}
+          spark={hrvSpark}
+          sparkColor="#a78bfa"
+          sparkBand={hrvBand ? [hrvBand.low, hrvBand.high] : undefined}
+          to="/health"
+        />
+        <StatTile
+          label="Resting HR"
+          value={rhrHl?.value ?? '—'}
+          sub={rhrHl?.note}
+          subTone={rhrHl?.tone === 'good' ? 'good' : rhrHl?.tone === 'bad' ? 'warn' : undefined}
+          spark={rhrSpark}
+          sparkColor="#f87171"
+          sparkBand={rhrBand ? [rhrBand.low, rhrBand.high] : undefined}
+          to="/health"
+        />
+        <StatTile
+          label="Volume this week"
+          value={fmtK(d.week.volume)}
+          unit={weightUnitLabel(d.units)}
+          sub={`${d.week.sessions} workout${d.week.sessions === 1 ? '' : 's'}`}
+          spark={d.week.weeklyVolumes}
+          sparkColor="#818cf8"
+          to="/progress"
+        />
+        <StatTile
+          label="Streak"
+          value={`${d.streak}`}
+          unit={d.streak === 1 ? 'day' : 'days'}
+          sub={d.streak > 0 ? 'logging streak 🔥' : 'log food to start'}
+          subTone={d.streak >= 7 ? 'good' : undefined}
+          to="/nutrition"
+        />
       </div>
-
-      {todaysRoutine && !activeSessionId && (
-        <Card className="border-l-4 border-l-emerald-400 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-400 shrink-0">
-              <Dumbbell size={20} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400">Today&apos;s workout</p>
-              <p className="text-sm font-semibold text-slate-100 truncate">{todaysRoutine.name}</p>
-              <p className="text-xs text-slate-500">
-                {todaysRoutine.items.length} exercise{todaysRoutine.items.length === 1 ? '' : 's'}
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="primary"
-            className="shrink-0 text-sm"
-            onClick={() => navigate('/workouts', { state: { startRoutineId: todaysRoutine.id } })}
-          >
-            Start
-          </Button>
-        </Card>
-      )}
-
-      {hero && (
-        <Card
-          onClick={() => navigate('/health')}
-          className="flex items-center justify-between gap-3 cursor-pointer active:bg-slate-800/40"
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <RingChart
-              value={Math.min(1, hero.value / 100)}
-              size={54}
-              stroke={6}
-              color={scoreColor(hero.value)}
-              label={`${Math.round(hero.value)}`}
-            />
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400">{hero.label}</p>
-              <p className="text-sm font-semibold text-slate-100">{scoreWord(hero.value)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 shrink-0 text-slate-500">
-            <HeartPulse size={16} className="text-rose-400" />
-            <ChevronRight size={16} />
-          </div>
-        </Card>
-      )}
-
-      <Card className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-400">
-            <Flame size={20} />
-          </div>
-          <p className="text-sm text-slate-200">
-            {streak > 0 ? `${streak}-day logging streak` : 'Start your streak today'}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 text-sky-400 shrink-0">
-          <GlassWater size={16} />
-          <span className="text-sm font-medium">
-            {units === 'imperial' ? `${Math.round(mlToFloz(todayWaterMl))} oz` : `${(todayWaterMl / 1000).toFixed(1)} L`}
-          </span>
-        </div>
-      </Card>
-
-      {supplements.length > 0 && (
-        <Card>
-          <h2 className="mb-2 text-sm font-semibold text-slate-100">Today&apos;s supplements</h2>
-          <SupplementList compact />
-        </Card>
-      )}
-
-      <Card onClick={() => navigate('/progress')} className="cursor-pointer active:bg-slate-800/40">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-100">Weight</h2>
-          <ChevronRight size={14} className="text-slate-500" />
-        </div>
-        {latestWeight ? (
-          <p className="mt-1 text-sm text-slate-200">
-            {convertWeight(latestWeight.weightKg, units).toFixed(1)} {weightUnit(units)}{' '}
-            <span className="text-slate-500">· {isoToLabel(latestWeight.date)}</span>
-          </p>
-        ) : (
-          <p className="mt-1 text-xs text-slate-500">No weight logged yet</p>
-        )}
-      </Card>
     </div>
+  )
+}
+
+function Dial({
+  pct,
+  color,
+  value,
+  label,
+  sub,
+  onClick,
+}: {
+  pct: number
+  color: string
+  value: string
+  label: string
+  sub: string
+  onClick: () => void
+}) {
+  return (
+    <button type="button" onClick={onClick} className="flex flex-col items-center gap-1">
+      <RingChart value={pct} size={94} stroke={9} color={color} label={value} />
+      <p className="text-xs font-semibold text-slate-200">{label}</p>
+      <p className="text-[10px] text-slate-500">{sub}</p>
+    </button>
   )
 }
