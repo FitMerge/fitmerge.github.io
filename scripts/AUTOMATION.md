@@ -1,4 +1,38 @@
-# Automating the Garmin pull (Windows)
+# Cloud pull — phone button + hourly, no PC needed
+
+This runs the Garmin pull on GitHub's servers instead of your computer, so it works
+even when your PC is off, and the app gets a **"Pull from Garmin"** button (Settings →
+Pull from Garmin) plus an automatic hourly refresh. Data lands in your FitMerge cloud
+and every device updates itself via sync.
+
+**One-time setup**
+
+1. **Log in to Garmin once, locally**, then export the saved session:
+   ```
+   pip install garminconnect firebase-admin
+   python scripts/garmin-sync.py --days 7          # logs in (asks for 2FA once)
+   python scripts/garmin-sync.py --export-tokens   # prints one base64 line
+   ```
+2. **Add three repository secrets** (GitHub repo → Settings → Secrets and variables →
+   Actions → New repository secret):
+   - `GARMIN_TOKENS_B64` — the base64 line from `--export-tokens`.
+   - `FIREBASE_SERVICE_ACCOUNT` — the full contents of your `serviceAccount.json`.
+   - `FIREBASE_UID` — your FitMerge id (app → Settings → Sync).
+   - (Optional) `GARMIN_EMAIL` / `GARMIN_PASSWORD` as a fallback if the token expires.
+3. **Make sure `.github/workflows/garmin-pull.yml` is on your repo's default branch**
+   (merge it to `main`). Scheduled and dispatched runs only work from the default branch.
+4. **Create a fine-grained token** (GitHub → Settings → Developer settings → Fine-grained
+   tokens) limited to this one repo with **Actions: Read and write**. In the app →
+   Settings → Pull from Garmin, paste your `owner/repo` and the token, and Save.
+
+That's it. The hourly schedule runs on its own; the button triggers an immediate pull.
+The token you paste into the app stays on that device only — it is never synced to the
+cloud. If a scheduled run ever fails with a Garmin login error, re-run steps 1–2 to
+refresh `GARMIN_TOKENS_B64` (the cached login lasts ~a year).
+
+---
+
+# Automating the Garmin pull (Windows PC — the original local method)
 
 Once this is set up, your Garmin data flows into FitMerge on a schedule and every
 device updates itself — no file, no manual import. Here's the whole path.

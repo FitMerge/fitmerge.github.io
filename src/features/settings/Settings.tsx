@@ -6,6 +6,7 @@ import AiSection from './AiSection'
 import FoodSearchSection from './FoodSearchSection'
 import DataSection from './DataSection'
 import HealthConnectSection from './HealthConnectSection'
+import GarminPullSection from './GarminPullSection'
 import AboutSection from './AboutSection'
 
 export default function Settings() {
@@ -24,6 +25,7 @@ export default function Settings() {
       <FoodSearchSection />
       <DataSection />
       <HealthConnectSection />
+      <GarminPullSection />
       <AboutSection />
     </div>
   )

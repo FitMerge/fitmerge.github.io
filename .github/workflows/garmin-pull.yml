@@ -1,0 +1,57 @@
+name: Garmin pull → FitMerge
+
+# Pulls recent Garmin data and pushes it straight into your FitMerge cloud account,
+# so every device updates itself via the app's realtime sync. Runs two ways:
+#   • on a schedule (hourly) so data stays fresh on its own, and
+#   • on demand (workflow_dispatch) — the app's "Pull from Garmin" button triggers this.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   GARMIN_TOKENS_B64        one-line output of: python scripts/garmin-sync.py --export-tokens
+#   FIREBASE_SERVICE_ACCOUNT the full contents of your Firebase service-account JSON
+#   FIREBASE_UID             your FitMerge account id (Settings → Sync in the app)
+#   GARMIN_EMAIL / GARMIN_PASSWORD  optional fallback if the token secret ever expires
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: How many days back to pull
+        required: false
+        default: '14'
+  schedule:
+    - cron: '0 * * * *' # hourly, on the hour (UTC)
+
+# Never let an on-demand run and a scheduled run collide; queue instead.
+concurrency:
+  group: garmin-pull
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install garminconnect firebase-admin
+
+      - name: Pull Garmin → FitMerge cloud
+        env:
+          GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_UID: ${{ secrets.FIREBASE_UID }}
+          DAYS: ${{ github.event.inputs.days || '14' }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] || [ -z "$FIREBASE_UID" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT and/or FIREBASE_UID secrets."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/sa.json"
+          python scripts/garmin-sync.py --days "$DAYS" --firebase \
+            --service-account "$RUNNER_TEMP/sa.json" --uid "$FIREBASE_UID"

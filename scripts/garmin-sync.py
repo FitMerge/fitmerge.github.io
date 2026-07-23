@@ -57,6 +57,7 @@ metrics need no code change on either side.
 """
 
 import argparse
+import base64
 import getpass
 import json
 import os
@@ -290,6 +291,55 @@ def push_to_firebase(payload, service_account, uid):
     return len(body["entries"]), added, len(health["days"])
 
 
+def _tokenstore_path():
+    return os.path.expanduser(os.environ.get("GARMINTOKENS", "~/.garminconnect"))
+
+
+def export_tokens():
+    """Print the cached Garmin session as one base64 line, for use as a CI secret.
+
+    Run this locally AFTER a normal sync has logged you in (so ~/.garminconnect
+    exists). Paste the output into a GitHub Actions secret named GARMIN_TOKENS_B64;
+    the cloud job restores it and logs in with no email/password/2-factor prompt."""
+    tokenstore = _tokenstore_path()
+    if not (os.path.isdir(tokenstore) and os.listdir(tokenstore)):
+        print(f"error: no cached Garmin session at {tokenstore}. Run a normal sync first "
+              "to log in, then re-run --export-tokens.", file=sys.stderr)
+        return 1
+    blob = {}
+    for name in sorted(os.listdir(tokenstore)):
+        p = os.path.join(tokenstore, name)
+        if os.path.isfile(p):
+            with open(p, "r", encoding="utf-8") as f:
+                blob[name] = f.read()
+    encoded = base64.b64encode(json.dumps(blob).encode("utf-8")).decode("ascii")
+    print(encoded)
+    return 0
+
+
+def _restore_tokens_from_env():
+    """If GARMIN_TOKENS_B64 is set (the CI path) and no local token store exists yet,
+    materialise the cached session into the token store so login() can resume it with
+    no interactive 2-factor prompt."""
+    encoded = os.environ.get("GARMIN_TOKENS_B64")
+    if not encoded:
+        return
+    tokenstore = _tokenstore_path()
+    if os.path.isdir(tokenstore) and os.listdir(tokenstore):
+        return  # a real session is already present; don't clobber it
+    try:
+        blob = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    except Exception as e:
+        print(f"warning: GARMIN_TOKENS_B64 could not be decoded ({e}); ignoring it.", file=sys.stderr)
+        return
+    os.makedirs(tokenstore, exist_ok=True)
+    for name, content in blob.items():
+        if isinstance(name, str) and isinstance(content, str) and "/" not in name and "\\" not in name:
+            with open(os.path.join(tokenstore, name), "w", encoding="utf-8") as f:
+                f.write(content)
+    print("Restored Garmin session from GARMIN_TOKENS_B64.", file=sys.stderr)
+
+
 def _garmin_login():
     """Return a logged-in Garmin client, reusing a cached session when possible.
 
@@ -297,6 +347,7 @@ def _garmin_login():
     after the first successful login, so every later run — including the scheduled job —
     resumes silently with NO email/password/2-factor prompt. Credentials are only asked
     for on the very first run, or after the token expires (roughly yearly)."""
+    _restore_tokens_from_env()
     try:
         from garminconnect import Garmin
     except ImportError:
@@ -815,10 +866,15 @@ def main():
     parser.add_argument("--uid", type=str, default=os.environ.get("FIREBASE_UID"),
                         help="Your FitMerge account user id, from Settings -> Sync (auto-sync; or FIREBASE_UID)")
     parser.add_argument("--self-test", action="store_true", help="Run offline validation and exit (no network)")
+    parser.add_argument("--export-tokens", action="store_true",
+                        help="Print the cached Garmin session as base64 for a GitHub Actions secret (GARMIN_TOKENS_B64)")
     args = parser.parse_args()
 
     if args.self_test:
         sys.exit(self_test())
+
+    if args.export_tokens:
+        sys.exit(export_tokens())
 
     if args.firebase:
         if not args.service_account or not args.uid:
