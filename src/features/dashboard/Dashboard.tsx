@@ -9,6 +9,8 @@ import { useSettingsStore } from '../../store/settings'
 import { useBodyStore } from '../../store/body'
 import { useWorkoutsStore } from '../../store/workouts'
 import { healthDaysDesc, useHealthStore } from '../../store/health'
+import { useSupplementStore } from '../../store/supplements'
+import SupplementList from '../assistant/SupplementList'
 import { heroScore, scoreColor } from '../health/healthToday'
 import { addDays, isoToLabel, todayISO, weekdayIndex } from '../../lib/date'
 import { macroPct, sumMacros } from '../../lib/macros'
@@ -73,6 +75,7 @@ export default function Dashboard() {
   }, [routines, today])
 
   const hero = useMemo(() => heroScore(healthDaysDesc(healthDays)), [healthDays])
+  const supplements = useSupplementStore((s) => s.items)
 
   return (
     <div className="p-4 pb-24 space-y-4">
@@ -200,6 +203,13 @@ export default function Dashboard() {
           </span>
         </div>
       </Card>
+
+      {supplements.length > 0 && (
+        <Card>
+          <h2 className="mb-2 text-sm font-semibold text-slate-100">Today&apos;s supplements</h2>
+          <SupplementList compact />
+        </Card>
+      )}
 
       <Card onClick={() => navigate('/progress')} className="cursor-pointer active:bg-slate-800/40">
         <div className="flex items-center justify-between">

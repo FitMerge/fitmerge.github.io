@@ -1,6 +1,7 @@
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Home, UtensilsCrossed, Dumbbell, HeartPulse, TrendingUp, Plus, Loader2 } from 'lucide-react'
+import ActionHub from '../features/assistant/ActionHub'
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -12,6 +13,7 @@ const tabs = [
 
 export default function AppShell() {
   const navigate = useNavigate()
+  const [hubOpen, setHubOpen] = useState(false)
 
   return (
     <div className="h-dvh flex flex-col">
@@ -46,12 +48,13 @@ export default function AppShell() {
             </NavLink>
           ))}
 
-          {/* Center quick-add — the MyFitnessPal "+" that logs food from anywhere. */}
+          {/* Center "+" opens the universal Action Hub: type/speak a command, or tap
+              a quick action (food, workout, weight, water, supplements). */}
           <div className="flex-1 flex justify-center">
             <button
               type="button"
-              onClick={() => navigate('/nutrition', { state: { openAdd: true } })}
-              aria-label="Add food"
+              onClick={() => setHubOpen(true)}
+              aria-label="Quick log"
               className="-mt-4 w-14 h-14 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shadow-lg shadow-emerald-500/20 active:bg-emerald-400"
             >
               <Plus size={26} strokeWidth={2.5} />
@@ -75,6 +78,15 @@ export default function AppShell() {
           ))}
         </div>
       </nav>
+
+      <ActionHub
+        open={hubOpen}
+        onClose={() => setHubOpen(false)}
+        onNavigate={(to, state) => {
+          setHubOpen(false)
+          navigate(to, { state })
+        }}
+      />
     </div>
   )
 }

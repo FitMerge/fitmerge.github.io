@@ -10,6 +10,11 @@
 // Google retires it again.
 export const GEMINI_MODEL = 'gemini-2.5-flash'
 
+// A lighter, cheaper model with a bigger free-tier daily allowance (~1000/day vs
+// ~250). Ideal for text-only jobs like parsing a natural-language log command, so
+// those requests don't eat into the photo-analysis budget on gemini-2.5-flash.
+export const GEMINI_LITE_MODEL = 'gemini-2.5-flash-lite'
+
 export function geminiEndpoint(model = GEMINI_MODEL): string {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 }
