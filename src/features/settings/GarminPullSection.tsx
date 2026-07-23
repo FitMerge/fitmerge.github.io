@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Loader2, RefreshCw, XCircle } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { useSettingsStore } from '../../store/settings'
-import { GarminPullError, latestGarminRun, triggerGarminPull, type PullRun } from '../../services/garmin/githubPull'
-
-type Status = 'idle' | 'dispatching' | 'running' | 'done' | 'error'
+import { useGarminPull } from './useGarminPull'
 
 function timeAgo(ts: number): string {
   const s = Math.round((Date.now() - ts) / 1000)
@@ -20,67 +18,20 @@ function timeAgo(ts: number): string {
 export default function GarminPullSection() {
   const token = useSettingsStore((s) => s.githubToken)
   const repo = useSettingsStore((s) => s.githubRepo)
-  const lastPull = useSettingsStore((s) => s.lastGarminPullAt)
   const setToken = useSettingsStore((s) => s.setGithubToken)
   const setRepo = useSettingsStore((s) => s.setGithubRepo)
-  const setLastPull = useSettingsStore((s) => s.setLastGarminPullAt)
 
-  const configured = token.trim().length > 0 && repo.trim().length > 0
+  const { configured, phase: status, message, run, lastPull, pull } = useGarminPull()
 
   const [tokenDraft, setTokenDraft] = useState(token)
   const [repoDraft, setRepoDraft] = useState(repo)
   const [editing, setEditing] = useState(!configured)
   const [helpOpen, setHelpOpen] = useState(false)
 
-  const [status, setStatus] = useState<Status>('idle')
-  const [message, setMessage] = useState('')
-  const [run, setRun] = useState<PullRun | null>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
-
-  useEffect(() => () => clearInterval(pollRef.current), [])
-
   function saveConfig() {
     setToken(tokenDraft.trim())
     setRepo(repoDraft.trim())
     setEditing(false)
-  }
-
-  async function pull() {
-    setStatus('dispatching')
-    setMessage('')
-    setRun(null)
-    try {
-      await triggerGarminPull(token, repo, 14)
-      setLastPull(Date.now())
-      setStatus('running')
-      // Poll the run status so the user sees queued → running → done. The pulled
-      // data itself arrives separately via Firestore sync, so this is just feedback.
-      let tries = 0
-      clearInterval(pollRef.current)
-      pollRef.current = setInterval(async () => {
-        tries++
-        try {
-          const r = await latestGarminRun(token, repo)
-          if (r) setRun(r)
-          if (r && r.status === 'completed') {
-            clearInterval(pollRef.current)
-            if (r.conclusion === 'success') {
-              setStatus('done')
-              setMessage('Garmin data pulled — it’s syncing into your app now.')
-            } else {
-              setStatus('error')
-              setMessage(`The pull run finished with "${r.conclusion ?? 'failure'}". Check the run log.`)
-            }
-          }
-        } catch {
-          /* transient poll error — keep trying */
-        }
-        if (tries >= 40) clearInterval(pollRef.current) // ~4 min safety stop
-      }, 6000)
-    } catch (err) {
-      setStatus('error')
-      setMessage(err instanceof GarminPullError ? err.message : 'Could not start the pull.')
-    }
   }
 
   return (

@@ -1,17 +1,30 @@
-import { useState } from 'react'
-import { ChevronLeft, Droplets, Dumbbell, Pill, Scale, UtensilsCrossed } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  CheckCircle2,
+  ChevronLeft,
+  Droplets,
+  Dumbbell,
+  ExternalLink,
+  Loader2,
+  Pill,
+  RefreshCw,
+  Scale,
+  UtensilsCrossed,
+  XCircle,
+} from 'lucide-react'
 import Sheet from '../../components/Sheet'
 import Button from '../../components/Button'
 import LogWeightSheet from '../progress/LogWeightSheet'
 import SupplementList from './SupplementList'
 import CommandBar from './CommandBar'
+import { useGarminPull } from '../settings/useGarminPull'
 import { useNutritionStore } from '../../store/nutrition'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { todayISO } from '../../lib/date'
 import { mlToFloz, waterUnit } from '../../lib/units'
 
-type Screen = 'menu' | 'weight' | 'water' | 'supplement' | 'workout'
+type Screen = 'menu' | 'weight' | 'water' | 'supplement' | 'workout' | 'garmin'
 
 type ActionHubProps = {
   open: boolean
@@ -25,6 +38,7 @@ const TITLES: Record<Screen, string> = {
   water: 'Log water',
   supplement: 'Supplements & habits',
   workout: 'Start a workout',
+  garmin: 'Pull from Garmin',
 }
 
 export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps) {
@@ -60,6 +74,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
               <Tile icon={Scale} label="Weight" onClick={() => setScreen('weight')} />
               <Tile icon={Droplets} label="Water" onClick={() => setScreen('water')} />
               <Tile icon={Pill} label="Supplements" onClick={() => setScreen('supplement')} />
+              <Tile icon={RefreshCw} label="Garmin" onClick={() => setScreen('garmin')} />
             </div>
           </div>
         </div>
@@ -69,6 +84,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
       {screen === 'water' && <WaterScreen />}
       {screen === 'supplement' && <SupplementList />}
       {screen === 'workout' && <WorkoutScreen onPick={(id) => onNavigate('/workouts', { startRoutineId: id })} onClose={close} />}
+      {screen === 'garmin' && <GarminScreen onSetup={() => onNavigate('/settings', null)} />}
     </Sheet>
   )
 }
@@ -117,6 +133,69 @@ function WaterScreen() {
         <button type="button" onClick={() => addWater(today, -Math.min(250, total))} className="w-full text-xs text-slate-500">
           Undo last cup
         </button>
+      )}
+    </div>
+  )
+}
+
+function GarminScreen({ onSetup }: { onSetup: () => void }) {
+  const { configured, phase, message, run, pull } = useGarminPull()
+  const started = useRef(false)
+
+  // One-tap: kick off the pull as soon as the screen opens (if it's set up).
+  useEffect(() => {
+    if (configured && !started.current) {
+      started.current = true
+      void pull()
+    }
+  }, [configured, pull])
+
+  if (!configured) {
+    return (
+      <div className="space-y-3 text-center">
+        <p className="text-sm text-slate-400">
+          Connect your GitHub repo and token once in Settings, then pull your Garmin data from here anytime.
+        </p>
+        <Button variant="primary" full onClick={onSetup}>
+          Set up in Settings
+        </Button>
+      </div>
+    )
+  }
+
+  const busy = phase === 'dispatching' || phase === 'running'
+  return (
+    <div className="space-y-4 py-2 text-center">
+      {busy && (
+        <>
+          <Loader2 size={32} className="mx-auto animate-spin text-primary-400" />
+          <p className="text-sm text-slate-300">Pulling your latest Garmin data…</p>
+          <p className="text-xs text-slate-500">It’s running in the cloud — your app will update automatically when it finishes.</p>
+        </>
+      )}
+      {phase === 'done' && (
+        <>
+          <CheckCircle2 size={32} className="mx-auto text-emerald-400" />
+          <p className="text-sm text-emerald-400">{message}</p>
+        </>
+      )}
+      {phase === 'error' && (
+        <>
+          <XCircle size={32} className="mx-auto text-rose-400" />
+          <p className="text-sm text-rose-400">{message}</p>
+        </>
+      )}
+      {(phase === 'done' || phase === 'error') && (
+        <div className="flex items-center justify-center gap-4 text-xs">
+          <button type="button" onClick={() => void pull()} className="text-primary-400 underline">
+            Pull again
+          </button>
+          {run?.url && (
+            <a href={run.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-slate-400">
+              Run log <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
       )}
     </div>
   )
