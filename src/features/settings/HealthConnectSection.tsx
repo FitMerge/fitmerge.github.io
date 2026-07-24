@@ -105,7 +105,7 @@ export default function HealthConnectSection() {
     <Card className="space-y-3">
       <h2 className="text-sm font-semibold text-slate-200">Connect health data</h2>
       <p className="text-sm text-slate-400">
-        Import weight and workouts from Apple Health, Garmin, or a FitMerge JSON file.
+        Import weight and workouts from Apple Health, Garmin, or a Rung JSON file.
       </p>
 
       {(storedWeights > 0 || storedSessions > 0 || storedHealthDays > 0) && (
@@ -197,13 +197,13 @@ export default function HealthConnectSection() {
             <p>
               Connect website → export your weight or activities CSV, or run{' '}
               <code className="rounded bg-slate-800 px-1 py-0.5">scripts/garmin-sync.py</code> (see README) to
-              generate a FitMerge JSON file directly.
+              generate a Rung JSON file directly.
             </p>
           </div>
           <div>
             <p className="font-semibold text-slate-300">3. Claude / MCP</p>
             <p>
-              Connect a Garmin MCP server to Claude and ask it to produce a FitMerge JSON file, then import it
+              Connect a Garmin MCP server to Claude and ask it to produce a Rung JSON file, then import it
               here.
             </p>
           </div>

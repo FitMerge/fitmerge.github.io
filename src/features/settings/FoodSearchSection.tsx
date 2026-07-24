@@ -39,7 +39,7 @@ export default function FoodSearchSection() {
       {open && (
         <>
           <p className="text-xs text-slate-500">
-            FitMerge searches its own food library first, then a free US government food database.
+            Rung searches its own food library first, then a free US government food database.
             That shared database limits how often everyone can use it. Getting your own free pass
             (about 30 seconds) removes that limit for you.
           </p>

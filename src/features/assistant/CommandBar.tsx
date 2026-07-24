@@ -92,7 +92,7 @@ export default function CommandBar({ onNavigate, onDone }: CommandBarProps) {
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
       <div className="flex items-center gap-1.5 text-xs font-medium text-primary-300">
         <Sparkles size={14} />
-        Tell FitMerge what to log
+        Tell Rung what to log
       </div>
 
       <form

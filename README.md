@@ -1,4 +1,4 @@
-# FitMerge
+# Rung
 
 One app for nutrition **and** training — the macro-tracking core of MyFitnessPal merged
 with the customizable workout plans of a personal training coach, built as a mobile-first
@@ -48,28 +48,28 @@ installable PWA.
 - Import weigh-ins, workouts, and **dozens of daily Garmin metrics** — training readiness,
   endurance & hill scores, fitness age, race-time predictions, Body Battery, full sleep stages,
   HRV, stress, respiration, VO₂ max, body composition and more — from an **Apple Health** export,
-  a **Garmin Connect** CSV, or a documented **FitMerge JSON** file. All parsed locally in the
+  a **Garmin Connect** CSV, or a documented **Rung JSON** file. All parsed locally in the
   browser, nothing is uploaded anywhere. Every metric renders as a grouped, tappable **trend
   chart**. See [Connect Apple Health & Garmin](#connect-apple-health--garmin) below.
 
 ## Connect Apple Health & Garmin
 
-FitMerge's **Settings → Connect health data** card imports weigh-ins and workouts from three
+Rung's **Settings → Connect health data** card imports weigh-ins and workouts from three
 sources. All parsing happens locally in the browser — nothing is uploaded to a server.
 
 ### Apple Health
 
 1. Open the **Health** app on your iPhone → tap your profile picture (top right) → **Export
    All Health Data**.
-2. AirDrop or otherwise transfer the resulting `export.zip` to the device running FitMerge.
-3. In FitMerge, go to **Settings → Connect health data → Import file** and pick the zip (or
+2. AirDrop or otherwise transfer the resulting `export.zip` to the device running Rung.
+3. In Rung, go to **Settings → Connect health data → Import file** and pick the zip (or
    the `export.xml` inside it). Body weight, body fat percentage, and workouts are extracted.
 
 ### Garmin Connect (CSV)
 
 1. On [connect.garmin.com](https://connect.garmin.com), open **Reports** and export either a
    **weight** history CSV or an **activities** CSV.
-2. In FitMerge, **Settings → Connect health data → Import file** and pick the CSV. FitMerge
+2. In Rung, **Settings → Connect health data → Import file** and pick the CSV. Rung
    detects which kind of export it is from the header row.
 
 ### Garmin Connect (`garmin-sync.py` script)
@@ -89,7 +89,7 @@ wellness + performance metrics — into a single file:
 
 ```bash
 pip install garminconnect
-python3 scripts/garmin-sync.py --days 90 --out fitmerge-import.json
+python3 scripts/garmin-sync.py --days 90 --out rung-import.json
 ```
 
 The daily metrics land in `Progress → Health metrics`, grouped into **Training & performance,
@@ -102,32 +102,32 @@ up with no code change.
 
 Credentials come from the `GARMIN_EMAIL` / `GARMIN_PASSWORD` environment variables (or you'll
 be prompted). The session token is cached locally so you won't be re-prompted every run. Then
-import the resulting `fitmerge-import.json` the same way as any other file.
+import the resulting `rung-import.json` the same way as any other file.
 
 #### Auto-sync (no manual import)
 
-If you've connected sync (see below), the same script can write **straight into your FitMerge
+If you've connected sync (see below), the same script can write **straight into your Rung
 account** with `--firebase`, so every device updates itself automatically — no file, no import
 step. Schedule it nightly and your Garmin data just shows up.
 
 ```bash
 pip install garminconnect firebase-admin
 python3 scripts/garmin-sync.py --days 90 --firebase \
-    --service-account serviceAccount.json --uid YOUR_FITMERGE_UID
+    --service-account serviceAccount.json --uid YOUR_RUNG_UID
 ```
 
 - **`serviceAccount.json`** — in the [Firebase console](https://console.firebase.google.com/),
   open **Project settings → Service accounts → Generate new private key**. Keep it private; it
   stays on your computer.
-- **`YOUR_FITMERGE_UID`** — shown in the app under **Settings → Sync → Automate Garmin import**
+- **`YOUR_RUNG_UID`** — shown in the app under **Settings → Sync → Automate Garmin import**
   (tap to copy) once you're signed in, and in the Firebase console under **Authentication → Users**.
   Both values can also be passed via the `FIREBASE_SERVICE_ACCOUNT` / `FIREBASE_UID` env vars.
 - The push is **read-merge-write**: your existing cloud data (app-logged workouts, weigh-ins, other
   days of metrics) is preserved, Garmin data is folded in, and re-runs are **idempotent** — the
   same activity is never imported twice.
 - **Schedule it:** on Windows use Task Scheduler to run the command daily; on macOS/Linux add a
-  `cron` entry (e.g. `0 6 * * * cd /path/to/FitMerge && python3 scripts/garmin-sync.py --days 3
-  --firebase --service-account serviceAccount.json --uid YOUR_FITMERGE_UID`).
+  `cron` entry (e.g. `0 6 * * * cd /path/to/Rung && python3 scripts/garmin-sync.py --days 3
+  --firebase --service-account serviceAccount.json --uid YOUR_RUNG_UID`).
 
 Run `python3 scripts/garmin-sync.py --self-test` to sanity-check the script offline (no network
 or `garminconnect`/`firebase-admin` install needed) — this validates both the JSON-building and
@@ -138,13 +138,13 @@ the cloud-merge logic, and is what CI runs.
 If you'd rather have Claude do the pull: install a community Garmin MCP server in Claude
 Desktop (e.g. [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp) or
 [eddmann/garmin-connect-mcp](https://github.com/eddmann/garmin-connect-mcp)), then ask Claude
-to emit a FitMerge JSON file using the schema below and import the result.
+to emit a Rung JSON file using the schema below and import the result.
 
 **Example prompt:** *"Using the Garmin MCP server, pull my weigh-ins, activities, and daily
 health metrics (steps, sleep, resting HR, HRV, stress, Body Battery, VO₂ max, SpO₂) from the
-last 90 days and write them to `fitmerge-import.json` in the FitMerge JSON schema below."*
+last 90 days and write them to `rung-import.json` in the Rung JSON schema below."*
 
-**FitMerge JSON schema (version 1):**
+**Rung JSON schema (version 1):**
 
 ```json
 {
@@ -194,7 +194,7 @@ Re-importing is safe — weigh-ins replace same-date entries, previously-importe
 
 ## Sync across devices (Google login)
 
-FitMerge works fully offline with no account — everything is stored locally in the
+Rung works fully offline with no account — everything is stored locally in the
 browser. If you want the same nutrition, workouts, and body data on more than one
 device, **Settings → Sync across devices** lets you connect your own free Firebase
 project and sign in with Google; this is entirely optional and additive.

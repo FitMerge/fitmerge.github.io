@@ -1,4 +1,4 @@
-// Shared domain types for FitMerge.
+// Shared domain types for Rung.
 // Dates are stored as ISO date strings 'YYYY-MM-DD'.
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
@@ -112,7 +112,7 @@ export type WorkoutSession = {
   startedAt: number
   finishedAt?: number
   entries: WorkoutSessionEntry[]
-  /** True for sessions created via Health Data Connect import (Apple Health, Garmin, FitMerge JSON). */
+  /** True for sessions created via Health Data Connect import (Apple Health, Garmin, Rung JSON). */
   imported?: boolean
   /** Minutes — used for imported sessions where entries (and thus timers) are empty. */
   durationMin?: number

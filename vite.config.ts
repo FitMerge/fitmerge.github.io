@@ -30,9 +30,9 @@ export default defineConfig({
       },
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'FitMerge',
-        short_name: 'FitMerge',
-        description: 'Nutrition, macro photos and custom workouts in one app.',
+        name: 'Rung',
+        short_name: 'Rung',
+        description: 'Training, food and recovery in one place.',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',

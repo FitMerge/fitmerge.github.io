@@ -1,4 +1,4 @@
-// Shared types for the Health Data Connect importers (Apple Health, Garmin CSV, FitMerge JSON).
+// Shared types for the Health Data Connect importers (Apple Health, Garmin CSV, Rung JSON).
 
 /** A workout parsed from an external source, not yet turned into a WorkoutSession. */
 export type ImportedSessionInput = {
@@ -10,7 +10,7 @@ export type ImportedSessionInput = {
   distanceKm?: number
 }
 
-export type HealthImportSource = 'fitmerge-json' | 'apple-health' | 'garmin-csv'
+export type HealthImportSource = 'rung-json' | 'apple-health' | 'garmin-csv'
 
 export type HealthImportResult = {
   weights: import('../../types').BodyEntry[]
@@ -34,5 +34,5 @@ export function coerceFiniteNumber(value: unknown): number | undefined {
 export function sourceLabel(source: HealthImportSource): string {
   if (source === 'apple-health') return 'Apple Health'
   if (source === 'garmin-csv') return 'Garmin'
-  return 'FitMerge JSON'
+  return 'Rung JSON'
 }

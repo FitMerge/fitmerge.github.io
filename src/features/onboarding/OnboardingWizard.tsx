@@ -111,9 +111,9 @@ export default function OnboardingWizard() {
                 <Dumbbell size={36} />
               </div>
               <div className="space-y-2">
-                <h1 className="text-2xl font-bold text-slate-100">Welcome to FitMerge</h1>
+                <h1 className="text-2xl font-bold text-slate-100">Welcome to Rung</h1>
                 <p className="text-sm text-slate-400">
-                  Track meals, macros and workouts — all in one place.
+                  Training, food and recovery — finally in one place.
                 </p>
               </div>
 

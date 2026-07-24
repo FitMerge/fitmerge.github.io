@@ -154,7 +154,7 @@ export default function GarminConnectSection() {
               className="mt-0.5 h-4 w-4 shrink-0 accent-primary-500"
             />
             <span>
-              Garmin has no “connect an app” button, so FitMerge signs in as you to fetch your data.
+              Garmin has no “connect an app” button, so Rung signs in as you to fetch your data.
               Your login is encrypted on this device and swapped for a temporary pass as soon as it
               works. You can disconnect any time.
             </span>

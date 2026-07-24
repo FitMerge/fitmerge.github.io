@@ -41,7 +41,7 @@ export default function AiSection() {
       ) : (
         <>
           <p className="text-sm text-slate-400">
-            FitMerge can read your food photos, act as your coach, and let you log by talking. Google
+            Rung can read your food photos, act as your coach, and let you log by talking. Google
             gives this away free — it takes about a minute to switch on.
           </p>
           <ol className="list-decimal space-y-1.5 pl-4 text-sm text-slate-400">

@@ -1,6 +1,6 @@
-name: Garmin pull → FitMerge
+name: Garmin pull → Rung
 
-# Pulls recent Garmin data and pushes it straight into your FitMerge cloud account,
+# Pulls recent Garmin data and pushes it straight into your Rung cloud account,
 # so every device updates itself via the app's realtime sync. Runs two ways:
 #   • on a schedule (hourly) so data stays fresh on its own, and
 #   • on demand (workflow_dispatch) — the app's "Pull from Garmin" button triggers this.
@@ -8,7 +8,7 @@ name: Garmin pull → FitMerge
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   GARMIN_TOKENS_B64        one-line output of: python scripts/garmin-sync.py --export-tokens
 #   FIREBASE_SERVICE_ACCOUNT the full contents of your Firebase service-account JSON
-#   FIREBASE_UID             your FitMerge account id (Settings → Sync in the app)
+#   FIREBASE_UID             your Rung account id (Settings → Sync in the app)
 #   GARMIN_EMAIL / GARMIN_PASSWORD  optional fallback if the token secret ever expires
 
 on:
@@ -40,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: pip install garminconnect firebase-admin cryptography
 
-      - name: Pull Garmin → FitMerge cloud
+      - name: Pull Garmin → Rung cloud
         env:
           GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}

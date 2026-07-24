@@ -262,7 +262,7 @@ function GoalWeightSheet({ open, onClose }: { open: boolean; onClose: () => void
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <Flag size={15} className="text-primary-400" />
-          Set a target and FitMerge projects when you'll reach it from your current trend.
+          Set a target and Rung projects when you'll reach it from your current trend.
         </div>
         <NumberField
           label="Goal weight"

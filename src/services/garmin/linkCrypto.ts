@@ -12,6 +12,9 @@ import { GARMIN_LINK_PUBLIC_KEY } from '../../config/garminLink'
 
 const VERSION = 'v1'
 const HKDF_SALT = new Uint8Array(32) // fixed + non-secret; both sides must agree
+// Predates the FitMerge → Rung rename and must not change: this string is baked
+// into every link already issued, and must stay byte-identical to _HKDF_INFO in
+// scripts/garmin_crypto.py or existing Garmin links stop decrypting.
 const HKDF_INFO = new TextEncoder().encode('fitmerge-garmin-v1')
 const NONCE_BYTES = 12
 

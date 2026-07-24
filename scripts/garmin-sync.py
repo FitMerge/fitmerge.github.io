@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """garmin-sync.py — pull recent weigh-ins and activities from Garmin Connect and either write a
-FitMerge health-import JSON file (version 1) OR push straight into your FitMerge account so the
+Rung health-import JSON file (version 1) OR push straight into your Rung account so the
 app updates itself with no manual import.
 
 Two modes:
 
   1) File mode (default) — writes a JSON file you import from Settings -> "Connect health data":
          pip install garminconnect
-         python3 scripts/garmin-sync.py --days 90 --out fitmerge-import.json
+         python3 scripts/garmin-sync.py --days 90 --out rung-import.json
 
-  2) Auto-sync mode (--firebase) — writes directly to your FitMerge cloud data. The app picks it
+  2) Auto-sync mode (--firebase) — writes directly to your Rung cloud data. The app picks it
      up automatically on every device via the existing realtime sync — no file, no import step:
          pip install garminconnect firebase-admin
          python3 scripts/garmin-sync.py --days 90 --firebase \
-             --service-account serviceAccount.json --uid YOUR_FITMERGE_UID
+             --service-account serviceAccount.json --uid YOUR_RUNG_UID
 
      - serviceAccount.json comes from the Firebase console: Project settings -> Service accounts
        -> "Generate new private key". Keep it private; it never leaves your machine.
-     - YOUR_FITMERGE_UID is shown in FitMerge under Settings -> Sync (once signed in with Google),
+     - YOUR_RUNG_UID is shown in Rung under Settings -> Sync (once signed in with Google),
        and in the Firebase console under Authentication -> Users.
      - Both can also be supplied via the FIREBASE_SERVICE_ACCOUNT / FIREBASE_UID env vars.
      - The push is READ-MERGE-WRITE: your existing cloud data (app-created workouts, weigh-ins,
@@ -31,7 +31,7 @@ prompted for them. Session tokens are cached by the underlying `garth` library a
 Run `python3 scripts/garmin-sync.py --self-test` to validate the JSON-building and cloud-merge
 logic offline (no network, no garminconnect/firebase dependency needed) — this is what CI runs.
 
-Output schema (FitMerge JSON, version 1):
+Output schema (Rung JSON, version 1):
     {
       "version": 1,
       "weights": [{"date": "YYYY-MM-DD", "weightKg": number, "bodyFatPct"?: number}],
@@ -76,7 +76,7 @@ SYNC_CLIENT_ID = "garmin-sync-script"
 
 
 def build_payload(weights, sessions, health=None):
-    """Assembles + validates the version-1 FitMerge JSON payload from already-shaped rows."""
+    """Assembles + validates the version-1 Rung JSON payload from already-shaped rows."""
     health = health or []
     clean_weights = []
     for w in weights:
@@ -884,15 +884,15 @@ def self_test():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sync Garmin Connect weigh-ins and activities to FitMerge — as a JSON file or straight to your account.")
+    parser = argparse.ArgumentParser(description="Sync Garmin Connect weigh-ins and activities to Rung — as a JSON file or straight to your account.")
     parser.add_argument("--days", type=int, default=90, help="How many days back to pull (default 90)")
-    parser.add_argument("--out", type=str, default="fitmerge-import.json", help="Output file path (file mode)")
+    parser.add_argument("--out", type=str, default="rung-import.json", help="Output file path (file mode)")
     parser.add_argument("--firebase", action="store_true",
-                        help="Push straight to your FitMerge account (auto-sync) instead of writing a file")
+                        help="Push straight to your Rung account (auto-sync) instead of writing a file")
     parser.add_argument("--service-account", type=str, default=os.environ.get("FIREBASE_SERVICE_ACCOUNT"),
                         help="Path to your Firebase service-account JSON (auto-sync; or FIREBASE_SERVICE_ACCOUNT)")
     parser.add_argument("--uid", type=str, default=os.environ.get("FIREBASE_UID"),
-                        help="Your FitMerge account user id, from Settings -> Sync (auto-sync; or FIREBASE_UID)")
+                        help="Your Rung account user id, from Settings -> Sync (auto-sync; or FIREBASE_UID)")
     parser.add_argument("--all-users", action="store_true",
                         help="Sync every account that connected Garmin through the app (needs GARMIN_LINK_PRIVATE_KEY)")
     parser.add_argument("--link-worker", action="store_true",
@@ -939,7 +939,7 @@ def main():
     if args.firebase:
         if not args.service_account or not args.uid:
             print("error: --firebase requires --service-account and --uid (or the FIREBASE_SERVICE_ACCOUNT "
-                  "/ FIREBASE_UID env vars). Your uid is shown in FitMerge under Settings -> Sync.",
+                  "/ FIREBASE_UID env vars). Your uid is shown in Rung under Settings -> Sync.",
                   file=sys.stderr)
             sys.exit(2)
 
@@ -949,7 +949,7 @@ def main():
     if args.firebase:
         n_weights, n_sessions, n_health = push_to_firebase(payload, args.service_account, args.uid)
         print(
-            f"Auto-synced to your FitMerge account: {n_weights} weigh-ins and {n_health} days of "
+            f"Auto-synced to your Rung account: {n_weights} weigh-ins and {n_health} days of "
             f"metrics in the cloud; added {n_sessions} new activit{'y' if n_sessions == 1 else 'ies'}. "
             "Open the app — it updates automatically."
         )

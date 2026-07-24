@@ -1,6 +1,6 @@
 """Multi-user Garmin sync — one scheduled job serving everybody who connected.
 
-FitMerge has no backend; the only thing that can hold a Garmin session is the
+Rung has no backend; the only thing that can hold a Garmin session is the
 owner's GitHub Action. So instead of every friend forking the repo and wiring up
 their own secrets, they type their Garmin login into the app, it is sealed with a
 public key (see garmin_crypto.py), and this module — running inside that one
@@ -141,7 +141,7 @@ def isolated_tokenstore(initial_blob=None):
     Without this every account would share ~/.garminconnect and stomp on each
     other's sessions."""
     previous = os.environ.get("GARMINTOKENS")
-    path = tempfile.mkdtemp(prefix="fitmerge-garmin-")
+    path = tempfile.mkdtemp(prefix="rung-garmin-")
     try:
         if initial_blob:
             _write_tokenstore(path, initial_blob)

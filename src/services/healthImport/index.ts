@@ -1,7 +1,7 @@
 // Entry point for Health Data Connect: sniffs a picked file and routes it to the right parser.
 
 import { parseAppleHealthFile } from './appleHealth'
-import { parseFitmergeJson } from './fitmergeJson'
+import { parseRungJson } from './rungJson'
 import { parseGarminCsv } from './garminCsv'
 import type { HealthImportResult } from './types'
 
@@ -21,7 +21,7 @@ export async function detectAndParse(
 
   if (ext === 'json') {
     const text = await file.text()
-    return parseFitmergeJson(text)
+    return parseRungJson(text)
   }
 
   if (ext === 'csv') {
@@ -41,7 +41,7 @@ export async function detectAndParse(
 
   const text = await file.text()
   const trimmed = text.trimStart()
-  if (trimmed.startsWith('{')) return parseFitmergeJson(text)
+  if (trimmed.startsWith('{')) return parseRungJson(text)
   if (trimmed.startsWith('<')) return parseAppleHealthFile(file, onProgress)
   return parseGarminCsv(text)
 }

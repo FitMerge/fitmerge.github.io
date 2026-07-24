@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// FitMerge security rules.
+// Rung security rules.
 //
 // Every signed-in account gets its own private tree under /users/{uid}. Nobody
 // can read or write anyone else's data — the whole multi-user story rests on

@@ -171,7 +171,7 @@ export function formatDurationMin(ms: number): string {
 }
 
 /**
- * Duration for a session, in milliseconds. Imported sessions (Apple Health / Garmin / FitMerge
+ * Duration for a session, in milliseconds. Imported sessions (Apple Health / Garmin / Rung
  * JSON) may have no meaningful startedAt/finishedAt gap — an empty routine finished the instant
  * it started — so fall back to the reported durationMin when present.
  */

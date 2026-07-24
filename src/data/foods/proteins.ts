@@ -1,6 +1,6 @@
 import type { CommonFood } from '../commonFoods'
 
-// Curated database of lean/healthy protein foods for FitMerge.
+// Curated database of lean/healthy protein foods for Rung.
 // Macros are per 100 g, sourced from USDA FoodData Central reference values
 // (rounded to <=1 decimal). Serving sizes are realistic everyday portions.
 export const FOODS: CommonFood[] = [

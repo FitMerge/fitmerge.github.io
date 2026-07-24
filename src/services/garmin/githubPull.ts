@@ -1,7 +1,7 @@
 // Triggers the cloud Garmin-pull GitHub Actions workflow from the app and reports
 // its progress. The browser can't talk to Garmin directly (no public API, 2FA, CORS),
 // so the pull runs in GitHub Actions; here we just dispatch it and poll the run status.
-// The pulled data lands in the user's FitMerge cloud and reaches the app through the
+// The pulled data lands in the user's Rung cloud and reaches the app through the
 // existing Firestore realtime sync — this module only drives the trigger + status UI.
 
 const API = 'https://api.github.com'
