@@ -9,4 +9,4 @@
 //
 // Empty string disables the in-app Garmin connect flow entirely.
 export const GARMIN_LINK_PUBLIC_KEY =
-  'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEH8YY5u+dv0rFuLLBzBI6rF/YAC7aPGLgNlKYGRIk+6+gWLUzxXEc8/T3w9Dc+Uda+pRpk52/ah0gRKGbk5wSaQ=='
+  'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE6QmLVFQV/QsQUdcH1NeZt0MAEUNAAWMZngU8YkxMSdvJ1UgntW4Q0W8kQagle+soKJ2XeLaf+rW3K4wqSWNtvQ=='
