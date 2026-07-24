@@ -253,6 +253,7 @@ const settings: StoreAdapter = {
       githubToken: s.githubToken,
       githubRepo: s.githubRepo,
       availableEquipment: s.availableEquipment,
+      restTimerSound: s.restTimerSound,
     }
   },
   apply(data) {
@@ -263,6 +264,7 @@ const settings: StoreAdapter = {
       waterGoalMl: (data.waterGoalMl as number | undefined) ?? prev.waterGoalMl,
       onboarded: (data.onboarded as boolean | undefined) ?? prev.onboarded,
       availableEquipment: (data.availableEquipment as string[] | undefined) ?? prev.availableEquipment,
+      restTimerSound: (data.restTimerSound as boolean | undefined) ?? prev.restTimerSound,
       // `||` (not `??`) so an empty incoming value keeps the existing local one.
       geminiApiKey: (data.geminiApiKey as string | undefined) || prev.geminiApiKey,
       usdaApiKey: (data.usdaApiKey as string | undefined) || prev.usdaApiKey,

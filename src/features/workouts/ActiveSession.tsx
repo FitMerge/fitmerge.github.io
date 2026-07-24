@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Calculator, Info, MoreVertical, Repeat, Trash2, Trophy } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
@@ -20,10 +20,15 @@ import {
   lastWeightForExercise,
   previousSessionSets,
   priorBest1RM,
+  priorBestSetVolume,
+  priorBestWeight,
   totalSetsDone,
   totalVolume,
   weightUnitLabel,
 } from './utils'
+import { detectPRs, type PRBars } from './prDetect'
+import PRToast, { type PRCelebration } from './PRToast'
+import { beep, primeAudio, vibrate } from '../../lib/beep'
 import type { ReactNode } from 'react'
 import type { Exercise, SetLog, WorkoutSessionEntry } from '../../types'
 
@@ -42,6 +47,8 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const setActiveSessionId = useWorkoutsStore((s) => s.setActiveSessionId)
   const completeProgramDay = useWorkoutsStore((s) => s.completeProgramDay)
   const units = useSettingsStore((s) => s.units)
+  const restTimerSound = useSettingsStore((s) => s.restTimerSound)
+  const setRestTimerSound = useSettingsStore((s) => s.setRestTimerSound)
 
   const session = sessions.find((s) => s.id === sessionId)
   const routine = useMemo(
@@ -59,6 +66,11 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   // Exercise ids whose action row / note editor is expanded.
   const [expandedActions, setExpandedActions] = useState<Set<string>>(() => new Set())
   const [plateWeight, setPlateWeight] = useState<number | null>(null)
+  const [prCelebration, setPrCelebration] = useState<PRCelebration | null>(null)
+  // Guards the rest-timer alert so it dings exactly once per timer, and gives each
+  // PR celebration a unique id.
+  const restAlerted = useRef(false)
+  const prSeq = useRef(0)
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -72,6 +84,17 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     }, 1000)
     return () => clearTimeout(t)
   }, [restTimer])
+
+  // Ding + buzz once when the rest timer reaches zero (if the user has it on).
+  useEffect(() => {
+    if (restTimer && restTimer.secondsLeft <= 0 && !restAlerted.current) {
+      restAlerted.current = true
+      if (restTimerSound) {
+        beep()
+        vibrate([120, 60, 120])
+      }
+    }
+  }, [restTimer, restTimerSound])
 
   // Per-exercise reference data: previous session's sets (ghost hints) and the
   // est-1RM bar a new set must clear to count as a personal record.
@@ -87,6 +110,20 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     const map: Record<string, number> = {}
     for (const e of session?.entries ?? []) {
       map[e.exerciseId] = priorBest1RM(sessions, e.exerciseId, session?.id)
+    }
+    return map
+  }, [sessions, session?.entries, session?.id])
+
+  // All-time bars (weight / est-1RM / best-set volume) a completed set must beat
+  // to trigger a personal-record celebration.
+  const priorBarsByExercise = useMemo(() => {
+    const map: Record<string, PRBars> = {}
+    for (const e of session?.entries ?? []) {
+      map[e.exerciseId] = {
+        best1rm: priorBest1RM(sessions, e.exerciseId, session?.id),
+        bestWeight: priorBestWeight(sessions, e.exerciseId, session?.id),
+        bestVolume: priorBestSetVolume(sessions, e.exerciseId, session?.id),
+      }
     }
     return map
   }, [sessions, session?.entries, session?.id])
@@ -145,10 +182,20 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   }
 
   function patchSet(exerciseId: string, setIdx: number, patch: Partial<SetLog>) {
+    // Entering a weight cascades to the later sets you haven't completed yet, so
+    // you don't re-type the same load for every set of an exercise.
+    const cascadeWeight = 'weight' in patch ? (patch.weight as number) : undefined
     patchEntries(
       session!.entries.map((e) =>
         e.exerciseId === exerciseId
-          ? { ...e, sets: e.sets.map((s, i) => (i === setIdx ? { ...s, ...patch } : s)) }
+          ? {
+              ...e,
+              sets: e.sets.map((s, i) => {
+                if (i === setIdx) return { ...s, ...patch }
+                if (cascadeWeight !== undefined && i > setIdx && !s.done) return { ...s, weight: cascadeWeight }
+                return s
+              }),
+            }
           : e,
       ),
     )
@@ -213,9 +260,37 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     })
   }
 
-  function handleCheckedOn(exerciseId: string) {
+  function handleCheckedOn(exerciseId: string, setIdx: number) {
+    // Start the rest timer, and prime audio now (this is a user gesture) so the
+    // end-of-rest ding is allowed to play later.
     const total = restSecFor(exerciseId)
+    restAlerted.current = false
+    primeAudio()
     setRestTimer({ total, secondsLeft: total })
+    checkForPRs(exerciseId, setIdx)
+  }
+
+  // Celebrate when the just-completed set beats a personal record — bars are the
+  // max of all-time history and what's already been hit earlier this session.
+  function checkForPRs(exerciseId: string, setIdx: number) {
+    const entry = session!.entries.find((e) => e.exerciseId === exerciseId)
+    const set = entry?.sets[setIdx]
+    if (!entry || !set || (set.type && set.type !== 'normal')) return
+    const priors = priorBarsByExercise[exerciseId] ?? { best1rm: 0, bestWeight: 0, bestVolume: 0 }
+    // Fold in the best already logged earlier this session so escalating sets each
+    // celebrate a genuinely new record rather than re-firing.
+    const bars: PRBars = { ...priors }
+    entry.sets.forEach((s, i) => {
+      if (i === setIdx || !s.done || !isWorkingSet(s)) return
+      bars.best1rm = Math.max(bars.best1rm, epley1RM(s.weight, s.reps))
+      bars.bestWeight = Math.max(bars.bestWeight, s.weight)
+      bars.bestVolume = Math.max(bars.bestVolume, s.weight * s.reps)
+    })
+    const hits = detectPRs(set.weight, set.reps, bars)
+    if (hits.length > 0) {
+      setPrCelebration({ id: ++prSeq.current, exerciseName: getExerciseById(exerciseId)?.name ?? 'Exercise', hits })
+      vibrate(60)
+    }
   }
 
   function finishSession() {
@@ -344,7 +419,7 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
                       previous={prevSets?.[idx]}
                       isPR={prIdx === idx}
                       onChange={(patch) => patchSet(entry.exerciseId, idx, patch)}
-                      onCheckedOn={() => handleCheckedOn(entry.exerciseId)}
+                      onCheckedOn={() => handleCheckedOn(entry.exerciseId, idx)}
                     />
                   ))}
                 </div>
@@ -371,6 +446,11 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         <RestTimerBar
           secondsLeft={restTimer.secondsLeft}
           totalSeconds={restTimer.total}
+          soundOn={restTimerSound}
+          onToggleSound={() => {
+            primeAudio()
+            setRestTimerSound(!restTimerSound)
+          }}
           onAddTime={() => setRestTimer((r) => (r ? { total: r.total + 15, secondsLeft: r.secondsLeft + 15 } : r))}
           onSkip={() => setRestTimer(null)}
         />
@@ -387,6 +467,8 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
           setSwapId(null)
         }}
       />
+
+      <PRToast celebration={prCelebration} units={units} onDone={() => setPrCelebration(null)} />
 
       <ExerciseDetailSheet exerciseId={detailId} onClose={() => setDetailId(null)} />
 

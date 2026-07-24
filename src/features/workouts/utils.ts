@@ -89,6 +89,44 @@ export function priorBest1RM(
   return best
 }
 
+/** Heaviest single-set weight ever lifted on an exercise before `excludeSessionId`. */
+export function priorBestWeight(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+  excludeSessionId?: string,
+): number {
+  let best = 0
+  for (const session of sessions) {
+    if (!session.finishedAt || session.id === excludeSessionId) continue
+    const entry = session.entries.find((e) => e.exerciseId === exerciseId)
+    if (!entry) continue
+    for (const set of entry.sets) {
+      if (!isWorkingSet(set)) continue
+      best = Math.max(best, set.weight)
+    }
+  }
+  return best
+}
+
+/** Best single-set volume (weight × reps) ever on an exercise before `excludeSessionId`. */
+export function priorBestSetVolume(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+  excludeSessionId?: string,
+): number {
+  let best = 0
+  for (const session of sessions) {
+    if (!session.finishedAt || session.id === excludeSessionId) continue
+    const entry = session.entries.find((e) => e.exerciseId === exerciseId)
+    if (!entry) continue
+    for (const set of entry.sets) {
+      if (!isWorkingSet(set)) continue
+      best = Math.max(best, set.weight * set.reps)
+    }
+  }
+  return best
+}
+
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 export function weekdayLabels(): string[] {

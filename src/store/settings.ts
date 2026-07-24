@@ -21,6 +21,8 @@ type SettingsState = {
   /** Equipment the user owns, used to filter exercise-swap suggestions. undefined
    * = no preference (everything available); Bodyweight is always available. */
   availableEquipment?: string[]
+  /** Play a ding + buzz when the rest timer hits zero. */
+  restTimerSound: boolean
   /** Epoch ms of the last successful manual Garmin pull trigger. */
   lastGarminPullAt?: number
   setGoals: (goals: Goals) => void
@@ -34,6 +36,7 @@ type SettingsState = {
   setGithubToken: (token: string) => void
   setGithubRepo: (repo: string) => void
   setAvailableEquipment: (list: string[]) => void
+  setRestTimerSound: (on: boolean) => void
   setLastGarminPullAt: (ts: number) => void
 }
 
@@ -49,6 +52,7 @@ export const useSettingsStore = create<SettingsState>()(
       onboarded: false,
       githubToken: '',
       githubRepo: '',
+      restTimerSound: true,
       setGoals: (goals) => set({ goals }),
       setUnits: (units) => set({ units }),
       setProfile: (patch) => set({ profile: { ...get().profile, ...patch } }),
@@ -60,6 +64,7 @@ export const useSettingsStore = create<SettingsState>()(
       setGithubToken: (token) => set({ githubToken: token }),
       setGithubRepo: (repo) => set({ githubRepo: repo }),
       setAvailableEquipment: (list) => set({ availableEquipment: list }),
+      setRestTimerSound: (on) => set({ restTimerSound: on }),
       setLastGarminPullAt: (ts) => set({ lastGarminPullAt: ts }),
     }),
     { name: 'fm-settings' },
