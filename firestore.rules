@@ -21,9 +21,34 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
+    // Garmin login, sealed in the browser before it ever gets here (see
+    // src/services/garmin/linkCrypto.ts). WRITE-ONLY from the app: you can hand
+    // your credentials to the sync job, but nothing — not even your own signed-in
+    // session — can read them back out. The job uses the Admin SDK, which
+    // bypasses these rules, so it can still read them.
+    match /users/{uid}/garmin/cred {
+      allow read: if false;
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(
+             ['secret', 'kind', 'mfaSecret', 'requestedAt', 'backfillDays', 'pullRequestedAt'])
+        && request.resource.data.secret is string
+        && request.resource.data.secret.size() < 12000;
+      // Disconnecting must keep working even if the account is later restricted.
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Connection progress, written by the sync job and shown in the app.
+    match /users/{uid}/garmin/status {
+      allow read: if isOwner(uid);
+      allow create, update: if false;
+      // Disconnecting clears this alongside the credential, so the app doesn't
+      // keep reporting "connected" with nothing behind it.
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
     // Everything else is denied. Any new per-user data needs its own rule
-    // above — deliberately no /users/{uid}/{doc=**} wildcard, so a future
-    // credentials document can be made write-only without this overriding it.
+    // above — deliberately no /users/{uid}/{doc=**} wildcard, which would
+    // otherwise override the write-only credential rule above.
     match /{document=**} {
       allow read, write: if false;
     }

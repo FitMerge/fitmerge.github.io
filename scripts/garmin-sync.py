@@ -238,8 +238,8 @@ def merge_health(existing, health):
     return {"days": out}
 
 
-def push_to_firebase(payload, service_account, uid):
-    """Read-merge-write the payload into users/{uid}/state/{body,workouts,health}."""
+def init_firebase(service_account):
+    """Initialise firebase-admin once and hand back a Firestore client."""
     try:
         import firebase_admin
         from firebase_admin import credentials, firestore
@@ -254,10 +254,24 @@ def push_to_firebase(payload, service_account, uid):
 
     if not firebase_admin._apps:
         firebase_admin.initialize_app(credentials.Certificate(service_account))
-    db = firestore.client()
+    return firestore.client()
+
+
+def push_to_firebase(payload, service_account, uid):
+    """Read-merge-write the payload into users/{uid}/state/{body,workouts,health}."""
+    return push_payload(init_firebase(service_account), uid, payload)
+
+
+def push_payload(db, uid, payload):
+    """The actual merge+write, against an existing Firestore client. Split out so
+    the multi-user runner can reuse one connection across everybody."""
+    from firebase_admin import firestore
 
     def ref(store):
         return db.collection("users").document(uid).collection("state").document(store)
+
+    # Raw stored JSON per store, so an unchanged run can skip the write entirely.
+    previous = {}
 
     def read(store):
         snap = ref(store).get()
@@ -266,6 +280,7 @@ def push_to_firebase(payload, service_account, uid):
         data = snap.to_dict() or {}
         p = data.get("payload")
         if isinstance(p, str):
+            previous[store] = p
             try:
                 return json.loads(p)
             except json.JSONDecodeError:
@@ -273,11 +288,21 @@ def push_to_firebase(payload, service_account, uid):
         return p if isinstance(p, dict) else None
 
     def write(store, obj):
+        """Write only when something actually changed.
+
+        Most scheduled runs find nothing new. Rewriting the document anyway would
+        push a full copy of it — the health store grows to hundreds of KB — down
+        to every signed-in device on every run, which is the dominant bandwidth
+        cost once more than one person is syncing."""
+        encoded = json.dumps(obj, separators=(",", ":"))
+        if previous.get(store) == encoded:
+            return False
         ref(store).set({
-            "payload": json.dumps(obj, separators=(",", ":")),
+            "payload": encoded,
             "clientId": SYNC_CLIENT_ID,
             "updatedAt": firestore.SERVER_TIMESTAMP,
         })
+        return True
 
     body = merge_body(read("body"), payload["weights"])
     write("body", body)
@@ -420,8 +445,11 @@ def _garmin_login():
     return client
 
 
-def fetch_from_garmin(days):
-    client = _garmin_login()
+def fetch_from_garmin(days, client=None):
+    # `client` lets the multi-user runner supply an already-logged-in session for
+    # a specific person; left as None this logs in the usual single-user way.
+    if client is None:
+        client = _garmin_login()
 
     end = date.today()
     start = end - timedelta(days=days)
@@ -865,6 +893,12 @@ def main():
                         help="Path to your Firebase service-account JSON (auto-sync; or FIREBASE_SERVICE_ACCOUNT)")
     parser.add_argument("--uid", type=str, default=os.environ.get("FIREBASE_UID"),
                         help="Your FitMerge account user id, from Settings -> Sync (auto-sync; or FIREBASE_UID)")
+    parser.add_argument("--all-users", action="store_true",
+                        help="Sync every account that connected Garmin through the app (needs GARMIN_LINK_PRIVATE_KEY)")
+    parser.add_argument("--link-worker", action="store_true",
+                        help="Finish pending Garmin connections, including the live 2-factor handshake")
+    parser.add_argument("--max-users", type=int, default=10,
+                        help="Safety cap on how many accounts one run will process (default 10)")
     parser.add_argument("--self-test", action="store_true", help="Run offline validation and exit (no network)")
     parser.add_argument("--export-tokens", action="store_true",
                         help="Print the cached Garmin session as base64 for a GitHub Actions secret (GARMIN_TOKENS_B64)")
@@ -875,6 +909,32 @@ def main():
 
     if args.export_tokens:
         sys.exit(export_tokens())
+
+    # Multi-user modes: one job serving everyone who connected Garmin in the app.
+    # These never touch the single-user path below, so an existing --uid setup
+    # keeps working exactly as before.
+    if args.all_users or args.link_worker:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from garmin_multi import link_worker, load_private_key_from_env, sync_all_users
+
+        if not args.service_account:
+            print("error: --all-users/--link-worker need --service-account (or FIREBASE_SERVICE_ACCOUNT).",
+                  file=sys.stderr)
+            sys.exit(2)
+        private_key = load_private_key_from_env()
+        if private_key is None:
+            print("error: set the GARMIN_LINK_PRIVATE_KEY secret (see scripts/garmin-keygen.py).",
+                  file=sys.stderr)
+            sys.exit(2)
+
+        db = init_firebase(args.service_account)
+        if args.link_worker:
+            link_worker(db, private_key, max_users=max(1, min(args.max_users, 3)))
+        else:
+            # Skip the owner when they already sync through the single-user path,
+            # so their data isn't pulled twice in the same run.
+            sync_all_users(db, private_key, days=args.days, skip_uid=args.uid, max_users=args.max_users)
+        return
 
     if args.firebase:
         if not args.service_account or not args.uid:

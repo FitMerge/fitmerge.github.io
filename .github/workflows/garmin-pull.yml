@@ -29,6 +29,7 @@ concurrency:
 jobs:
   pull:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +38,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install garminconnect firebase-admin
+        run: pip install garminconnect firebase-admin cryptography
 
       - name: Pull Garmin → FitMerge cloud
         env:
@@ -54,4 +55,22 @@ jobs:
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/sa.json"
           python scripts/garmin-sync.py --days "$DAYS" --firebase \
+            --service-account "$RUNNER_TEMP/sa.json" --uid "$FIREBASE_UID"
+
+      # Everyone who connected Garmin from inside the app. Skips the owner (they
+      # just synced above) and is a no-op until the link key secret exists, so
+      # this step is harmless before the feature is switched on.
+      - name: Pull Garmin → everyone else who connected in the app
+        if: always()
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GARMIN_LINK_PRIVATE_KEY: ${{ secrets.GARMIN_LINK_PRIVATE_KEY }}
+          FIREBASE_UID: ${{ secrets.FIREBASE_UID }}
+        run: |
+          if [ -z "$GARMIN_LINK_PRIVATE_KEY" ]; then
+            echo "No GARMIN_LINK_PRIVATE_KEY secret — in-app Garmin connect is off. Skipping."
+            exit 0
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/sa.json"
+          python scripts/garmin-sync.py --all-users --days 3 \
             --service-account "$RUNNER_TEMP/sa.json" --uid "$FIREBASE_UID"

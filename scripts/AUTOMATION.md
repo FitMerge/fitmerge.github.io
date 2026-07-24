@@ -1,3 +1,46 @@
+# Sharing FitMerge: letting friends connect their own Garmin
+
+Anyone you share the app link with signs in with Google and gets their own private,
+synced account. They can also connect **their own** Garmin watch from inside the app —
+no GitHub account, no fork, no secrets, no service account on their side. Their login is
+encrypted in their browser and can only be opened by the sync job running in *your*
+repository.
+
+**One-time setup (owner only)**
+
+1. **Mint the keypair** that protects those logins:
+   ```
+   pip install cryptography
+   python3 scripts/garmin-keygen.py
+   ```
+2. Paste the **public key** into `src/config/garminLink.ts` (safe to commit — it can only
+   encrypt) and commit it.
+3. Add the **private key** as the repository secret `GARMIN_LINK_PRIVATE_KEY`
+   (Settings → Secrets and variables → Actions). Never commit it.
+4. Make sure `FIREBASE_SERVICE_ACCOUNT` is already set (it is, if your own hourly pull
+   works), and that both workflows are on the repo's default branch.
+
+That's all. From then on:
+
+- `garmin-link.yml` runs every 5 minutes and finishes new connections, including the
+  live two-factor handshake. A run with nobody waiting exits in seconds.
+- `garmin-pull.yml` keeps doing your own hourly pull, then syncs everyone else who has
+  connected. It skips your `FIREBASE_UID` so you are never pulled twice.
+
+**What is stored, and where.** A friend's Garmin password is encrypted in their browser
+and lives — as ciphertext — in `users/{uid}/garmin/cred` only until the first successful
+sign-in, at which point the sync job replaces it with a Garmin *session token* and
+deletes the password. Security rules make that document unreadable to the app itself;
+only the Actions runner, holding `GARMIN_LINK_PRIVATE_KEY`, can open it. Rotating the
+keypair invalidates everything and asks each person to reconnect.
+
+Be straight with people about the trade-off: Garmin offers no "connect an app" option, so
+this really is signing in on their behalf, and you — as the holder of the private key and
+the service account — can technically decrypt what the job decrypts. The app says as much
+before anyone types a password.
+
+---
+
 # Cloud pull — phone button + hourly, no PC needed
 
 This runs the Garmin pull on GitHub's servers instead of your computer, so it works
@@ -26,9 +69,13 @@ and every device updates itself via sync.
    Settings → Pull from Garmin, paste your `owner/repo` and the token, and Save.
 
 That's it. The hourly schedule runs on its own; the button triggers an immediate pull.
-The token you paste into the app stays on that device only — it is never synced to the
-cloud. If a scheduled run ever fails with a Garmin login error, re-run steps 1–2 to
-refresh `GARMIN_TOKENS_B64` (the cached login lasts ~a year).
+The token you paste into the app is stored privately in your own account, so it works on
+all your devices; nobody else can read it. If a scheduled run ever fails with a Garmin
+login error, re-run steps 1–2 to refresh `GARMIN_TOKENS_B64` (the cached login lasts
+~a year).
+
+> This self-hosted route is only needed for the repository owner. Everyone else should use
+> the in-app **Garmin watch → Connect** flow described at the top of this file.
 
 ---
 

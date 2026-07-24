@@ -1,0 +1,51 @@
+name: Garmin link worker
+
+# Finishes first-time Garmin connections made from inside the app.
+#
+# Kept separate from the hourly data pull for two reasons: it must run often
+# enough that connecting feels quick, and a two-factor login has to be completed
+# in one live exchange (Garmin's codes expire in minutes), so this job may sit
+# waiting for a few minutes while the hourly pull carries on independently.
+#
+# A run with nobody waiting exits in seconds.
+#
+# Required repository secrets:
+#   GARMIN_LINK_PRIVATE_KEY   from: python3 scripts/garmin-keygen.py
+#   FIREBASE_SERVICE_ACCOUNT  the full contents of your service-account JSON
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *' # every 5 minutes — GitHub's shortest allowed interval
+
+# Deliberately a different concurrency group from garmin-pull, so a link waiting
+# on someone's 2-factor code never blocks the scheduled data sync.
+concurrency:
+  group: garmin-link
+  cancel-in-progress: false
+
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install garminconnect firebase-admin cryptography
+
+      - name: Finish pending Garmin connections
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GARMIN_LINK_PRIVATE_KEY: ${{ secrets.GARMIN_LINK_PRIVATE_KEY }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] || [ -z "$GARMIN_LINK_PRIVATE_KEY" ]; then
+            echo "Garmin link worker is not configured yet — skipping."
+            exit 0
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/sa.json"
+          python scripts/garmin-sync.py --link-worker --service-account "$RUNNER_TEMP/sa.json"

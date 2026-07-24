@@ -25,8 +25,30 @@ export default function GarminPullSection() {
 
   const [tokenDraft, setTokenDraft] = useState(token)
   const [repoDraft, setRepoDraft] = useState(repo)
-  const [editing, setEditing] = useState(!configured)
+  const [editing, setEditing] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  // Self-hosting the sync in your own GitHub repo is the owner's path. Everyone
+  // else connects Garmin straight from the app (GarminConnectSection), so keep
+  // this collapsed until someone has actually set it up.
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+
+  if (!configured && !advancedOpen) {
+    return (
+      <Card>
+        <button
+          type="button"
+          onClick={() => {
+            setAdvancedOpen(true)
+            setEditing(true)
+          }}
+          className="flex w-full items-center justify-between text-xs text-slate-500"
+        >
+          <span>Advanced: run Garmin sync from my own GitHub repo</span>
+          <ChevronDown size={14} />
+        </button>
+      </Card>
+    )
+  }
 
   function saveConfig() {
     setToken(tokenDraft.trim())
