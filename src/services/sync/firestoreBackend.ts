@@ -6,6 +6,7 @@
 import {
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   onSnapshot,
   serverTimestamp,
@@ -33,7 +34,18 @@ export class FirestoreBackend implements SyncBackend {
   }
 
   async get(store: StoreName): Promise<StoreData | null> {
-    const snap = await getDoc(this.ref(store))
+    // Read from the SERVER first, not the local cache. With persistentLocalCache
+    // enabled, a plain getDoc() can resolve from a stale on-device cache — the exact
+    // failure that leaves a resumed mobile PWA showing old data after the cloud has
+    // moved on (e.g. an hourly Garmin push that landed while the phone was asleep).
+    // Reconcile must see authoritative cloud state; fall back to the cache only when
+    // the device is genuinely offline so first-load still works with no network.
+    let snap
+    try {
+      snap = await getDocFromServer(this.ref(store))
+    } catch {
+      snap = await getDoc(this.ref(store))
+    }
     if (!snap.exists()) return null
     return decodePayload((snap.data() as StoredDoc).payload)
   }

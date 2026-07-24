@@ -23,8 +23,12 @@ type AuthContextValue = {
   status: AuthStatus
   syncState: SyncState
   configured: boolean
+  /** Epoch ms of the last successful cloud reconcile, or null if not synced yet. */
+  lastSyncedAt: number | null
   signIn: () => Promise<void>
   signOut: () => Promise<void>
+  /** Force a pull from the cloud right now (merge + apply all stores). */
+  refresh: () => Promise<void>
   /** Parses + saves a pasted Firebase config. Returns false if it doesn't look valid. */
   connect: (pastedConfig: string) => boolean
   disconnect: () => void
@@ -43,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('signed-out')
   const [syncState, setSyncState] = useState<SyncState>('idle')
   const [configured, setConfigured] = useState<boolean>(() => hasFirebaseConfig())
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
 
   const mountedRef = useRef(true)
   const authUnsubRef = useRef<(() => void) | null>(null)
@@ -55,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     syncHandleRef.current?.stop()
     syncHandleRef.current = null
     setSyncState('idle')
+    setLastSyncedAt(null)
   }
 
   async function startSyncing(uid: string) {
@@ -83,9 +89,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       syncHandleRef.current = handle
       setSyncState('synced')
+      setLastSyncedAt(Date.now())
     } catch (err) {
       console.error('[sync] failed to start sync', err)
       if (generation === generationRef.current) setSyncState('error')
+    }
+  }
+
+  /** Force an immediate cloud re-pull. No-op when not actively syncing. */
+  async function refresh(): Promise<void> {
+    const handle = syncHandleRef.current
+    if (!handle) return
+    setSyncState('syncing')
+    try {
+      await handle.refresh()
+      if (!mountedRef.current) return
+      setSyncState('synced')
+      setLastSyncedAt(Date.now())
+    } catch (err) {
+      console.error('[sync] refresh failed', err)
+      if (mountedRef.current) setSyncState('error')
     }
   }
 
@@ -135,6 +158,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Runs once on mount; connect()/disconnect() manage re-attachment explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-pull from the cloud whenever the app returns to the foreground or the
+  // network comes back. Mobile PWAs (esp. iOS) freeze the process when you switch
+  // away — killing Firestore's realtime channel — and on resume they often reuse
+  // the frozen process without re-running sign-in, so a cloud write made while the
+  // phone was asleep (like an hourly Garmin push) would otherwise never arrive.
+  useEffect(() => {
+    if (status !== 'signed-in') return
+    let last = 0
+    const trigger = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - last < 3000) return // collapse the focus+visibility double-fire
+      last = now
+      void refresh()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') trigger()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', trigger)
+    window.addEventListener('online', trigger)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', trigger)
+      window.removeEventListener('online', trigger)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
 
   async function signIn() {
     setStatus('signing-in')
@@ -217,8 +269,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     status,
     syncState,
     configured,
+    lastSyncedAt,
     signIn,
     signOut,
+    refresh,
     connect,
     disconnect,
   }

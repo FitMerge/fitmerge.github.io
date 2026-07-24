@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronUp, Cloud, Copy, LogIn, LogOut } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Cloud, Copy, LogIn, LogOut, RefreshCw } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { useAuth } from '../../auth/AuthProvider'
@@ -9,7 +9,8 @@ const FIRESTORE_RULES = `match /users/{uid}/{doc=**} {
 }`
 
 export default function SyncSection() {
-  const { user, status, syncState, configured, signIn, signOut, connect, disconnect } = useAuth()
+  const { user, status, syncState, configured, lastSyncedAt, signIn, signOut, refresh, connect, disconnect } =
+    useAuth()
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
@@ -128,7 +129,18 @@ export default function SyncSection() {
       {status === 'signed-in' && user && (
         <div className="space-y-2">
           <p className="text-sm text-slate-200">{user.email ?? 'Signed in'}</p>
-          <SyncStatusLine syncState={syncState} />
+          <SyncStatusLine syncState={syncState} lastSyncedAt={lastSyncedAt} />
+          <Button
+            variant="ghost"
+            full
+            onClick={() => void refresh()}
+            disabled={syncState === 'syncing'}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <RefreshCw size={16} className={syncState === 'syncing' ? 'animate-spin' : undefined} />
+              {syncState === 'syncing' ? 'Pulling…' : 'Pull latest now'}
+            </span>
+          </Button>
           <AutoSyncSection uid={user.uid} />
           <Button variant="ghost" full onClick={() => void signOut()}>
             <span className="flex items-center justify-center gap-1.5">
@@ -231,15 +243,37 @@ function AutoSyncSection({ uid }: { uid: string }) {
   )
 }
 
-function SyncStatusLine({ syncState }: { syncState: 'idle' | 'syncing' | 'synced' | 'error' }) {
+function SyncStatusLine({
+  syncState,
+  lastSyncedAt,
+}: {
+  syncState: 'idle' | 'syncing' | 'synced' | 'error'
+  lastSyncedAt: number | null
+}) {
   if (syncState === 'synced') {
-    return <p className="text-sm text-emerald-400">Synced ✓</p>
+    return (
+      <p className="text-sm text-emerald-400">
+        Synced ✓{lastSyncedAt ? <span className="text-slate-500"> · updated {relativeTime(lastSyncedAt)}</span> : null}
+      </p>
+    )
   }
   if (syncState === 'syncing') {
     return <p className="text-sm text-slate-400">Syncing…</p>
   }
   if (syncState === 'error') {
-    return <p className="text-sm text-red-400">Sync error — check your setup</p>
+    return <p className="text-sm text-red-400">Sync error — check your connection and try Pull latest now</p>
   }
   return null
+}
+
+/** Compact "just now / 5m ago / 2h ago" label for the last cloud pull. */
+function relativeTime(ts: number): string {
+  const secs = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  if (secs < 10) return 'just now'
+  if (secs < 60) return `${secs}s ago`
+  const mins = Math.round(secs / 60)
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.round(hours / 24)}d ago`
 }

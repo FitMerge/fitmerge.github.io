@@ -15,6 +15,9 @@ const WRITE_DEBOUNCE_MS = 800
 
 export type SyncManager = {
   stop: () => void
+  /** Re-pull every store from the cloud, merge, and apply — used on foreground
+   * resume and by the manual "Pull latest now" control. Safe to call anytime. */
+  refresh: () => Promise<void>
 }
 
 function equal(a: StoreData, b: StoreData): boolean {
@@ -72,8 +75,10 @@ export async function startSync(
     )
   }
 
-  for (const adapter of STORE_ADAPTERS) {
-    // 1. Reconcile local + cloud and push the result up.
+  // Reconcile one store against the cloud: pull the latest snapshot, merge it with
+  // local, apply the result, and push the merged superset back up when it differs.
+  // Used for the initial sync AND every foreground/manual refresh.
+  const reconcile = async (adapter: StoreAdapter) => {
     let cloud: StoreData | null = null
     try {
       cloud = await backend.get(adapter.name)
@@ -94,6 +99,11 @@ export async function startSync(
       }
     }
     lastSynced.set(adapter.name, JSON.stringify(reconciled))
+  }
+
+  for (const adapter of STORE_ADAPTERS) {
+    // 1. Reconcile local + cloud and push the result up.
+    await reconcile(adapter)
 
     // 2. Remote → local.
     unsubs.push(
@@ -116,6 +126,13 @@ export async function startSync(
       for (const unsub of unsubs) unsub()
       for (const timer of timers.values()) clearTimeout(timer)
       timers.clear()
+    },
+    async refresh() {
+      if (stopped) return
+      for (const adapter of STORE_ADAPTERS) {
+        if (stopped) return
+        await reconcile(adapter)
+      }
     },
   }
 }
