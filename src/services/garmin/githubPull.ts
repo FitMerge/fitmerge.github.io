@@ -6,6 +6,10 @@
 
 const API = 'https://api.github.com'
 const WORKFLOW_FILE = 'garmin-pull.yml'
+// The link worker finishes first-time connections. It runs on a schedule too,
+// but GitHub's short crons are best-effort and routinely skip, which leaves a
+// fresh connection spinning — so whoever holds a token nudges it directly.
+const LINK_WORKFLOW_FILE = 'garmin-link.yml'
 
 export class GarminPullError extends Error {}
 
@@ -56,22 +60,40 @@ async function defaultBranch(token: string, owner: string, name: string): Promis
   return body.default_branch || 'main'
 }
 
-/** Fire the workflow_dispatch event. Resolves when GitHub accepts it (HTTP 204). */
-export async function triggerGarminPull(token: string, repo: string, days = 14): Promise<void> {
+/** Fire a workflow_dispatch event. Resolves when GitHub accepts it (HTTP 204). */
+async function dispatchWorkflow(
+  token: string,
+  repo: string,
+  workflow: string,
+  inputs?: Record<string, string>,
+): Promise<void> {
   if (!token.trim()) throw new GarminPullError('Add a GitHub token first.')
   const { owner, name } = parseRepo(repo)
   const ref = await defaultBranch(token, owner, name)
   let res: Response
   try {
-    res = await fetch(`${API}/repos/${owner}/${name}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+    res = await fetch(`${API}/repos/${owner}/${name}/actions/workflows/${workflow}/dispatches`, {
       method: 'POST',
       headers: { ...headers(token), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ref, inputs: { days: String(days) } }),
+      body: JSON.stringify(inputs ? { ref, inputs } : { ref }),
     })
   } catch {
     throw new GarminPullError('Network error reaching GitHub.')
   }
   if (!res.ok) throw new GarminPullError(await ghError(res))
+}
+
+export async function triggerGarminPull(token: string, repo: string, days = 14): Promise<void> {
+  return dispatchWorkflow(token, repo, WORKFLOW_FILE, { days: String(days) })
+}
+
+/**
+ * Start the link worker now instead of waiting for its cron. Takes no inputs —
+ * the worker picks up whoever is pending in Firestore, so this helps anyone
+ * mid-connect, not just the person who pressed it.
+ */
+export async function triggerGarminLink(token: string, repo: string): Promise<void> {
+  return dispatchWorkflow(token, repo, LINK_WORKFLOW_FILE)
 }
 
 /** Latest run of the pull workflow, so the UI can show queued → running → done. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
   disconnectGarmin,
@@ -9,6 +9,8 @@ import {
   type GarminStatus,
 } from '../../services/garmin/garminLink'
 import { garminLinkAvailable } from '../../services/garmin/linkCrypto'
+import { triggerGarminLink } from '../../services/garmin/githubPull'
+import { useSettingsStore } from '../../store/settings'
 
 const IDLE: GarminStatus = { state: 'idle', message: '', lastSyncAt: null }
 
@@ -24,6 +26,40 @@ export function useGarminLink() {
   const [status, setStatus] = useState<GarminStatus>(IDLE)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // Only the repo owner has a GitHub token, so only they can start the worker.
+  // Everyone else waits on its schedule — see `canStartWorker` below.
+  const githubToken = useSettingsStore((s) => s.githubToken)
+  const githubRepo = useSettingsStore((s) => s.githubRepo)
+  const canStartWorker = githubToken.trim().length > 0 && githubRepo.trim().length > 0
+
+  // When the connection started waiting, so the UI can show real elapsed time
+  // instead of a spinner that looks identical at 5 seconds and 5 minutes.
+  const [waitingSince, setWaitingSince] = useState<number | null>(null)
+  const [workerStarted, setWorkerStarted] = useState(false)
+
+  /**
+   * Kick the link worker so a fresh connection isn't stuck behind a cron tick.
+   * Best-effort by design: a failure here never fails the connection itself,
+   * because the scheduled run is still coming.
+   */
+  const startWorker = useCallback(async (): Promise<boolean> => {
+    if (!canStartWorker) return false
+    try {
+      await triggerGarminLink(githubToken, githubRepo)
+      setWorkerStarted(true)
+      return true
+    } catch {
+      return false
+    }
+  }, [canStartWorker, githubToken, githubRepo])
+
+  // Keep the latest startWorker without making connect/sendMfaCode re-create on
+  // every keystroke in Settings.
+  const startWorkerRef = useRef(startWorker)
+  useEffect(() => {
+    startWorkerRef.current = startWorker
+  }, [startWorker])
 
   useEffect(() => {
     if (!uid || !garminLinkAvailable()) {
@@ -43,6 +79,13 @@ export function useGarminLink() {
       unsub?.()
     }
   }, [uid])
+
+  // The wait is over once the job reaches a settled state, whichever way it went.
+  useEffect(() => {
+    if (status.state === 'linked' || status.state === 'error' || status.state === 'needs_relink') {
+      setWaitingSince(null)
+    }
+  }, [status.state])
 
   const run = useCallback(
     async (fn: () => Promise<void>) => {
@@ -65,6 +108,11 @@ export function useGarminLink() {
       await submitCredentials(uid, email, password)
       // Show progress immediately; the job replaces this within a few minutes.
       setStatus({ state: 'pending', message: 'Connecting to Garmin…', lastSyncAt: null })
+      setWaitingSince(Date.now())
+      setWorkerStarted(false)
+      // Credentials are stored before this runs, so the worker finds them
+      // whether it starts from here or from its own schedule.
+      await startWorkerRef.current()
     }),
     [uid, run],
   )
@@ -74,6 +122,10 @@ export function useGarminLink() {
       if (!uid) throw new Error('Sign in first.')
       await submitMfaCode(uid, code)
       setStatus((s) => ({ ...s, state: 'pending', message: 'Checking your code…' }))
+      setWaitingSince(Date.now())
+      // A code expires in minutes, so this leg is the one that most needs a
+      // worker running now rather than at the next cron tick.
+      await startWorkerRef.current()
     }),
     [uid, run],
   )
@@ -106,5 +158,12 @@ export function useGarminLink() {
     sendMfaCode,
     syncNow,
     disconnect,
+    /** True when this device holds a GitHub token and can start the worker itself. */
+    canStartWorker,
+    /** True once a worker run has been requested for this connection attempt. */
+    workerStarted,
+    /** When the current wait began, for showing elapsed time. */
+    waitingSince,
+    startWorker,
   }
 }

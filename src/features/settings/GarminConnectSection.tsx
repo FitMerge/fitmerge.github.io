@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckCircle2, Loader2, RefreshCw, Watch, XCircle } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
@@ -17,18 +17,48 @@ function timeAgo(ts: number): string {
 const INPUT =
   'w-full rounded-lg bg-slate-800 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500'
 
+/** How long the current connection attempt has been waiting, in plain words. */
+function elapsedLabel(since: number): string {
+  const s = Math.max(0, Math.round((Date.now() - since) / 1000))
+  if (s < 60) return `${s}s so far`
+  const m = Math.floor(s / 60)
+  return `${m} min ${s % 60}s so far`
+}
+
 /**
  * Connect Garmin without touching GitHub, secrets or a service account: the
  * login is sealed in this browser and opened only by the scheduled sync job.
  * Deliberately written for someone who has never heard the word "API".
  */
 export default function GarminConnectSection() {
-  const { available, signedIn, status, busy, error, connect, sendMfaCode, syncNow, disconnect } = useGarminLink()
+  const {
+    available,
+    signedIn,
+    status,
+    busy,
+    error,
+    connect,
+    sendMfaCode,
+    syncNow,
+    disconnect,
+    canStartWorker,
+    workerStarted,
+    waitingSince,
+    startWorker,
+  } = useGarminLink()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [understood, setUnderstood] = useState(false)
+
+  // Re-render once a second while waiting so the elapsed time actually counts up.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!waitingSince) return
+    const id = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [waitingSince])
 
   if (!available) {
     // Nothing actionable without an account, so say why rather than showing a
@@ -104,11 +134,36 @@ export default function GarminConnectSection() {
       )}
 
       {working && state !== 'needs_mfa' && (
-        <p className="flex items-start gap-1.5 text-sm text-slate-400">
-          <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-primary-400" />
-          Connecting… this usually takes a few minutes. You can leave this screen open — you may
-          need to enter a code.
-        </p>
+        <div className="space-y-2">
+          <p className="flex items-start gap-1.5 text-sm text-slate-400">
+            <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-primary-400" />
+            <span>
+              Connecting…{waitingSince ? ` ${elapsedLabel(waitingSince)}.` : ''} You can leave this
+              screen open — you may need to enter a code.
+            </span>
+          </p>
+
+          {/* The worker runs on a schedule, but GitHub's short crons skip often
+              enough that waiting on one looks indistinguishable from a hang.
+              Whoever holds a token can start it now; everyone else is told what
+              is actually happening rather than watching a bare spinner. */}
+          {canStartWorker ? (
+            workerStarted ? (
+              <p className="text-xs text-slate-500">
+                Sync job started — this usually finishes within a minute or two.
+              </p>
+            ) : (
+              <Button variant="ghost" full onClick={() => void startWorker()} disabled={busy}>
+                Start the sync job now
+              </Button>
+            )
+          ) : (
+            <p className="text-xs text-slate-500">
+              The sync job runs every few minutes and will pick this up on its own. If it is still
+              going after about ten minutes, ask whoever set up the app to start it.
+            </p>
+          )}
+        </div>
       )}
 
       {!connected && !working && state !== 'needs_mfa' && (
