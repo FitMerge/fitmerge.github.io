@@ -29,8 +29,10 @@ Each action is one object. Use ONLY these shapes; omit fields that don't apply:
 
 - Log body weight:
   {"type":"logWeight","date":"YYYY-MM-DD","weight":number,"weightUnit":"lb"|"kg","bodyFatPct":number?}
-- Log water/fluids:
-  {"type":"logWater","date":"YYYY-MM-DD","ml":number}   // convert oz/cups/liters to ml (1 cup=250ml, 1 oz=30ml)
+- Log water/fluids — give the amount in the unit the user said and DON'T convert (the app converts precisely); include exactly one of oz/ml/cups:
+  {"type":"logWater","date":"YYYY-MM-DD","oz":number}     // fluid ounces
+  {"type":"logWater","date":"YYYY-MM-DD","ml":number}     // millilitres (litres → ml: 1 L = 1000 ml)
+  {"type":"logWater","date":"YYYY-MM-DD","cups":number}   // cups
 - Log a food/meal (ESTIMATE macros for the portion described):
   {"type":"logFood","date":"YYYY-MM-DD","name":string,"mealType":"breakfast"|"lunch"|"dinner"|"snack","calories":number,"protein":number,"carbs":number,"fat":number,"qty":number?,"unit":string?}
 - Log a supplement/habit (creatine, vitamins, etc.):
