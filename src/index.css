@@ -49,6 +49,12 @@ select.text-sm {
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  /* Installed as a PWA there's no address bar to push content down, so every
+     screen's header would sit under the status bar / Dynamic Island. */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
   /* Full-screen overlays (onboarding) must clear the notch and home indicator in
      standalone PWA mode, where viewport-fit=cover lets content run under both. */
   .safe-screen {

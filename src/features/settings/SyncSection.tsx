@@ -15,7 +15,7 @@ const FIRESTORE_RULES = `match /users/{uid}/{doc=**} {
 const AUTH_DOMAIN_HINT =
   typeof window !== 'undefined' && !/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
     ? window.location.hostname
-    : 'rung.github.io'
+    : 'fitmerge.github.io'
 
 export default function SyncSection() {
   const {
