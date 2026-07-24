@@ -12,9 +12,16 @@ const Progress = lazy(() => import('./features/progress/Progress'))
 const Settings = lazy(() => import('./features/settings/Settings'))
 import OnboardingWizard from './features/onboarding/OnboardingWizard'
 import { useSettingsStore } from './store/settings'
+import { useAuth } from './auth/AuthProvider'
 
 export default function App() {
   const onboarded = useSettingsStore((s) => s.onboarded)
+  const { authResolved, status, syncState } = useAuth()
+
+  // A returning user signing in on a new device starts with empty local settings,
+  // so `onboarded` is false until their cloud settings land. Waiting for auth and
+  // the first reconcile keeps the wizard from flashing over an existing account.
+  const cloudSettling = !authResolved || status === 'signing-in' || (status === 'signed-in' && syncState === 'syncing')
 
   return (
     <>
@@ -28,7 +35,7 @@ export default function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
-      {!onboarded && <OnboardingWizard />}
+      {!onboarded && !cloudSettling && <OnboardingWizard />}
     </>
   )
 }

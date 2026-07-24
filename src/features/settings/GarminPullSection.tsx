@@ -113,7 +113,7 @@ export default function GarminPullSection() {
             className="w-full rounded-lg bg-slate-800 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
           />
           <p className="text-[11px] text-slate-500">
-            The token stays on this device only — it’s never uploaded to your FitMerge cloud.
+            Saved privately to your own account, so it works on all your devices. Nobody else can see it.
           </p>
           <div className="flex gap-2">
             <Button variant="primary" full onClick={saveConfig} disabled={!tokenDraft.trim() || !repoDraft.trim()}>

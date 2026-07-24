@@ -114,3 +114,16 @@ export function clearFirebaseConfig(): void {
 export function hasFirebaseConfig(): boolean {
   return loadFirebaseConfig() !== null
 }
+
+/**
+ * True only when THIS device pasted its own config, as opposed to riding on the
+ * baked-in default. Lets the UI show "use my own Firebase project" controls to
+ * the rare power user without offering them to everyone else.
+ */
+export function hasDeviceConfig(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null
+  } catch {
+    return false
+  }
+}

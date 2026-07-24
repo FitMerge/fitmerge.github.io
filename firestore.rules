@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// FitMerge security rules.
+//
+// Every signed-in account gets its own private tree under /users/{uid}. Nobody
+// can read or write anyone else's data — the whole multi-user story rests on
+// this file, so keep it narrow.
+//
+// Deploy: Firebase console → Firestore Database → Rules → paste → Publish.
+// (Or `firebase deploy --only firestore:rules` with the Firebase CLI.)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // The app's synced stores: nutrition, workouts, body, settings, health.
+    match /users/{uid}/state/{store} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // Everything else is denied. Any new per-user data needs its own rule
+    // above — deliberately no /users/{uid}/{doc=**} wildcard, so a future
+    // credentials document can be made write-only without this overriding it.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OPTIONAL: friends-and-family allowlist.
+//
+// While the app URL is unlisted this is off, so anyone who signs in gets an
+// account. To restrict it, create a collection `allowedUsers` with one document
+// per person (document ID = their Google email, body can be empty), then swap
+// the isOwner() function above for:
+//
+//   function isOwner(uid) {
+//     return request.auth != null
+//       && request.auth.uid == uid
+//       && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email));
+//   }
+//
+// Nobody can read the allowlist from the app — it is not matched by any rule
+// above, so the final deny-all covers it.
+// ---------------------------------------------------------------------------

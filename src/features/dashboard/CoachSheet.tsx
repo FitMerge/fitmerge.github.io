@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Loader2, Sparkles, Dumbbell, Apple, Target, Send, Check } from 'lucide-react'
 import Sheet from '../../components/Sheet'
 import Button from '../../components/Button'
+import NeedsAiKey from '../../components/NeedsAiKey'
 import { useSettingsStore, type CoachProfile } from '../../store/settings'
 import { useNutritionStore } from '../../store/nutrition'
 import { useWorkoutsStore } from '../../store/workouts'
@@ -19,6 +20,7 @@ type Phase =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'plan'; plan: CoachPlan }
+  | { status: 'no-key' }
   | { status: 'error'; message: string }
 
 const FOCUS_STYLE: Record<CoachPlan['focus'], { label: string; cls: string }> = {
@@ -58,7 +60,11 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
   const apiKey = useSettingsStore((s) => s.geminiApiKey)
   const units = useSettingsStore((s) => s.units)
   const coachProfile = useSettingsStore((s) => s.coachProfile)
-  const [phase, setPhase] = useState<Phase>({ status: coachProfile ? 'idle' : 'profile' })
+  // Check for the AI key before anything else — asking someone to fill in a
+  // profile form and only then telling them AI is switched off wastes their time.
+  const [phase, setPhase] = useState<Phase>(
+    !apiKey.trim() ? { status: 'no-key' } : { status: coachProfile ? 'idle' : 'profile' },
+  )
   const [followUp, setFollowUp] = useState('')
   const [updateNote, setUpdateNote] = useState<string | null>(null)
 
@@ -73,7 +79,7 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
 
   async function generate(note?: string) {
     if (!apiKey.trim()) {
-      setPhase({ status: 'error', message: 'Add a Gemini API key in Settings → AI to use the coach.' })
+      setPhase({ status: 'no-key' })
       return
     }
     setPhase({ status: 'loading' })
@@ -125,6 +131,12 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
         <div className="flex flex-col items-center gap-2 py-10 text-slate-400">
           <Loader2 size={26} className="animate-spin text-primary-400" />
           <span className="text-sm">Reading your last 5 days…</span>
+        </div>
+      )}
+
+      {phase.status === 'no-key' && (
+        <div className="py-2">
+          <NeedsAiKey what="Your coach" />
         </div>
       )}
 

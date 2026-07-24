@@ -8,6 +8,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   hasFirebaseConfig,
+  hasDeviceConfig,
   parseFirebaseConfig,
   saveFirebaseConfig,
   clearFirebaseConfig,
@@ -23,6 +24,13 @@ type AuthContextValue = {
   status: AuthStatus
   syncState: SyncState
   configured: boolean
+  /** True when this device pasted its own Firebase config instead of using the built-in one. */
+  usingOwnProject: boolean
+  /**
+   * False until we know whether anyone is signed in. Callers that would
+   * otherwise flash first-run UI (the onboarding wizard) should wait for this.
+   */
+  authResolved: boolean
   /** Epoch ms of the last successful cloud reconcile, or null if not synced yet. */
   lastSyncedAt: number | null
   signIn: () => Promise<void>
@@ -47,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('signed-out')
   const [syncState, setSyncState] = useState<SyncState>('idle')
   const [configured, setConfigured] = useState<boolean>(() => hasFirebaseConfig())
+  const [usingOwnProject, setUsingOwnProject] = useState<boolean>(() => hasDeviceConfig())
+  const [authResolved, setAuthResolved] = useState<boolean>(() => !hasFirebaseConfig())
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
 
   const mountedRef = useRef(true)
@@ -114,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function handleAuthChange(next: SyncUser | null) {
     if (!mountedRef.current) return
+    setAuthResolved(true)
     setUser(next)
     if (next) {
       setStatus('signed-in')
@@ -127,7 +138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** (Re)attaches the auth-state listener against whatever config is currently saved. */
   async function attachAuthWatch() {
-    if (!hasFirebaseConfig()) return
+    if (!hasFirebaseConfig()) {
+      setAuthResolved(true)
+      return
+    }
     const mod = await import('../services/sync/firebase')
     if (!mountedRef.current) return
     try {
@@ -217,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     saveFirebaseConfig(cfg)
     setConfigured(true)
+    setUsingOwnProject(true)
 
     // Re-init in place (no page reload): tear down any previous Firebase app
     // instance, then reattach the auth watcher against the freshly saved config.
@@ -241,6 +256,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true
   }
 
+  /**
+   * Forgets the config this device pasted. When a built-in default exists the
+   * app falls straight back onto it (so this reads as "stop using my own
+   * project"); with no default it returns to the paste screen.
+   */
   function disconnect() {
     void (async () => {
       generationRef.current++
@@ -259,8 +279,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null)
         setStatus('signed-out')
         setSyncState('idle')
-        setConfigured(false)
+        // Re-derive rather than assuming false: the baked-in default may still
+        // leave the app configured, and claiming otherwise strands the UI on a
+        // paste screen that a reload would immediately contradict.
+        setConfigured(hasFirebaseConfig())
+        setUsingOwnProject(false)
       }
+      // Re-attach against the default config (no-op when there isn't one).
+      await attachAuthWatch()
     })()
   }
 
@@ -269,6 +295,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     status,
     syncState,
     configured,
+    usingOwnProject,
+    authResolved,
     lastSyncedAt,
     signIn,
     signOut,
