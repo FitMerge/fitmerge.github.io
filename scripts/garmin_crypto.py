@@ -30,8 +30,6 @@ VERSION = "v1"
 # Fixed, non-secret domain separation. HKDF's salt is optional; what matters is
 # that both sides agree, and that `info` pins the derived key to this use.
 _HKDF_SALT = b"\x00" * 32
-# Predates the FitMerge -> Rung rename and must not change: must stay byte-identical
-# to HKDF_INFO in src/services/garmin/linkCrypto.ts, and is baked into issued links.
 _HKDF_INFO = b"fitmerge-garmin-v1"
 _NONCE_BYTES = 12
 

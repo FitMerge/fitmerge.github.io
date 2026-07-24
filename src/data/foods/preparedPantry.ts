@@ -1,5 +1,5 @@
 // Curated database of healthy pantry staples, condiments, prepared soups/salads/dishes,
-// protein supplements, and beverages for Rung.
+// protein supplements, and beverages for FitMerge.
 //
 // Macros are per 100 g, sourced from USDA FoodData Central / manufacturer-typical reference
 // values (rounded to ≤1 decimal). Serving sizes are realistic everyday portions, not 100 g.

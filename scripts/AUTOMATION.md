@@ -1,4 +1,4 @@
-# Sharing Rung: letting friends connect their own Garmin
+# Sharing FitMerge: letting friends connect their own Garmin
 
 Anyone you share the app link with signs in with Google and gets their own private,
 synced account. They can also connect **their own** Garmin watch from inside the app —
@@ -45,7 +45,7 @@ before anyone types a password.
 
 This runs the Garmin pull on GitHub's servers instead of your computer, so it works
 even when your PC is off, and the app gets a **"Pull from Garmin"** button (Settings →
-Pull from Garmin) plus an automatic hourly refresh. Data lands in your Rung cloud
+Pull from Garmin) plus an automatic hourly refresh. Data lands in your FitMerge cloud
 and every device updates itself via sync.
 
 **One-time setup**
@@ -60,7 +60,7 @@ and every device updates itself via sync.
    Actions → New repository secret):
    - `GARMIN_TOKENS_B64` — the base64 line from `--export-tokens`.
    - `FIREBASE_SERVICE_ACCOUNT` — the full contents of your `serviceAccount.json`.
-   - `FIREBASE_UID` — your Rung id (app → Settings → Sync).
+   - `FIREBASE_UID` — your FitMerge id (app → Settings → Sync).
    - (Optional) `GARMIN_EMAIL` / `GARMIN_PASSWORD` as a fallback if the token expires.
 3. **Make sure `.github/workflows/garmin-pull.yml` is on your repo's default branch**
    (merge it to `main`). Scheduled and dispatched runs only work from the default branch.
@@ -81,7 +81,7 @@ login error, re-run steps 1–2 to refresh `GARMIN_TOKENS_B64` (the cached login
 
 # Automating the Garmin pull (Windows PC — the original local method)
 
-Once this is set up, your Garmin data flows into Rung on a schedule and every
+Once this is set up, your Garmin data flows into FitMerge on a schedule and every
 device updates itself — no file, no manual import. Here's the whole path.
 
 ## Prerequisites (one-time)
@@ -113,7 +113,7 @@ device updates itself — no file, no manual import. Here's the whole path.
 ## Configure and test
 
 6. Open `scripts\run-garmin-sync.bat` in Notepad and paste your UID into the
-   `RUNG_UID=` line. Save.
+   `FITMERGE_UID=` line. Save.
 
 7. **Double-click `run-garmin-sync.bat`.** The first run will ask for your Garmin
    email/password (and a 2-factor code if your account uses one). That login is
@@ -123,7 +123,7 @@ device updates itself — no file, no manual import. Here's the whole path.
 ## Schedule it nightly (Task Scheduler)
 
 8. Press **Start**, type **Task Scheduler**, open it.
-9. **Create Basic Task…** → name it "Rung Garmin sync" → **Next**.
+9. **Create Basic Task…** → name it "FitMerge Garmin sync" → **Next**.
 10. Trigger: **Daily** → pick a time (e.g. 6:00 AM) → **Next**.
 11. Action: **Start a program** → **Browse…** → select `run-garmin-sync.bat` → **Next → Finish**.
 12. (Recommended) Find the task in the list → **Properties** → General tab →

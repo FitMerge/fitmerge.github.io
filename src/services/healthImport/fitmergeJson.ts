@@ -1,4 +1,4 @@
-// Parser for the documented Rung health-import JSON format (version 1):
+// Parser for the documented FitMerge health-import JSON format (version 1):
 //
 // {
 //   "version": 1,
@@ -7,7 +7,7 @@
 // }
 //
 // This is the format emitted by scripts/garmin-sync.py and by asking Claude (with a Garmin
-// MCP server) to produce a Rung import file. Validation follows the unknown-narrowing
+// MCP server) to produce a FitMerge import file. Validation follows the unknown-narrowing
 // style used by services/vision/geminiProvider.ts — never trust the shape of parsed JSON.
 
 import type { BodyEntry, HealthDay } from '../../types'
@@ -68,16 +68,16 @@ function parseSession(raw: unknown): ImportedSessionInput | undefined {
   return session
 }
 
-export function parseRungJson(text: string): HealthImportResult {
+export function parseFitmergeJson(text: string): HealthImportResult {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error('Not a Rung import file')
+    throw new Error('Not a FitMerge import file')
   }
 
   if (!isRecord(parsed) || parsed.version !== 1) {
-    throw new Error('Not a Rung import file')
+    throw new Error('Not a FitMerge import file')
   }
 
   const rawWeights = Array.isArray(parsed.weights) ? parsed.weights : []
@@ -91,8 +91,8 @@ export function parseRungJson(text: string): HealthImportResult {
   const health = rawHealth.map(parseHealthDay).filter((h): h is HealthDay => h !== undefined)
 
   if (weights.length === 0 && sessions.length === 0 && health.length === 0) {
-    throw new Error('Not a Rung import file')
+    throw new Error('Not a FitMerge import file')
   }
 
-  return { weights, sessions, health, source: 'rung-json' }
+  return { weights, sessions, health, source: 'fitmerge-json' }
 }

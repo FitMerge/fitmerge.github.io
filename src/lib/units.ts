@@ -1,4 +1,4 @@
-// Shared unit-conversion helpers for Rung. Canonical storage units are always
+// Shared unit-conversion helpers for FitMerge. Canonical storage units are always
 // metric (kg, cm, ml) — these helpers only convert for display/input purposes.
 import type { Units } from '../types'
 

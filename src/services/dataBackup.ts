@@ -1,4 +1,4 @@
-// Parse and restore a Rung backup produced by Settings → Export data.
+// Parse and restore a FitMerge backup produced by Settings → Export data.
 // Restore MERGES into whatever is already on the device (union by id / date, so
 // importing a backup never destroys newer local logs), mirroring how sync merges.
 
@@ -69,7 +69,7 @@ export function parseBackup(text: string): ParsedBackup | null {
   const health = isRecord(parsed.health) ? parsed.health : undefined
   const settings = isRecord(parsed.settings) ? parsed.settings : undefined
 
-  // Must look like a Rung backup: at least one recognized section.
+  // Must look like a FitMerge backup: at least one recognized section.
   if (!nutrition && !workouts && !body && !health) return null
 
   const raw: BackupData = {

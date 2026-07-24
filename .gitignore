@@ -9,7 +9,7 @@ vite.config.d.ts
 # Garmin auto-sync secrets / output — never commit these
 serviceAccount.json
 scripts/serviceAccount.json
-rung-import.json
+fitmerge-import.json
 scripts/garmin-sync.log
 
 # Garmin link keypair — the private half must never be committed

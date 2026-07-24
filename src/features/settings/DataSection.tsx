@@ -26,7 +26,7 @@ export default function DataSection() {
     const text = await file.text()
     const parsed = parseBackup(text)
     if (!parsed) {
-      setImportError("That doesn't look like a Rung export file.")
+      setImportError("That doesn't look like a FitMerge export file.")
       return
     }
     setPreview(parsed)
@@ -71,7 +71,7 @@ export default function DataSection() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'rung-export.json'
+    a.download = 'fitmerge-export.json'
     a.click()
     URL.revokeObjectURL(url)
   }

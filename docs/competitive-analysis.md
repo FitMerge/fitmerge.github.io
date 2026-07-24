@@ -1,12 +1,12 @@
-# Rung Competitive Analysis & Gap Roadmap
+# FitMerge Competitive Analysis & Gap Roadmap
 
 _Last updated: 2026-07-13_
 
 ## Intro
 
-Rung is a mobile-first fitness PWA that fuses three normally-separate products: nutrition tracking (MyFitnessPal/MacroFactor style), strength logging (Hevy/Strong style), and endurance/health analytics (Garmin + TrainingPeaks style). Its differentiator is that it already owns the hard, coach-grade endurance layer — CTL/ATL/TSB performance-management chart, ACWR injury risk, HR-vs-HRV, intensity distribution, forward projection, plus 1985 days of Garmin daily metrics and 1010 activities with per-activity training load. That analytics moat is ahead of Hevy/Strong.
+FitMerge is a mobile-first fitness PWA that fuses three normally-separate products: nutrition tracking (MyFitnessPal/MacroFactor style), strength logging (Hevy/Strong style), and endurance/health analytics (Garmin + TrainingPeaks style). Its differentiator is that it already owns the hard, coach-grade endurance layer — CTL/ATL/TSB performance-management chart, ACWR injury risk, HR-vs-HRV, intensity distribution, forward projection, plus 1985 days of Garmin daily metrics and 1010 activities with per-activity training load. That analytics moat is ahead of Hevy/Strong.
 
-The gaps are concentrated in three areas the user already flagged: (a) no pre-built training **programs** to pick from, (b) no **cardio progression charts** (pace/distance/duration trends) despite most of the user's data being walk/run/cycle activities, and (c) no explicit **"improvement" tracking** (pace, total volume, e1RM over time). This doc benchmarks six best-in-class apps, tags each signature feature relative to Rung's current state, consolidates the gaps, and lays out a prioritized, buildable roadmap.
+The gaps are concentrated in three areas the user already flagged: (a) no pre-built training **programs** to pick from, (b) no **cardio progression charts** (pace/distance/duration trends) despite most of the user's data being walk/run/cycle activities, and (c) no explicit **"improvement" tracking** (pace, total volume, e1RM over time). This doc benchmarks six best-in-class apps, tags each signature feature relative to FitMerge's current state, consolidates the gaps, and lays out a prioritized, buildable roadmap.
 
 Legend: **`[HAVE]`** = shipped, **`[PARTIAL]`** = partially present / data exists but not surfaced, **`[GAP]`** = missing.
 
@@ -16,42 +16,42 @@ Legend: **`[HAVE]`** = shipped, **`[PARTIAL]`** = partially present / data exist
 
 - `[HAVE]` Live set logger with warmup / drop / failure set types, supersets, rest timer.
 - `[HAVE]` Exercise library with demonstrations and how-to instructions.
-- `[HAVE]` Muscle-group volume / distribution breakdown (Rung has muscle balance in training stats).
-- `[PARTIAL]` Per-exercise progress charts: heaviest weight, best set volume, session volume, most reps, best time. Rung has lifetime totals + weekly frequency but not per-exercise progression graphs.
+- `[HAVE]` Muscle-group volume / distribution breakdown (FitMerge has muscle balance in training stats).
+- `[PARTIAL]` Per-exercise progress charts: heaviest weight, best set volume, session volume, most reps, best time. FitMerge has lifetime totals + weekly frequency but not per-exercise progression graphs.
 - `[GAP]` **Estimated 1RM per exercise over time** (projected & true 1RM tracked as a first-class metric).
 - `[GAP]` **Pre-made programs / plans library** — body-part splits, beginner programs, equipment-specific, multi-week structured routines you can start.
 - `[GAP]` **Automatic PR detection & celebration** (weight PR, rep PR, volume PR, 1RM PR flagged live in the logger).
 - `[GAP]` Social feed / following / shareable workout cards.
-- `[HAVE]` Cross-device cloud sync (Rung has Firebase sync).
+- `[HAVE]` Cross-device cloud sync (FitMerge has Firebase sync).
 
 ## 2. Strong — logging UX, plate calc, progress, templates
 
 - `[HAVE]` Fast set-by-set logging with previous-set reference and plate calculator.
 - `[HAVE]` Reusable workout templates / routines (user-built).
 - `[HAVE]` Multiple exercise types incl. duration and bodyweight/assisted.
-- `[PARTIAL]` Advanced statistics: PRs, 1RM calc, total weight lifted, progression graphs. Rung has lifetime totals but not the per-lift progression/PR views.
+- `[PARTIAL]` Advanced statistics: PRs, 1RM calc, total weight lifted, progression graphs. FitMerge has lifetime totals but not the per-lift progression/PR views.
 - `[GAP]` **Estimated 1RM and total-volume trend graphs** as the headline "are you getting stronger" view.
-- `[GAP]` Per-muscle-group volume analytics over time (Strong Premium) — Rung has a static balance view, not a trend.
+- `[GAP]` Per-muscle-group volume analytics over time (Strong Premium) — FitMerge has a static balance view, not a trend.
 - `[HAVE]` Imperial/metric support, cloud sync.
 - `[GAP]` CSV / data export.
 
 ## 3. Garmin Connect & Garmin Coach — endurance metrics
 
-- `[HAVE]` Daily metrics ingest: steps, sleep, resting HR, HRV, stress, body battery, VO2max, SpO2, intensity minutes (Rung already imports all of these).
-- `[HAVE]` Training load per activity + training-status-style analytics (CTL/ATL/TSB is Rung's equivalent of Training Status).
-- `[PARTIAL]` VO2max trend — Rung imports vo2max daily but does not chart it over time.
+- `[HAVE]` Daily metrics ingest: steps, sleep, resting HR, HRV, stress, body battery, VO2max, SpO2, intensity minutes (FitMerge already imports all of these).
+- `[HAVE]` Training load per activity + training-status-style analytics (CTL/ATL/TSB is FitMerge's equivalent of Training Status).
+- `[PARTIAL]` VO2max trend — FitMerge imports vo2max daily but does not chart it over time.
 - `[GAP]` **Pace / speed trends per activity type over time** (running/cycling/walking pace progression) — the flagship missing chart given the user's data mix.
 - `[GAP]` **Race Predictor** — predicted 5K/10K/half/marathon times derived from VO2max + training history.
-- `[GAP]` **Training Readiness score** — a single daily "should I train hard today" number blending sleep, HRV, recovery, acute load (Rung has all inputs already).
+- `[GAP]` **Training Readiness score** — a single daily "should I train hard today" number blending sleep, HRV, recovery, acute load (FitMerge has all inputs already).
 - `[GAP]` Running dynamics (cadence, ground contact, vertical oscillation, grade-adjusted pace) — only if source data exists.
 - `[GAP]` **Garmin Coach-style adaptive daily suggested workout** — recommends today's session and auto-inserts recovery after poor sleep/high load.
 - `[GAP]` PacePro-style pacing strategy for a target distance.
 
 ## 4. TrainingPeaks — PMC, structured workouts, annual plan
 
-- `[HAVE]` **Performance Management Chart (CTL / ATL / TSB)** — Rung already has the gold-standard model; this is a genuine strength vs Hevy/Strong.
+- `[HAVE]` **Performance Management Chart (CTL / ATL / TSB)** — FitMerge already has the gold-standard model; this is a genuine strength vs Hevy/Strong.
 - `[HAVE]` Fitness/Fatigue/Form framing and forward projection.
-- `[PARTIAL]` Training Stress Score input — Rung uses per-activity trainingLoad, functionally similar to TSS, but has no explicit TSS-per-workout builder for strength sessions.
+- `[PARTIAL]` Training Stress Score input — FitMerge uses per-activity trainingLoad, functionally similar to TSS, but has no explicit TSS-per-workout builder for strength sessions.
 - `[GAP]` **Structured workout builder** — prescribe intervals with pace/HR/power targets, then score compliance.
 - `[GAP]` **Annual Training Plan (ATP)** — periodized multi-week/multi-month plan with planned vs actual CTL, ramp rate, and phases (base/build/peak/taper).
 - `[GAP]` Planned vs actual load view (target CTL ramp rate 3–8/week, planned TSS vs completed).
@@ -60,9 +60,9 @@ Legend: **`[HAVE]`** = shipped, **`[PARTIAL]`** = partially present / data exist
 ## 5. MacroFactor / MyFitnessPal — nutrition (brief)
 
 - `[HAVE]` Photo→macros (Gemini), food search, macro diary, water tracking.
-- `[GAP]` **Adaptive TDEE / expenditure algorithm** — model real energy expenditure from logged intake + weigh-in trend and auto-recalibrate macro targets. Rung already has both inputs (food diary + Garmin/Progress weigh-ins) — high-fit, high-value.
+- `[GAP]` **Adaptive TDEE / expenditure algorithm** — model real energy expenditure from logged intake + weigh-in trend and auto-recalibrate macro targets. FitMerge already has both inputs (food diary + Garmin/Progress weigh-ins) — high-fit, high-value.
 - `[GAP]` **Weight-trend smoothing** (moving-average trend line vs noisy daily scale) and calorie/weight correlation.
-- `[PARTIAL]` Large food database — Rung has search + photo; depth vs MFP's 14M entries unknown.
+- `[PARTIAL]` Large food database — FitMerge has search + photo; depth vs MFP's 14M entries unknown.
 - `[GAP]` "Describe your meal" natural-language logging and recipe-URL import (partly covered by photo→macros).
 - `[HAVE]` Fast logging via photo (fewer taps, MacroFactor-style advantage).
 
@@ -70,9 +70,9 @@ Legend: **`[HAVE]`** = shipped, **`[PARTIAL]`** = partially present / data exist
 
 - `[GAP]` (Strava) Activity feed / kudos / following — social layer.
 - `[GAP]` (Strava) Segments & leaderboards / personal segment PRs — needs GPS track data.
-- `[HAVE]` (Strava) Per-activity detail view (Rung has the underlying activity records).
+- `[HAVE]` (Strava) Per-activity detail view (FitMerge has the underlying activity records).
 - `[GAP]` (Fitbod) **Auto-generated workout** from training history, goals, equipment, and muscle-recovery %.
-- `[PARTIAL]` (Fitbod) **Muscle-recovery model** (0–100% freshness per muscle group) — Rung has the training data + body battery to build this but doesn't surface per-muscle recovery.
+- `[PARTIAL]` (Fitbod) **Muscle-recovery model** (0–100% freshness per muscle group) — FitMerge has the training data + body battery to build this but doesn't surface per-muscle recovery.
 
 ---
 
@@ -100,7 +100,7 @@ Legend: **`[HAVE]`** = shipped, **`[PARTIAL]`** = partially present / data exist
 
 ## Prioritized roadmap (value ÷ effort, highest first)
 
-These are ordered so the fast, high-value "improvement tracking" wins ship first (they reuse data Rung already stores), then the flagged program/plan work, then the higher-effort intelligence layers.
+These are ordered so the fast, high-value "improvement tracking" wins ship first (they reuse data FitMerge already stores), then the flagged program/plan work, then the higher-effort intelligence layers.
 
 1. **Cardio pace-trend chart** _(S, very high)_ — Derive `pace = session.durationMin ÷ health.distanceKm` (min/km) per activity, group by activity type (run/walk/cycle), and plot over time with a moving-average trend. This is the single biggest gap given the user's data mix and it needs zero new data. Add a per-type toggle and a "faster/slower vs 30-day avg" delta.
 
@@ -120,7 +120,7 @@ These are ordered so the fast, high-value "improvement tracking" wins ship first
 
 9. **Training Readiness daily score** _(M, high)_ — Blend already-imported `sleep`, `HRV` (vs baseline), `restingHr`, `stress`, `bodyBattery`, and current `TSB`/ACWR into a single 0–100 "train hard / go easy / recover" number with a plain-language reason. All inputs already exist; this is a scoring function + a card on the dashboard.
 
-10. **Adaptive TDEE + weight-trend smoothing** _(M, high)_ — Fit an expenditure model from the macro diary (calories in) against the smoothed weigh-in trend (exponential moving average of Garmin/Progress weight), then auto-suggest macro targets that adapt as expenditure shifts — the MacroFactor moat, using data Rung already has on both sides. Ship the weight-trend line first as a quick win.
+10. **Adaptive TDEE + weight-trend smoothing** _(M, high)_ — Fit an expenditure model from the macro diary (calories in) against the smoothed weigh-in trend (exponential moving average of Garmin/Progress weight), then auto-suggest macro targets that adapt as expenditure shifts — the MacroFactor moat, using data FitMerge already has on both sides. Ship the weight-trend line first as a quick win.
 
 11. **Muscle-recovery % model** _(M, medium)_ — Assign each muscle group a 0–100% freshness score from recent set volume + recency decay (and optionally `bodyBattery`). Surface as a body-map heat overlay reusing the existing muscle-map component. Feeds items 8 and 12.
 
@@ -133,7 +133,7 @@ These are ordered so the fast, high-value "improvement tracking" wins ship first
 15. **Social / sharing layer** _(L, low-medium)_ — Shareable workout/PR cards first (cheap, viral), then an opt-in follow feed. Lowest priority: high backend + privacy cost, tangential to the analytics-first positioning.
 
 ### Sequencing note
-Items 1–6 are a fast "Improvement Tracking" release that ships in days from data already stored and closes gaps (b) and (c). Items 7–8 close gap (a) and the multi-week-plan ask. Items 9–14 build the adaptive-coaching intelligence layer that turns Rung's analytics moat into daily guidance. Item 15 is optional.
+Items 1–6 are a fast "Improvement Tracking" release that ships in days from data already stored and closes gaps (b) and (c). Items 7–8 close gap (a) and the multi-week-plan ask. Items 9–14 build the adaptive-coaching intelligence layer that turns FitMerge's analytics moat into daily guidance. Item 15 is optional.
 
 ---
 

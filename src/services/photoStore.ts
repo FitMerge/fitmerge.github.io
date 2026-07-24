@@ -10,12 +10,10 @@ type PhotoThumb = {
   dataUrl: string
 }
 
-class RungDB extends Dexie {
+class FitmergeDB extends Dexie {
   thumbs!: Table<PhotoThumb, string>
 
   constructor() {
-    // Database name predates the FitMerge → Rung rename and must not change:
-    // IndexedDB keys stores by name, so renaming would orphan every saved photo.
     super('fitmerge')
     this.version(1).stores({
       thumbs: 'id',
@@ -23,7 +21,7 @@ class RungDB extends Dexie {
   }
 }
 
-const db = new RungDB()
+const db = new FitmergeDB()
 
 export async function savePhotoThumb(dataUrl: string): Promise<string> {
   const id = uid()

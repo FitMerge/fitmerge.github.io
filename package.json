@@ -1,9 +1,9 @@
 {
-  "name": "rung",
+  "name": "fitmerge",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Rung — training, food and recovery in one place.",
+  "description": "FitMerge — nutrition + macro tracking (incl. photo AI) and custom workout plans in one app.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
