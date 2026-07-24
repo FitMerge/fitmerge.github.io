@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Sparkles, Dumbbell, Apple, Target, Send } from 'lucide-react'
+import { Loader2, Sparkles, Dumbbell, Apple, Target, Send, Check } from 'lucide-react'
 import Sheet from '../../components/Sheet'
 import Button from '../../components/Button'
 import { useSettingsStore, type CoachProfile } from '../../store/settings'
@@ -10,8 +10,9 @@ import { useHealthStore } from '../../store/health'
 import { useBodyStore } from '../../store/body'
 import { useSupplementStore } from '../../store/supplements'
 import { buildCoachContext, type CoachInputs } from '../../services/coach/coachContext'
-import { getCoachPlan, CoachError, type CoachPlan } from '../../services/coach/coachPlan'
+import { getCoachPlan, CoachError, type CoachPlan, type CoachUpdates } from '../../services/coach/coachPlan'
 import { weightUnitLabel } from '../workouts/utils'
+import { lbToKg } from '../../lib/units'
 
 type Phase =
   | { status: 'profile' }
@@ -59,6 +60,16 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
   const coachProfile = useSettingsStore((s) => s.coachProfile)
   const [phase, setPhase] = useState<Phase>({ status: coachProfile ? 'idle' : 'profile' })
   const [followUp, setFollowUp] = useState('')
+  const [updateNote, setUpdateNote] = useState<string | null>(null)
+
+  // Persist goal/profile edits the coach made from a chat message, then confirm.
+  function applyUpdates(u: CoachUpdates) {
+    const s = useSettingsStore.getState()
+    if (u.profile && s.coachProfile) s.setCoachProfile({ ...s.coachProfile, ...u.profile })
+    if (u.goals) s.setGoals({ ...s.goals, ...u.goals })
+    if (u.goalWeight !== undefined) s.setGoalWeightKg(s.units === 'imperial' ? lbToKg(u.goalWeight) : u.goalWeight)
+    setUpdateNote(u.summary || 'Goals updated.')
+  }
 
   async function generate(note?: string) {
     if (!apiKey.trim()) {
@@ -69,6 +80,8 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
     try {
       const ctx = buildCoachContext(gather())
       const plan = await getCoachPlan(ctx, apiKey, note)
+      // Only a chat instruction (note) may change goals — never the first read.
+      if (note && plan.updates) applyUpdates(plan.updates)
       setPhase({ status: 'plan', plan })
     } catch (err) {
       setPhase({ status: 'error', message: err instanceof CoachError ? err.message : 'Something went wrong.' })
@@ -125,7 +138,13 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
       )}
 
       {phase.status === 'plan' && (
-        <PlanView plan={phase.plan} units={units} onStart={() => startWorkout(phase.plan)} onEditGoals={() => setPhase({ status: 'profile' })}>
+        <PlanView
+          plan={phase.plan}
+          units={units}
+          updateNote={updateNote}
+          onStart={() => startWorkout(phase.plan)}
+          onEditGoals={() => setPhase({ status: 'profile' })}
+        >
           <form
             className="flex items-center gap-2"
             onSubmit={(e) => {
@@ -140,7 +159,7 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
             <input
               value={followUp}
               onChange={(e) => setFollowUp(e.target.value)}
-              placeholder="Adjust it… e.g. only have 30 min, shoulder's sore"
+              placeholder="Adjust or change goals… e.g. switch to fat loss, protein 200g, only 30 min"
               className="min-w-0 flex-1 rounded-lg bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
             />
             <button
@@ -161,12 +180,14 @@ export default function CoachSheet({ open, onClose }: { open: boolean; onClose: 
 function PlanView({
   plan,
   units,
+  updateNote,
   onStart,
   onEditGoals,
   children,
 }: {
   plan: CoachPlan
   units: 'metric' | 'imperial'
+  updateNote: string | null
   onStart: () => void
   onEditGoals: () => void
   children: ReactNode
@@ -174,6 +195,12 @@ function PlanView({
   const focus = FOCUS_STYLE[plan.focus]
   return (
     <div className="space-y-3">
+      {updateNote && (
+        <div className="flex items-start gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+          <Check size={14} className="mt-0.5 shrink-0" />
+          <span>{updateNote}</span>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-slate-500">Readiness</p>

@@ -7,8 +7,22 @@
 import { generateContent } from '../gemini/model'
 import { getExerciseById } from '../../data/exercises'
 import type { CoachContext } from './coachContext'
+import type { CoachProfile } from '../../store/settings'
+import type { Goals } from '../../types'
 
 export class CoachError extends Error {}
+
+const GOAL_VALUES: CoachProfile['primaryGoal'][] = ['build-muscle', 'lose-fat', 'strength', 'endurance', 'general-health']
+const EXPERIENCE_VALUES: CoachProfile['experience'][] = ['beginner', 'intermediate', 'advanced']
+
+/** Goal/profile changes the coach applies when the user asks via chat. */
+export type CoachUpdates = {
+  profile?: Partial<CoachProfile>
+  goals?: Partial<Goals>
+  /** New goal body weight in the user's display unit (converted to kg on apply). */
+  goalWeight?: number
+  summary: string
+}
 
 export type CoachFocus = 'train' | 'active-recovery' | 'rest'
 
@@ -29,6 +43,8 @@ export type CoachPlan = {
   nutrition: { calories: number | null; protein: number | null; note: string }
   priorities: string[]
   rationale: string
+  /** Present only when a chat follow-up asked to change goals/profile. */
+  updates?: CoachUpdates
 }
 
 const SYSTEM = `You are a certified strength & conditioning and nutrition coach. Analyse the user's last 5 days of data and give ONE focused, realistic plan for TODAY that moves them toward their stated goal.
@@ -49,7 +65,11 @@ Rules:
 - session: null on a rest day; otherwise 3–7 exercises drawn from AVAILABLE EXERCISES sized to ~the session length.
 - nutrition.calories / nutrition.protein: today's numeric targets; note: one actionable sentence.
 - priorities: 2–3 short strings — the highest-impact things to do today.
-- rationale: 1–2 sentences citing the data behind the plan.`
+- rationale: 1–2 sentences citing the data behind the plan.
+
+If (and only if) the USER FOLLOW-UP asks to change their goals or profile — primary goal, experience, days/week, session length, focus, injuries, diet, calorie/macro targets, or goal body weight — ALSO include an "updates" object with ONLY the changed fields, and generate the rest of the plan using those UPDATED values. Confirm the change in updates.summary (one sentence). Omit "updates" entirely for plan-only tweaks like "only 30 min today". Shape:
+"updates":{"profile":{"primaryGoal":"build-muscle"|"lose-fat"|"strength"|"endurance"|"general-health","experience":"beginner"|"intermediate"|"advanced","daysPerWeek":number,"sessionMinutes":number,"focus":string,"constraints":string,"dietNotes":string},"goals":{"calories":number,"protein":number,"carbs":number,"fat":number},"goalWeight":number,"summary":string}
+goalWeight is in the user's weight unit shown in the data. Current goals and profile are in the USER DATA — only include fields the user actually asked to change.`
 
 function stripFences(text: string): string {
   const t = text.trim()
@@ -85,6 +105,48 @@ function buildPrompt(ctx: CoachContext, followUp?: string): string {
     libLines || '(none — user has no equipment set; suggest bodyweight movements by name in notes and leave session null)',
     followUp ? `\nUSER FOLLOW-UP (adjust today's plan accordingly): ${followUp}` : '',
   ].join('\n')
+}
+
+/** Validate goal/profile edits the model proposes, dropping anything malformed.
+ * Returns undefined if nothing valid actually changed. */
+function parseUpdates(value: unknown): CoachUpdates | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const u = value as Record<string, unknown>
+
+  let profile: Partial<CoachProfile> | undefined
+  if (u.profile && typeof u.profile === 'object') {
+    const p = u.profile as Record<string, unknown>
+    const out: Partial<CoachProfile> = {}
+    const goal = str(p.primaryGoal) as CoachProfile['primaryGoal']
+    if (GOAL_VALUES.includes(goal)) out.primaryGoal = goal
+    const exp = str(p.experience) as CoachProfile['experience']
+    if (EXPERIENCE_VALUES.includes(exp)) out.experience = exp
+    const dpw = num(p.daysPerWeek)
+    if (dpw !== undefined) out.daysPerWeek = clampInt(dpw, 1, 7, 4)
+    const sm = num(p.sessionMinutes)
+    if (sm !== undefined) out.sessionMinutes = clampInt(sm, 10, 180, 60)
+    if (typeof p.focus === 'string') out.focus = p.focus.trim() || undefined
+    if (typeof p.constraints === 'string') out.constraints = p.constraints.trim() || undefined
+    if (typeof p.dietNotes === 'string') out.dietNotes = p.dietNotes.trim() || undefined
+    if (Object.keys(out).length > 0) profile = out
+  }
+
+  let goals: Partial<Goals> | undefined
+  if (u.goals && typeof u.goals === 'object') {
+    const g = u.goals as Record<string, unknown>
+    const out: Partial<Goals> = {}
+    for (const k of ['calories', 'protein', 'carbs', 'fat'] as const) {
+      const v = num(g[k])
+      if (v !== undefined && v >= 0) out[k] = Math.round(Math.min(v, k === 'calories' ? 20000 : 2000))
+    }
+    if (Object.keys(out).length > 0) goals = out
+  }
+
+  const gw = num(u.goalWeight)
+  const goalWeight = gw !== undefined && gw > 0 && gw < 2000 ? Math.round(gw * 10) / 10 : undefined
+
+  if (!profile && !goals && goalWeight === undefined) return undefined
+  return { profile, goals, goalWeight, summary: str(u.summary) }
 }
 
 /** Validate + normalise the model's JSON into a typed CoachPlan. Unknown exercise
@@ -140,6 +202,7 @@ export function parseCoachPlan(raw: string): CoachPlan {
     },
     priorities: Array.isArray(o.priorities) ? (o.priorities as unknown[]).map(str).filter(Boolean).slice(0, 5) : [],
     rationale: str(o.rationale),
+    updates: parseUpdates(o.updates),
   }
 }
 
