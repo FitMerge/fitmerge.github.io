@@ -4,7 +4,7 @@
 
 import { epley1RM } from '../progress/utils'
 
-export type PRKind = '1rm' | 'weight' | 'volume'
+export type PRKind = '1rm' | 'weight' | 'volume' | 'milestone'
 
 export type PRHit = { kind: PRKind; value: number }
 
@@ -15,6 +15,22 @@ const LABELS: Record<PRKind, string> = {
   '1rm': 'Estimated 1RM',
   weight: 'Heaviest weight',
   volume: 'Best set',
+  milestone: 'All-time total',
+}
+
+/** Lifetime-tonnage milestones per exercise (in the display unit). Crossing one
+ * during a set fires a celebration. */
+export const TONNAGE_MILESTONES = [
+  10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000,
+]
+
+/** The highest milestone strictly crossed when total goes from `before` to `after`, or null. */
+export function crossedMilestone(before: number, after: number): number | null {
+  let hit: number | null = null
+  for (const m of TONNAGE_MILESTONES) {
+    if (before < m && after >= m) hit = m
+  }
+  return hit
 }
 
 export function prLabel(kind: PRKind): string {

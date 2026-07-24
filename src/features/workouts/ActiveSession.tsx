@@ -18,6 +18,7 @@ import {
   formatElapsed,
   isWorkingSet,
   lastWeightForExercise,
+  lifetimeTonnage,
   previousSessionSets,
   priorBest1RM,
   priorBestSetVolume,
@@ -26,7 +27,7 @@ import {
   totalVolume,
   weightUnitLabel,
 } from './utils'
-import { detectPRs, type PRBars } from './prDetect'
+import { crossedMilestone, detectPRs, type PRBars } from './prDetect'
 import PRToast, { type PRCelebration } from './PRToast'
 import { beep, primeAudio, vibrate } from '../../lib/beep'
 import type { ReactNode } from 'react'
@@ -124,6 +125,16 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         bestWeight: priorBestWeight(sessions, e.exerciseId, session?.id),
         bestVolume: priorBestSetVolume(sessions, e.exerciseId, session?.id),
       }
+    }
+    return map
+  }, [sessions, session?.entries, session?.id])
+
+  // Lifetime tonnage per exercise from finished sessions — the base a milestone
+  // (10k, 25k, 50k…) is measured against as you complete sets.
+  const lifetimeBaseByExercise = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const e of session?.entries ?? []) {
+      map[e.exerciseId] = lifetimeTonnage(sessions, e.exerciseId, session?.id)
     }
     return map
   }, [sessions, session?.entries, session?.id])
@@ -287,6 +298,17 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
       bars.bestVolume = Math.max(bars.bestVolume, s.weight * s.reps)
     })
     const hits = detectPRs(set.weight, set.reps, bars)
+
+    // Lifetime-tonnage milestone: does completing this set push the exercise's
+    // all-time total across a round number (10k, 25k, 50k…)?
+    let sessionDoneVolume = 0
+    entry.sets.forEach((s, i) => {
+      if (i !== setIdx && isWorkingSet(s)) sessionDoneVolume += s.weight * s.reps
+    })
+    const before = (lifetimeBaseByExercise[exerciseId] ?? 0) + sessionDoneVolume
+    const milestone = crossedMilestone(before, before + set.weight * set.reps)
+    if (milestone) hits.push({ kind: 'milestone', value: milestone })
+
     if (hits.length > 0) {
       setPrCelebration({ id: ++prSeq.current, exerciseName: getExerciseById(exerciseId)?.name ?? 'Exercise', hits })
       vibrate(60)

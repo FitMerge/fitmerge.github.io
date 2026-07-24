@@ -5,7 +5,8 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { getExerciseById } from '../../data/exercises'
 import { epley1RM, monthDayLabel } from '../progress/utils'
-import { weightUnitLabel } from './utils'
+import { lifetimeTonnage, weightUnitLabel } from './utils'
+import { TONNAGE_MILESTONES } from './prDetect'
 import type { WorkoutSession } from '../../types'
 
 type ExerciseProgressSheetProps = {
@@ -50,6 +51,10 @@ export default function ExerciseProgressSheet({ exerciseId, onClose }: ExerciseP
     [points],
   )
 
+  const tonnage = useMemo(() => (exerciseId ? lifetimeTonnage(sessions, exerciseId) : 0), [sessions, exerciseId])
+  const nextMilestone = TONNAGE_MILESTONES.find((m) => m > tonnage) ?? null
+  const milestonePct = nextMilestone ? Math.min(1, tonnage / nextMilestone) : 1
+
   return (
     <Sheet open={exerciseId !== null} onClose={onClose} title={exercise?.name ?? ''}>
       {exerciseId && (
@@ -70,6 +75,27 @@ export default function ExerciseProgressSheet({ exerciseId, onClose }: ExerciseP
               <p className="text-xs text-slate-500">Sessions</p>
             </div>
           </div>
+
+          {tonnage > 0 && (
+            <div className="rounded-xl bg-gradient-to-br from-amber-500/10 to-slate-800/60 px-3 py-3">
+              <div className="flex items-baseline justify-between">
+                <p className="text-xs text-slate-400">All-time volume lifted</p>
+                <p className="text-lg font-bold text-amber-200">
+                  {Math.round(tonnage).toLocaleString()} <span className="text-xs font-normal text-slate-400">{unitLabel}</span>
+                </p>
+              </div>
+              {nextMilestone && (
+                <>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-700">
+                    <div className="h-full rounded-full bg-amber-400" style={{ width: `${milestonePct * 100}%` }} />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {Math.round(nextMilestone - tonnage).toLocaleString()} {unitLabel} to {nextMilestone.toLocaleString()}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           {points.length >= 2 ? (
             <div style={{ height: 180 }}>

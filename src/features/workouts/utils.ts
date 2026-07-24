@@ -108,6 +108,27 @@ export function priorBestWeight(
   return best
 }
 
+/**
+ * Lifetime tonnage (Σ weight × reps of working sets) for an exercise across
+ * finished sessions. Powers the all-time-total stat and milestone celebrations.
+ */
+export function lifetimeTonnage(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+  excludeSessionId?: string,
+): number {
+  let total = 0
+  for (const session of sessions) {
+    if (!session.finishedAt || session.id === excludeSessionId) continue
+    const entry = session.entries.find((e) => e.exerciseId === exerciseId)
+    if (!entry) continue
+    for (const set of entry.sets) {
+      if (isWorkingSet(set)) total += set.weight * set.reps
+    }
+  }
+  return total
+}
+
 /** Best single-set volume (weight × reps) ever on an exercise before `excludeSessionId`. */
 export function priorBestSetVolume(
   sessions: WorkoutSession[],
