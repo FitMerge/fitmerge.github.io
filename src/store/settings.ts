@@ -13,9 +13,10 @@ type SettingsState = {
   goalWeightKg?: number
   onboarded: boolean
   /** GitHub fine-grained token used to trigger the cloud Garmin-pull workflow.
-   * Device-local only — deliberately NOT synced to the cloud (see storeAdapters). */
+   * Synced across the user's own devices via their private per-user Firestore doc
+   * (see storeAdapters KEY_FIELDS), guarded so an empty value never wipes it. */
   githubToken: string
-  /** "owner/repo" hosting the garmin-pull workflow. Device-local. */
+  /** "owner/repo" hosting the garmin-pull workflow. Synced across devices. */
   githubRepo: string
   /** Epoch ms of the last successful manual Garmin pull trigger. */
   lastGarminPullAt?: number

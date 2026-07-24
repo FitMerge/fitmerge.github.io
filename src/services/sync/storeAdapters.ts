@@ -232,9 +232,11 @@ const health: StoreAdapter = {
 // an empty cloud value never wipes a real local key. On merge, cloud values win
 // so a freshly-installed device doesn't clobber the account's goals with defaults.
 
-// API keys are the user's own credentials; carry them across devices but treat
-// an empty value as "no update" so one device signing in blank can't erase them.
-const KEY_FIELDS = ['geminiApiKey', 'usdaApiKey'] as const
+// Credential-style fields (the user's own keys, GitHub token, and repo): carry
+// them across devices but treat an empty value as "no update" so one device
+// signing in blank can't erase them. They live only in the user's own per-user
+// Firestore doc, readable solely by their authenticated uid.
+const KEY_FIELDS = ['geminiApiKey', 'usdaApiKey', 'githubToken', 'githubRepo'] as const
 
 const settings: StoreAdapter = {
   name: 'settings',
@@ -248,6 +250,8 @@ const settings: StoreAdapter = {
       onboarded: s.onboarded,
       geminiApiKey: s.geminiApiKey,
       usdaApiKey: s.usdaApiKey,
+      githubToken: s.githubToken,
+      githubRepo: s.githubRepo,
     }
   },
   apply(data) {
@@ -257,9 +261,11 @@ const settings: StoreAdapter = {
       profile: (data.profile as Profile | undefined) ?? prev.profile,
       waterGoalMl: (data.waterGoalMl as number | undefined) ?? prev.waterGoalMl,
       onboarded: (data.onboarded as boolean | undefined) ?? prev.onboarded,
-      // `||` (not `??`) so an empty incoming key keeps the existing local one.
+      // `||` (not `??`) so an empty incoming value keeps the existing local one.
       geminiApiKey: (data.geminiApiKey as string | undefined) || prev.geminiApiKey,
       usdaApiKey: (data.usdaApiKey as string | undefined) || prev.usdaApiKey,
+      githubToken: (data.githubToken as string | undefined) || prev.githubToken,
+      githubRepo: (data.githubRepo as string | undefined) || prev.githubRepo,
     }))
   },
   subscribe(cb) {
