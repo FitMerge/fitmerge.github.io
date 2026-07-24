@@ -19,8 +19,12 @@ const buildTime = new Date().toISOString().slice(0, 16).replace('T', ' ')
 function git(command: string, fallback: string): string {
   try {
     return execSync(command, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  } catch {
-    return fallback // no git available (e.g. a tarball build) — degrade, don't fail
+  } catch (err) {
+    // Degrade rather than fail the build — git may genuinely be absent (a tarball
+    // build). But say so: swallowing this silently once already shipped an empty
+    // changelog that looked exactly like "no commits yet".
+    console.warn(`[build] ${command} failed, using fallback: ${(err as Error).message}`)
+    return fallback
   }
 }
 
@@ -42,12 +46,28 @@ const commitCount = git('git rev-list --count HEAD', '0')
 const appVersion = `${major}.${minor}.${commitCount}`
 const gitSha = (process.env.GITHUB_SHA ?? git('git rev-parse HEAD', '')).slice(0, 7) || 'dev'
 
+// "What's new", read straight from git history at build time. A hand-maintained
+// CHANGELOG.md would drift out of date the way the hardcoded version string did;
+// commit subjects here are already written for people, so use them directly.
+// Parsed by shape rather than a delimiter: the sha and date have fixed forms and
+// the subject is whatever remains, so no separator character is needed — one line
+// per commit, since a subject can never contain a newline.
+// Needs full history — deploy-pages.yml sets fetch-depth: 0.
+// The format string must stay quoted: unquoted, the shell splits it on spaces
+// and git reads %ad as a revision, which fails silently into an empty list.
+const changelog = git('git log --no-merges -n 25 --pretty=format:"%h %ad %s" --date=short', '')
+  .split('\n')
+  .map((line) => /^(\S+) (\d{4}-\d{2}-\d{2}) (.+)$/.exec(line))
+  .filter((m) => m !== null)
+  .map((m) => ({ sha: m[1], date: m[2], subject: m[3] }))
+
 export default defineConfig({
   base,
   define: {
     __BUILD_TIME__: JSON.stringify(`${buildTime} UTC`),
     __APP_VERSION__: JSON.stringify(appVersion),
     __GIT_SHA__: JSON.stringify(gitSha),
+    __CHANGELOG__: JSON.stringify(changelog),
   },
   plugins: [
     react(),

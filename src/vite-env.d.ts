@@ -6,3 +6,5 @@ declare const __BUILD_TIME__: string
 declare const __APP_VERSION__: string
 /** Short commit SHA of the deployed build. */
 declare const __GIT_SHA__: string
+/** Recent commits, newest first, for the About card's "What's new" list. */
+declare const __CHANGELOG__: { sha: string; date: string; subject: string }[]
