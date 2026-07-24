@@ -20,7 +20,7 @@ type Phase =
   | { status: 'done'; messages: string[] }
   | { status: 'error'; message: string }
 
-const EXAMPLES = ['log 172 lb today and 172.5 yesterday', 'took creatine', 'add 500ml water', 'ate 2 eggs and toast for breakfast']
+const EXAMPLES = ['log 172 lb today and 172.5 yesterday', '60 min indoor soccer', 'ran 5k in 26 min', 'took creatine', 'ate 2 eggs and toast for breakfast']
 
 export default function CommandBar({ onNavigate, onDone }: CommandBarProps) {
   const apiKey = useSettingsStore((s) => s.geminiApiKey)

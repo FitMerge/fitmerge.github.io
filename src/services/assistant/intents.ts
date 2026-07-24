@@ -10,8 +10,10 @@ import { todayISO } from '../../lib/date'
 import { useBodyStore } from '../../store/body'
 import { useNutritionStore } from '../../store/nutrition'
 import { useSupplementStore } from '../../store/supplements'
+import { useWorkoutsStore } from '../../store/workouts'
 
 export const CUP_ML = 250
+export const KM_PER_MILE = 1.60934
 
 /** What the model is asked to emit — loose, unvalidated. */
 export type RawAction = {
@@ -38,6 +40,13 @@ export type RawAction = {
   amount?: number
   // workout
   routineName?: string
+  // cardio/activity
+  durationMin?: number
+  minutes?: number
+  kcal?: number
+  distanceKm?: number
+  distanceMi?: number
+  miles?: number
 }
 
 export type AssistantAction =
@@ -57,6 +66,7 @@ export type AssistantAction =
     }
   | { kind: 'supplement'; date: string; supplementId?: string; name: string; amount?: number; unit?: string; isNew: boolean }
   | { kind: 'startWorkout'; routineId?: string; routineName: string }
+  | { kind: 'activity'; date: string; name: string; durationMin: number; kcal?: number; distanceKm?: number }
   | { kind: 'unknown'; text: string }
 
 export type ActionContext = {
@@ -134,6 +144,23 @@ function resolveOne(raw: RawAction, ctx: ActionContext): AssistantAction | null 
         ctx.routines.find((r) => q && r.name.toLowerCase().includes(q.toLowerCase()))
       return { kind: 'startWorkout', routineId: match?.id, routineName: match?.name ?? q }
     }
+    case 'logActivity': {
+      const name = typeof raw.name === 'string' ? raw.name.trim() : ''
+      const durationMin = num(raw.durationMin) ?? num(raw.minutes)
+      if (!name || durationMin === undefined || durationMin <= 0) return null
+      let distanceKm = num(raw.distanceKm)
+      if (distanceKm === undefined && num(raw.distanceMi) !== undefined) distanceKm = num(raw.distanceMi)! * KM_PER_MILE
+      if (distanceKm === undefined && num(raw.miles) !== undefined) distanceKm = num(raw.miles)! * KM_PER_MILE
+      const kcal = num(raw.kcal) ?? num(raw.calories)
+      return {
+        kind: 'activity',
+        date,
+        name,
+        durationMin: Math.round(durationMin),
+        kcal: kcal !== undefined && kcal > 0 ? Math.round(kcal) : undefined,
+        distanceKm: distanceKm !== undefined && distanceKm > 0 ? Math.round(distanceKm * 100) / 100 : undefined,
+      }
+    }
     default:
       return null
   }
@@ -160,6 +187,20 @@ export function describeAction(a: AssistantAction, units: Units): { label: strin
       }
     case 'startWorkout':
       return { label: `Start workout: ${a.routineName || 'pick one'}`, detail: a.routineId ? 'ready' : 'not found' }
+    case 'activity': {
+      const extras = [
+        a.distanceKm !== undefined
+          ? units === 'imperial'
+            ? `${(a.distanceKm / KM_PER_MILE).toFixed(2)} mi`
+            : `${a.distanceKm} km`
+          : null,
+        a.kcal !== undefined ? `${a.kcal} kcal` : null,
+      ].filter(Boolean)
+      return {
+        label: `Log ${a.name} · ${a.durationMin} min`,
+        detail: [extras.join(' · '), when(a.date)].filter(Boolean).join(' · '),
+      }
+    }
     case 'unknown':
       return { label: a.text, detail: 'not understood' }
   }
@@ -199,6 +240,24 @@ export function executeAction(a: AssistantAction): ExecResult {
     case 'startWorkout':
       if (!a.routineId) return { ok: false, message: `No routine matching "${a.routineName}"` }
       return { ok: true, message: `Starting ${a.routineName}`, navigateTo: '/workouts', navigateState: { startRoutineId: a.routineId } }
+    case 'activity': {
+      // A completed cardio/activity session: no strength sets, so it reads as cardio
+      // everywhere (isCardioSession) and feeds the activity/pace charts. Anchor the
+      // timestamp to noon on the logged date so it sorts sensibly regardless of when
+      // it's entered.
+      const startedAt = new Date(`${a.date}T12:00:00`).getTime()
+      useWorkoutsStore.getState().addSession({
+        name: a.name,
+        date: a.date,
+        startedAt,
+        finishedAt: startedAt + a.durationMin * 60000,
+        entries: [],
+        durationMin: a.durationMin,
+        ...(a.kcal !== undefined ? { kcal: a.kcal } : {}),
+        ...(a.distanceKm !== undefined ? { distanceKm: a.distanceKm } : {}),
+      })
+      return { ok: true, message: `${a.name} (${a.durationMin} min) logged` }
+    }
     case 'unknown':
       return { ok: false, message: "Didn't understand that" }
   }

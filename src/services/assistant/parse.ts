@@ -35,13 +35,17 @@ Each action is one object. Use ONLY these shapes; omit fields that don't apply:
   {"type":"logFood","date":"YYYY-MM-DD","name":string,"mealType":"breakfast"|"lunch"|"dinner"|"snack","calories":number,"protein":number,"carbs":number,"fat":number,"qty":number?,"unit":string?}
 - Log a supplement/habit (creatine, vitamins, etc.):
   {"type":"logSupplement","date":"YYYY-MM-DD","name":string,"amount":number?,"unit":string?}
-- Start a planned workout:
+- Start a planned strength workout (one of the known routines):
   {"type":"startWorkout","routineName":string}
+- Log a COMPLETED cardio/activity session (soccer, run, walk, bike, hike, swim, tennis, yoga, etc.):
+  {"type":"logActivity","date":"YYYY-MM-DD","name":string,"durationMin":number,"kcal":number?,"distanceKm":number?}
 
 Rules:
 - Resolve relative dates ("today","yesterday","last monday") to YYYY-MM-DD using today's date above. Default to today when unstated.
 - A single message may contain several actions (e.g. two weigh-ins) — return one object each.
 - If weightUnit is not stated, use the user's preferred unit.
+- startWorkout is ONLY for starting one of the known routines listed above. Anything else the user "did" (a sport, run, walk, ride, hike, class) is a COMPLETED activity → use logActivity.
+- For logActivity: give "name" in Title Case (e.g. "Indoor Soccer", "Running", "Trail Hike"). Convert any distance to kilometres (1 mile = 1.609 km). You MAY estimate kcal from the activity + duration; omit it if unsure.
 - If you cannot map the message to any action, return an empty "actions" array and explain briefly in "reply".
 - Match supplement and routine names to the known lists above when possible; otherwise use the user's wording.`
 }
