@@ -29,7 +29,7 @@ import {
 } from './utils'
 import { crossedMilestone, detectPRs, type PRBars } from './prDetect'
 import PRToast, { type PRCelebration } from './PRToast'
-import { beep, primeAudio, vibrate } from '../../lib/beep'
+import { beepCountdown, beepDone, primeAudio, vibrate } from '../../lib/beep'
 import type { ReactNode } from 'react'
 import type { Exercise, SetLog, WorkoutSessionEntry } from '../../types'
 
@@ -69,8 +69,9 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const [plateWeight, setPlateWeight] = useState<number | null>(null)
   const [prCelebration, setPrCelebration] = useState<PRCelebration | null>(null)
   // Guards the rest-timer alert so it dings exactly once per timer, and gives each
-  // PR celebration a unique id.
+  // PR celebration a unique id. lastCountdownSecond stops a 3/2/1 blip repeating.
   const restAlerted = useRef(false)
+  const lastCountdownSecond = useRef<number | null>(null)
   const prSeq = useRef(0)
 
   useEffect(() => {
@@ -86,12 +87,19 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     return () => clearTimeout(t)
   }, [restTimer])
 
-  // Ding + buzz once when the rest timer reaches zero (if the user has it on).
+  // 3-2-1 countdown blips, then the higher "go" tone + buzz at zero (if sound on).
   useEffect(() => {
-    if (restTimer && restTimer.secondsLeft <= 0 && !restAlerted.current) {
+    if (!restTimer) return
+    const s = restTimer.secondsLeft
+    if (s > 3) lastCountdownSecond.current = null // reset so +15s re-arms the countdown
+    if (restTimerSound && (s === 3 || s === 2 || s === 1) && lastCountdownSecond.current !== s) {
+      lastCountdownSecond.current = s
+      beepCountdown()
+    }
+    if (s <= 0 && !restAlerted.current) {
       restAlerted.current = true
       if (restTimerSound) {
-        beep()
+        beepDone()
         vibrate([120, 60, 120])
       }
     }
@@ -276,6 +284,7 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     // end-of-rest ding is allowed to play later.
     const total = restSecFor(exerciseId)
     restAlerted.current = false
+    lastCountdownSecond.current = null
     primeAudio()
     setRestTimer({ total, secondsLeft: total })
     checkForPRs(exerciseId, setIdx)

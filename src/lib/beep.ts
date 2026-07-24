@@ -1,6 +1,6 @@
-// Tiny WebAudio ding + haptic buzz for the rest timer. The AudioContext must be
-// created/resumed from a user gesture (browser autoplay policy), so callers should
-// invoke primeAudio() on a tap (e.g. checking a set) before the timer fires.
+// Rest-timer audio: a 3-2-1 countdown (three low beeps) then a higher "go" tone
+// at zero, plus a haptic buzz. The AudioContext must be created/resumed from a
+// user gesture (autoplay policy), so callers prime it on a tap (checking a set).
 
 type Ctor = typeof AudioContext
 let ctx: AudioContext | null = null
@@ -25,24 +25,32 @@ export function primeAudio(): void {
   if (ctx.state === 'suspended') void ctx.resume()
 }
 
-/** A short two-tone ding. No-op if audio was never primed / isn't available. */
-export function beep(): void {
+/** One sine blip. delay lets us schedule a couple in quick succession. */
+function tone(freq: number, duration: number, peak = 0.3, delay = 0): void {
   if (!ctx || ctx.state !== 'running') return
-  const now = ctx.currentTime
-  for (const [i, freq] of [880, 1320].entries()) {
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = 'sine'
-    osc.frequency.value = freq
-    const start = now + i * 0.16
-    gain.gain.setValueAtTime(0.0001, start)
-    gain.gain.exponentialRampToValueAtTime(0.35, start + 0.01)
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.15)
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.start(start)
-    osc.stop(start + 0.16)
-  }
+  const start = ctx.currentTime + delay
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.type = 'sine'
+  osc.frequency.value = freq
+  gain.gain.setValueAtTime(0.0001, start)
+  gain.gain.exponentialRampToValueAtTime(peak, start + 0.01)
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  osc.start(start)
+  osc.stop(start + duration + 0.02)
+}
+
+/** A short, low "get ready" blip — one per second at 3, 2, 1 remaining. */
+export function beepCountdown(): void {
+  tone(520, 0.12, 0.25)
+}
+
+/** The higher "go" tone when rest is up — two quick rising notes. */
+export function beepDone(): void {
+  tone(1046, 0.16, 0.34)
+  tone(1318, 0.22, 0.34, 0.16)
 }
 
 /** Haptic buzz where supported (Android Chrome; iOS Safari has no Vibration API). */
