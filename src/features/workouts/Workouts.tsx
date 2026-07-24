@@ -70,14 +70,28 @@ export default function Workouts() {
   }
 
   useEffect(() => {
-    const state = location.state as { startRoutineId?: string } | null
-    const startRoutineId = state?.startRoutineId
-    if (!startRoutineId) return
+    const state = location.state as
+      | { startRoutineId?: string; coachSession?: { name: string; items: { exerciseId: string; sets: number; reps: number }[] } }
+      | null
+    if (!state?.startRoutineId && !state?.coachSession) return
 
     if (!activeSessionId) {
-      const routine = routines.find((r) => r.id === startRoutineId)
-      if (routine) {
-        startFromRoutine(routine)
+      if (state.startRoutineId) {
+        const routine = routines.find((r) => r.id === state.startRoutineId)
+        if (routine) startFromRoutine(routine)
+      } else if (state.coachSession) {
+        // Ad-hoc session the AI coach recommended — build entries, seeding each
+        // set's weight from the last time this exercise was trained.
+        const entries: WorkoutSessionEntry[] = state.coachSession.items.map((item) => ({
+          exerciseId: item.exerciseId,
+          sets: Array.from({ length: Math.max(1, item.sets) }, () => ({
+            reps: item.reps,
+            weight: lastWeightForExercise(sessions, item.exerciseId),
+            done: false,
+          })),
+        }))
+        startSession({ name: state.coachSession.name, date: todayISO(), startedAt: Date.now(), entries })
+        setView({ kind: 'session' })
       }
     }
     navigate('.', { replace: true, state: null })

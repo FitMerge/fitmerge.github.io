@@ -254,6 +254,7 @@ const settings: StoreAdapter = {
       githubRepo: s.githubRepo,
       availableEquipment: s.availableEquipment,
       restTimerSound: s.restTimerSound,
+      coachProfile: s.coachProfile,
     }
   },
   apply(data) {
@@ -265,6 +266,7 @@ const settings: StoreAdapter = {
       onboarded: (data.onboarded as boolean | undefined) ?? prev.onboarded,
       availableEquipment: (data.availableEquipment as string[] | undefined) ?? prev.availableEquipment,
       restTimerSound: (data.restTimerSound as boolean | undefined) ?? prev.restTimerSound,
+      coachProfile: (data.coachProfile as typeof prev.coachProfile) ?? prev.coachProfile,
       // `||` (not `??`) so an empty incoming value keeps the existing local one.
       geminiApiKey: (data.geminiApiKey as string | undefined) || prev.geminiApiKey,
       usdaApiKey: (data.usdaApiKey as string | undefined) || prev.usdaApiKey,

@@ -2,6 +2,20 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Goals, Profile, Units } from '../types'
 
+/** What the AI coach needs that raw data can't infer — captured once, editable. */
+export type CoachProfile = {
+  primaryGoal: 'build-muscle' | 'lose-fat' | 'strength' | 'endurance' | 'general-health'
+  experience: 'beginner' | 'intermediate' | 'advanced'
+  daysPerWeek: number
+  sessionMinutes: number
+  /** Free text: emphasis (e.g. "chest & arms"), preferences. */
+  focus?: string
+  /** Injuries / limitations to train around. */
+  constraints?: string
+  /** Dietary notes / restrictions. */
+  dietNotes?: string
+}
+
 type SettingsState = {
   goals: Goals
   units: Units
@@ -23,6 +37,8 @@ type SettingsState = {
   availableEquipment?: string[]
   /** Play a ding + buzz when the rest timer hits zero. */
   restTimerSound: boolean
+  /** Goals/constraints for the AI coach; undefined until the user fills it in. */
+  coachProfile?: CoachProfile
   /** Epoch ms of the last successful manual Garmin pull trigger. */
   lastGarminPullAt?: number
   setGoals: (goals: Goals) => void
@@ -37,6 +53,7 @@ type SettingsState = {
   setGithubRepo: (repo: string) => void
   setAvailableEquipment: (list: string[]) => void
   setRestTimerSound: (on: boolean) => void
+  setCoachProfile: (profile: CoachProfile) => void
   setLastGarminPullAt: (ts: number) => void
 }
 
@@ -65,6 +82,7 @@ export const useSettingsStore = create<SettingsState>()(
       setGithubRepo: (repo) => set({ githubRepo: repo }),
       setAvailableEquipment: (list) => set({ availableEquipment: list }),
       setRestTimerSound: (on) => set({ restTimerSound: on }),
+      setCoachProfile: (profile) => set({ coachProfile: profile }),
       setLastGarminPullAt: (ts) => set({ lastGarminPullAt: ts }),
     }),
     { name: 'fm-settings' },

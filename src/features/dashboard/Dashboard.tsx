@@ -3,12 +3,13 @@
 // a prioritized rule-based coach, today's plan, and the key stat from every page.
 // Styled after the daily-brief homes of Whoop and Oura.
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, Droplets, Dumbbell, Pill, Sparkles } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import RingChart from '../../components/RingChart'
+import CoachSheet from './CoachSheet'
 import { useHomeData } from './homeData'
 import { buildInsights } from './insights'
 import { metricSpark, scoreColor } from '../health/healthToday'
@@ -21,6 +22,7 @@ import { fmtK, fmtSleep, HomeHeader, INSIGHT_ICONS, InsightRow, StatTile, TONE_B
 export default function Dashboard() {
   const navigate = useNavigate()
   const d = useHomeData()
+  const [coachOpen, setCoachOpen] = useState(false)
   const insights = useMemo(() => buildInsights(d, new Date().getHours()), [d])
   const featured = insights[0]
   const FeaturedIcon = featured ? INSIGHT_ICONS[featured.icon] : null
@@ -103,13 +105,30 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      {/* Coach — featured read up top, the rest as compact rows. */}
-      {insights.length > 0 && (
-        <Card className="space-y-2">
-          <h2 className="flex items-center gap-1.5 px-1 text-sm font-semibold text-slate-100">
-            <Sparkles size={14} className="text-primary-400" /> Coach
-          </h2>
+      {/* Coach — AI plan on demand, then the featured rule-based read + rows. */}
+      <Card className="space-y-2">
+        <h2 className="flex items-center gap-1.5 px-1 text-sm font-semibold text-slate-100">
+          <Sparkles size={14} className="text-primary-400" /> Coach
+        </h2>
 
+        <button
+          type="button"
+          onClick={() => setCoachOpen(true)}
+          className="flex w-full items-center gap-3 rounded-xl bg-gradient-to-br from-primary-500/20 to-slate-900 p-3 text-left active:opacity-80"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-500/20">
+            <Sparkles size={19} className="text-primary-300" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[15px] font-bold text-primary-200">Get today's plan</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-slate-300">
+              AI reads your last 5 days and tailors training, fuel & recovery for today.
+            </span>
+          </span>
+        </button>
+
+        {insights.length > 0 && (
+          <>
           {featured && FeaturedIcon && (
             <button
               type="button"
@@ -129,8 +148,9 @@ export default function Dashboard() {
           {insights.slice(1, 4).map((i) => (
             <InsightRow key={i.id} insight={i} />
           ))}
-        </Card>
-      )}
+          </>
+        )}
+      </Card>
 
       {/* Today's plan — workout, supplements, water. */}
       {(d.todaysRoutine || d.supplements.length > 0 || d.waterGoalMl > 0) && (
@@ -274,6 +294,8 @@ export default function Dashboard() {
           to="/nutrition"
         />
       </div>
+
+      <CoachSheet open={coachOpen} onClose={() => setCoachOpen(false)} />
     </div>
   )
 }
