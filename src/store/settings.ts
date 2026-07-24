@@ -18,6 +18,9 @@ type SettingsState = {
   githubToken: string
   /** "owner/repo" hosting the garmin-pull workflow. Synced across devices. */
   githubRepo: string
+  /** Equipment the user owns, used to filter exercise-swap suggestions. undefined
+   * = no preference (everything available); Bodyweight is always available. */
+  availableEquipment?: string[]
   /** Epoch ms of the last successful manual Garmin pull trigger. */
   lastGarminPullAt?: number
   setGoals: (goals: Goals) => void
@@ -30,6 +33,7 @@ type SettingsState = {
   setOnboarded: (v: boolean) => void
   setGithubToken: (token: string) => void
   setGithubRepo: (repo: string) => void
+  setAvailableEquipment: (list: string[]) => void
   setLastGarminPullAt: (ts: number) => void
 }
 
@@ -55,6 +59,7 @@ export const useSettingsStore = create<SettingsState>()(
       setOnboarded: (v) => set({ onboarded: v }),
       setGithubToken: (token) => set({ githubToken: token }),
       setGithubRepo: (repo) => set({ githubRepo: repo }),
+      setAvailableEquipment: (list) => set({ availableEquipment: list }),
       setLastGarminPullAt: (ts) => set({ lastGarminPullAt: ts }),
     }),
     { name: 'fm-settings' },

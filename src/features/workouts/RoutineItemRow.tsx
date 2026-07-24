@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, ChevronUp, X } from 'lucide-react'
 import Card from '../../components/Card'
 import CompactStepper from './CompactStepper'
 import { getExerciseById } from '../../data/exercises'
@@ -12,6 +12,7 @@ type RoutineItemRowProps = {
   onRemove: () => void
   onMoveUp: () => void
   onMoveDown: () => void
+  onSwap: () => void
 }
 
 export default function RoutineItemRow({
@@ -22,16 +23,20 @@ export default function RoutineItemRow({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onSwap,
 }: RoutineItemRowProps) {
   const exercise = getExerciseById(item.exerciseId)
 
   return (
     <Card className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-100 truncate">{exercise?.name ?? 'Unknown exercise'}</p>
-          <p className="text-xs text-slate-500">{exercise?.muscleGroup}</p>
-        </div>
+        <button type="button" onClick={onSwap} className="flex min-w-0 items-center gap-1.5 text-left" aria-label="Swap exercise">
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-slate-100">{exercise?.name ?? 'Unknown exercise'}</span>
+            <span className="block text-xs text-slate-500">{exercise?.muscleGroup} · tap to swap</span>
+          </span>
+          <ArrowLeftRight size={13} className="shrink-0 text-slate-500" />
+        </button>
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"

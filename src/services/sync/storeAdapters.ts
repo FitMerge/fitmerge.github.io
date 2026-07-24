@@ -252,6 +252,7 @@ const settings: StoreAdapter = {
       usdaApiKey: s.usdaApiKey,
       githubToken: s.githubToken,
       githubRepo: s.githubRepo,
+      availableEquipment: s.availableEquipment,
     }
   },
   apply(data) {
@@ -261,6 +262,7 @@ const settings: StoreAdapter = {
       profile: (data.profile as Profile | undefined) ?? prev.profile,
       waterGoalMl: (data.waterGoalMl as number | undefined) ?? prev.waterGoalMl,
       onboarded: (data.onboarded as boolean | undefined) ?? prev.onboarded,
+      availableEquipment: (data.availableEquipment as string[] | undefined) ?? prev.availableEquipment,
       // `||` (not `??`) so an empty incoming value keeps the existing local one.
       geminiApiKey: (data.geminiApiKey as string | undefined) || prev.geminiApiKey,
       usdaApiKey: (data.usdaApiKey as string | undefined) || prev.usdaApiKey,

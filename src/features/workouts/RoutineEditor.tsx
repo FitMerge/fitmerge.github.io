@@ -3,6 +3,7 @@ import { ChevronLeft, Plus } from 'lucide-react'
 import Button from '../../components/Button'
 import ExercisePicker from './ExercisePicker'
 import RoutineItemRow from './RoutineItemRow'
+import SwapExerciseSheet from './SwapExerciseSheet'
 import { useWorkoutsStore } from '../../store/workouts'
 import { weekdayLabels } from './utils'
 import type { Exercise, RoutineItem } from '../../types'
@@ -25,6 +26,7 @@ export default function RoutineEditor({ routineId, onDone, onCancel }: RoutineEd
   const [scheduleDays, setScheduleDays] = useState<number[]>(existing?.scheduleDays ?? [])
   const [items, setItems] = useState<RoutineItem[]>(existing?.items ?? [])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [swapIndex, setSwapIndex] = useState<number | null>(null)
 
   const canSave = name.trim().length > 0 && items.length > 0
 
@@ -142,6 +144,7 @@ export default function RoutineEditor({ routineId, onDone, onCancel }: RoutineEd
                 onRemove={() => removeItem(idx)}
                 onMoveUp={() => moveItem(idx, -1)}
                 onMoveDown={() => moveItem(idx, 1)}
+                onSwap={() => setSwapIndex(idx)}
               />
             ))}
           </div>
@@ -165,6 +168,16 @@ export default function RoutineEditor({ routineId, onDone, onCancel }: RoutineEd
       </div>
 
       <ExercisePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
+
+      <SwapExerciseSheet
+        open={swapIndex !== null}
+        fromExerciseId={swapIndex !== null ? items[swapIndex].exerciseId : null}
+        onClose={() => setSwapIndex(null)}
+        onSwap={(exercise) => {
+          if (swapIndex !== null) updateItem(swapIndex, { exerciseId: exercise.id })
+          setSwapIndex(null)
+        }}
+      />
     </div>
   )
 }

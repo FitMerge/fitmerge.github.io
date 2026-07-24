@@ -5,6 +5,7 @@ import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
 import ExercisePicker from './ExercisePicker'
 import ExerciseDetailSheet from './ExerciseDetailSheet'
+import SwapExerciseSheet from './SwapExerciseSheet'
 import PlateCalculatorSheet from './PlateCalculatorSheet'
 import SetRow from './SetRow'
 import RestTimerBar from './RestTimerBar'
@@ -53,8 +54,8 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [finishOpen, setFinishOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
-  // When set, the exercise picker is swapping this exercise instead of adding a new one.
-  const [replaceId, setReplaceId] = useState<string | null>(null)
+  // When set, the comparable-swap sheet is open for this exercise.
+  const [swapId, setSwapId] = useState<string | null>(null)
   // Exercise ids whose action row / note editor is expanded.
   const [expandedActions, setExpandedActions] = useState<Set<string>>(() => new Set())
   const [plateWeight, setPlateWeight] = useState<number | null>(null)
@@ -177,19 +178,10 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     patchEntries([...session!.entries, newEntry])
   }
 
-  // Picker double-duties: swap an exercise (keeping its logged sets) when replaceId
-  // is set, otherwise append a new exercise.
-  function handlePick(exercise: Exercise) {
-    if (replaceId) {
-      if (replaceId !== exercise.id && !session!.entries.some((e) => e.exerciseId === exercise.id)) {
-        patchEntries(
-          session!.entries.map((e) => (e.exerciseId === replaceId ? { ...e, exerciseId: exercise.id } : e)),
-        )
-      }
-      setReplaceId(null)
-      setPickerOpen(false) // replace picks a single exercise, then closes
-    } else {
-      addExerciseEntry(exercise)
+  // Swap an exercise for a comparable one, keeping its logged sets in place.
+  function swapExercise(fromId: string, exercise: Exercise) {
+    if (fromId !== exercise.id && !session!.entries.some((e) => e.exerciseId === exercise.id)) {
+      patchEntries(session!.entries.map((e) => (e.exerciseId === fromId ? { ...e, exerciseId: exercise.id } : e)))
     }
   }
 
@@ -315,7 +307,7 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
                     <div className="flex flex-wrap gap-1.5">
                       <ActionBtn icon={<ArrowUp size={13} />} label="Up" disabled={entryIdx === 0} onClick={() => moveEntry(entry.exerciseId, -1)} />
                       <ActionBtn icon={<ArrowDown size={13} />} label="Down" disabled={entryIdx === session.entries.length - 1} onClick={() => moveEntry(entry.exerciseId, 1)} />
-                      <ActionBtn icon={<Repeat size={13} />} label="Replace" onClick={() => { setReplaceId(entry.exerciseId); setPickerOpen(true) }} />
+                      <ActionBtn icon={<Repeat size={13} />} label="Swap" onClick={() => setSwapId(entry.exerciseId)} />
                       <ActionBtn icon={<Calculator size={13} />} label="Plates" onClick={() => setPlateWeight(topWeight)} />
                       <ActionBtn icon={<Trash2 size={13} />} label="Remove" danger onClick={() => removeEntry(entry.exerciseId)} />
                     </div>
@@ -384,13 +376,16 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         />
       )}
 
-      <ExercisePicker
-        open={pickerOpen}
-        onClose={() => {
-          setPickerOpen(false)
-          setReplaceId(null)
+      <ExercisePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExerciseEntry} />
+
+      <SwapExerciseSheet
+        open={swapId !== null}
+        fromExerciseId={swapId}
+        onClose={() => setSwapId(null)}
+        onSwap={(exercise) => {
+          if (swapId) swapExercise(swapId, exercise)
+          setSwapId(null)
         }}
-        onPick={handlePick}
       />
 
       <ExerciseDetailSheet exerciseId={detailId} onClose={() => setDetailId(null)} />
