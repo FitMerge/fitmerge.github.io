@@ -2,9 +2,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Served from GitHub Pages at https://<owner>.github.io/Test/ , so assets and the
-// service worker must resolve under the /Test/ sub-path.
-const base = '/Test/'
+// GitHub Pages serves a user/org site (a repo literally named <name>.github.io)
+// from the root, and every other repo from /<repo-name>/. Derive the base from
+// GITHUB_REPOSITORY so assets and the service worker resolve correctly no matter
+// which repo builds this — moving the project to an org needs no edit here.
+// Outside Actions (local dev/preview) the root is always right.
+const ghRepo = process.env.GITHUB_REPOSITORY?.split('/')[1]
+const base = !ghRepo || ghRepo.endsWith('.github.io') ? '/' : `/${ghRepo}/`
 
 // Human-readable build stamp, surfaced in Settings → About so it's obvious which
 // deployed version is loaded (and that an update actually landed).

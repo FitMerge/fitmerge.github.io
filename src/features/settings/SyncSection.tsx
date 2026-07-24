@@ -8,6 +8,15 @@ const FIRESTORE_RULES = `match /users/{uid}/{doc=**} {
   allow read, write: if request.auth != null && request.auth.uid == uid;
 }`
 
+// The domain a user must allow-list in Firebase Auth is simply wherever they're
+// reading this from, so read it off the page rather than hardcoding a host that
+// goes stale the moment the app moves. Localhost is already trusted by Firebase
+// by default, so fall back to the public host when running locally.
+const AUTH_DOMAIN_HINT =
+  typeof window !== 'undefined' && !/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+    ? window.location.hostname
+    : 'rung.github.io'
+
 export default function SyncSection() {
   const {
     user,
@@ -180,7 +189,7 @@ function OwnProjectSetup({ connect }: { connect: (pasted: string) => boolean }) 
             </li>
             <li>
               Still in Authentication, under <span className="text-slate-300">Settings → Authorized domains</span>,
-              add <code className="rounded bg-slate-800 px-1 py-0.5">skidude3892.github.io</code>.
+              add <code className="rounded bg-slate-800 px-1 py-0.5">{AUTH_DOMAIN_HINT}</code>.
             </li>
             <li>
               In <span className="text-slate-300">Build → Firestore Database</span>, click{' '}
