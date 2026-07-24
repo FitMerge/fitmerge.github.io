@@ -4,7 +4,18 @@
 import { EXERCISES } from './exercises'
 
 // Preferred display order; anything in the data but not listed here is appended.
-const ORDER = ['Barbell', 'Dumbbell', 'Kettlebell', 'Machine', 'Cable', 'Bodyweight', 'Other']
+const ORDER = ['Barbell', 'Dumbbell', 'Kettlebell', 'Machine', 'Cable', 'Cardio machine', 'Bodyweight', 'Other']
+
+/** One-line examples so users can map their real gear to each category. */
+export const EQUIPMENT_HELP: Record<string, string> = {
+  Barbell: 'Bars, plates & collars — incl. curl/trap bars',
+  Dumbbell: 'Fixed or adjustable dumbbells',
+  Kettlebell: 'Any kettlebells',
+  Machine: 'Plate/pin-loaded machines (leg press, lat pulldown…)',
+  Cable: 'Cable stack / functional trainer',
+  'Cardio machine': 'Bike, rower, treadmill, elliptical',
+  Other: 'Jump rope & misc.',
+}
 
 export const EQUIPMENT_TYPES: string[] = (() => {
   const present = new Set(EXERCISES.map((e) => e.equipment))

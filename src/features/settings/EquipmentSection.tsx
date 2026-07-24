@@ -1,7 +1,7 @@
 import { Check, Dumbbell } from 'lucide-react'
 import Card from '../../components/Card'
 import { useSettingsStore } from '../../store/settings'
-import { TOGGLEABLE_EQUIPMENT } from '../../data/equipment'
+import { EQUIPMENT_HELP, TOGGLEABLE_EQUIPMENT } from '../../data/equipment'
 
 /** "What equipment do I have" — drives the exercise-swap suggestions so moves you
  * can't do (e.g. cables at home) drop to the bottom or out of the list. */
@@ -28,7 +28,7 @@ export default function EquipmentSection() {
         Tick what you can train with. When you swap an exercise, comparable moves that use gear you have show first.
       </p>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="space-y-1.5">
         {TOGGLEABLE_EQUIPMENT.map((t) => {
           const on = isOn(t)
           return (
@@ -37,12 +37,21 @@ export default function EquipmentSection() {
               type="button"
               onClick={() => toggle(t)}
               aria-pressed={on}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
-                on ? 'bg-primary-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${
+                on ? 'bg-primary-500/15' : 'bg-slate-800/50'
               }`}
             >
-              {on && <Check size={13} />}
-              {t}
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                  on ? 'bg-primary-500 text-slate-950' : 'border border-slate-600'
+                }`}
+              >
+                {on && <Check size={13} />}
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-sm ${on ? 'text-slate-100' : 'text-slate-300'}`}>{t}</span>
+                {EQUIPMENT_HELP[t] && <span className="block text-[11px] text-slate-500">{EQUIPMENT_HELP[t]}</span>}
+              </span>
             </button>
           )
         })}
