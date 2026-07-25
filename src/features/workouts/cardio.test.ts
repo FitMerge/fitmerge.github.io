@@ -5,6 +5,7 @@ import {
   cardioSeries,
   formatPace,
   hasOutlierSpike,
+  inCardioRange,
 } from './cardio'
 import type { WorkoutSession } from '../../types'
 
@@ -120,6 +121,70 @@ describe('cardioSeries', () => {
     const [point] = cardioSeries([session()], 'Run', 'metric')
     expect(point.pace).toBeNull()
     expect(point.distance).toBeNull()
+  })
+})
+
+describe('inCardioRange', () => {
+  const TODAY = '2026-07-24'
+
+  it('includes today and the full window, excluding the day before it', () => {
+    const range = { kind: 'days', days: 30 } as const
+    expect(inCardioRange(TODAY, range, TODAY)).toBe(true)
+    expect(inCardioRange('2026-06-25', range, TODAY)).toBe(true) // 30th day back
+    expect(inCardioRange('2026-06-24', range, TODAY)).toBe(false) // 31st
+  })
+
+  it('excludes dates in the future', () => {
+    expect(inCardioRange('2026-08-01', { kind: 'days', days: 30 }, TODAY)).toBe(false)
+  })
+
+  it('keeps everything for the all-time range', () => {
+    expect(inCardioRange('2019-01-01', { kind: 'all' }, TODAY)).toBe(true)
+  })
+
+  it('honours a custom window inclusively at both ends', () => {
+    const range = { kind: 'custom', from: '2026-03-01', to: '2026-03-31' } as const
+    expect(inCardioRange('2026-03-01', range, TODAY)).toBe(true)
+    expect(inCardioRange('2026-03-31', range, TODAY)).toBe(true)
+    expect(inCardioRange('2026-02-28', range, TODAY)).toBe(false)
+    expect(inCardioRange('2026-04-01', range, TODAY)).toBe(false)
+  })
+
+  it('tolerates a custom window entered back to front', () => {
+    const backwards = { kind: 'custom', from: '2026-03-31', to: '2026-03-01' } as const
+    expect(inCardioRange('2026-03-15', backwards, TODAY)).toBe(true)
+  })
+})
+
+describe('range filtering', () => {
+  const TODAY = '2026-07-24'
+
+  const runs = [
+    session({ id: 'a', name: 'Denver Running', date: '2026-07-20', distanceKm: 5 }),
+    session({ id: 'b', name: 'Arvada Running', date: '2026-05-01', distanceKm: 6 }),
+    session({ id: 'c', name: 'Denver Running', date: '2025-01-01', distanceKm: 7 }),
+  ]
+
+  it('counts only sessions inside the range', () => {
+    const last30 = cardioActivities(runs, { kind: 'days', days: 30 }, TODAY)
+    expect(last30[0]).toMatchObject({ category: 'Run', count: 1 })
+
+    const allTime = cardioActivities(runs, { kind: 'all' }, TODAY)
+    expect(allTime[0]).toMatchObject({ category: 'Run', count: 3 })
+  })
+
+  it('drops a category entirely when it has nothing in range', () => {
+    // A 2-day window ends 2026-07-23, just past the most recent run on the 20th.
+    expect(cardioActivities(runs, { kind: 'days', days: 2 }, TODAY)).toEqual([])
+  })
+
+  it('charts only the sessions the count is describing', () => {
+    const range = { kind: 'days', days: 90 } as const
+    const activities = cardioActivities(runs, range, TODAY)
+    const points = cardioSeries(runs, 'Run', 'metric', range, TODAY)
+    // The tab count and the plotted series must agree, or the UI lies.
+    expect(points).toHaveLength(activities[0].count)
+    expect(points).toHaveLength(2)
   })
 })
 

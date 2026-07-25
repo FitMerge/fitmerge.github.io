@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Loader2, RefreshCw,
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { useSettingsStore } from '../../store/settings'
-import { useGarminPull } from './useGarminPull'
+import { BACKFILL_DAYS, useGarminPull } from './useGarminPull'
 
 function timeAgo(ts: number): string {
   const s = Math.round((Date.now() - ts) / 1000)
@@ -69,7 +69,14 @@ export default function GarminPullSection() {
 
       {configured && !editing && (
         <>
-          <Button variant="primary" full onClick={pull} disabled={status === 'dispatching' || status === 'running'}>
+          {/* Wrapped, not passed directly: `pull` takes a day count, and handing it
+              straight to onClick would feed it the click event. */}
+          <Button
+            variant="primary"
+            full
+            onClick={() => void pull()}
+            disabled={status === 'dispatching' || status === 'running'}
+          >
             <span className="flex items-center justify-center gap-1.5">
               {status === 'dispatching' || status === 'running' ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -79,6 +86,22 @@ export default function GarminPullSection() {
               {status === 'dispatching' ? 'Starting…' : status === 'running' ? 'Pulling…' : 'Pull from Garmin now'}
             </span>
           </Button>
+
+          {/* Fields like distance were added to the importer over time and only
+              land when an activity is first saved, so older sessions can be
+              missing them. This refills those gaps across a year of history. */}
+          <Button
+            variant="ghost"
+            full
+            onClick={() => pull(BACKFILL_DAYS)}
+            disabled={status === 'dispatching' || status === 'running'}
+          >
+            Backfill last 12 months
+          </Button>
+          <p className="text-[11px] text-slate-500">
+            Use this once if older activities are missing distance or pace. It fills in gaps
+            without changing anything already recorded, and takes a few minutes.
+          </p>
 
           {status === 'running' && (
             <p className="text-xs text-slate-400">

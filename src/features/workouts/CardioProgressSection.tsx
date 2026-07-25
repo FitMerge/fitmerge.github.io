@@ -5,6 +5,7 @@ import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import {
+  CARDIO_RANGE_PRESETS,
   cardioActivities,
   cardioSeries,
   cardioSummary,
@@ -13,7 +14,9 @@ import {
   hasOutlierSpike,
   type ActivityCategory,
   type CardioMetricKey,
+  type CardioRange,
 } from './cardio'
+import { todayISO } from '../../lib/date'
 
 type MetricDef = { key: CardioMetricKey; label: string; needsDistance: boolean }
 
@@ -22,15 +25,25 @@ export default function CardioProgressSection() {
   const units = useSettingsStore((s) => s.units)
   const distUnit = distanceUnitLabel(units)
 
-  const activities = useMemo(() => cardioActivities(sessions), [sessions])
+  // 90 days by default: long enough for a trend, short enough that the recent
+  // weeks are still legible. "All" is one tap away.
+  const [range, setRange] = useState<CardioRange>({ kind: 'days', days: 90 })
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
+  const activities = useMemo(() => cardioActivities(sessions, range), [sessions, range])
   const [activeCategory, setActiveCategory] = useState<ActivityCategory | null>(null)
 
-  const selected = activeCategory ?? activities[0]?.category ?? null
+  // The chosen sport can vanish when the range narrows — fall back rather than
+  // showing an empty chart for a tab that is no longer there.
+  const stillPresent = activities.some((a) => a.category === activeCategory)
+  const selected = (stillPresent ? activeCategory : null) ?? activities[0]?.category ?? null
   const selectedActivity = activities.find((a) => a.category === selected)
 
   const points = useMemo(
-    () => (selected ? cardioSeries(sessions, selected, units) : []),
-    [sessions, selected, units],
+    () => (selected ? cardioSeries(sessions, selected, units, range) : []),
+    [sessions, selected, units, range],
   )
   const summary = useMemo(() => cardioSummary(points), [points])
 
@@ -45,23 +58,14 @@ export default function CardioProgressSection() {
   const [metric, setMetric] = useState<CardioMetricKey>('pace')
   const activeMetric = available.some((m) => m.key === metric) ? metric : available[0]?.key ?? 'durationMin'
 
-  if (activities.length === 0) {
-    return (
-      <Card className="space-y-2">
-        <Header />
-        <p className="text-xs text-slate-500">
-          Import cardio activities (walks, runs, rides) from Garmin to track pace, distance and duration
-          over time.
-        </p>
-      </Card>
-    )
-  }
+  // How many of the sessions in view actually carry the metric being charted. A
+  // Walk tab reading 145 while four dots appear is not a bug, but it reads like
+  // one, so the gap is stated rather than left to be inferred.
+  const plotted = points.filter((p) => (p[activeMetric] as number | null) !== null).length
 
-  const fmt = (v: number): string => {
-    if (activeMetric === 'pace') return formatPace(v)
-    if (activeMetric === 'distance') return v.toFixed(1)
-    return String(Math.round(v))
-  }
+  // Everything below must stay above the early return: changing the range can empty
+  // and refill the activity list, and a hook that only sometimes runs changes the
+  // hook count between renders, which React treats as a fatal error.
 
   // Session-to-session values bounce around (route, weather, mood) — a rolling
   // 5-session average is the bold trend, raw sessions become faint dots behind it.
@@ -104,6 +108,96 @@ export default function CardioProgressSection() {
     [points, activeMetric],
   )
 
+  const rangePicker = (
+    <div className="space-y-2">
+      <div className="flex gap-1.5">
+        {CARDIO_RANGE_PRESETS.map((preset) => {
+          const active =
+            !customOpen &&
+            ((preset.range.kind === 'all' && range.kind === 'all') ||
+              (preset.range.kind === 'days' &&
+                range.kind === 'days' &&
+                range.days === preset.range.days))
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => {
+                setCustomOpen(false)
+                setRange(preset.range)
+              }}
+              className={`flex-1 rounded-full py-1 text-[11px] font-medium ${
+                active ? 'bg-slate-700 text-slate-100' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {preset.label}
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => setCustomOpen((v) => !v)}
+          className={`flex-1 rounded-full py-1 text-[11px] font-medium ${
+            customOpen ? 'bg-slate-700 text-slate-100' : 'bg-slate-800 text-slate-400'
+          }`}
+        >
+          Custom
+        </button>
+      </div>
+
+      {customOpen && (
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={customFrom}
+            max={customTo || todayISO()}
+            onChange={(e) => {
+              setCustomFrom(e.target.value)
+              if (e.target.value && customTo) {
+                setRange({ kind: 'custom', from: e.target.value, to: customTo })
+              }
+            }}
+            className="min-w-0 flex-1 rounded-lg bg-slate-800 px-2 py-1.5 text-xs text-slate-100"
+          />
+          <span className="text-xs text-slate-500">to</span>
+          <input
+            type="date"
+            value={customTo}
+            min={customFrom || undefined}
+            max={todayISO()}
+            onChange={(e) => {
+              setCustomTo(e.target.value)
+              if (customFrom && e.target.value) {
+                setRange({ kind: 'custom', from: customFrom, to: e.target.value })
+              }
+            }}
+            className="min-w-0 flex-1 rounded-lg bg-slate-800 px-2 py-1.5 text-xs text-slate-100"
+          />
+        </div>
+      )}
+    </div>
+  )
+
+  if (activities.length === 0) {
+    return (
+      <Card className="space-y-3">
+        <Header />
+        {rangePicker}
+        <p className="text-xs text-slate-500">
+          {sessions.length > 0
+            ? 'No cardio activities in this date range. Try a wider range.'
+            : 'Import cardio activities (walks, runs, rides) from Garmin to track pace, distance and duration over time.'}
+        </p>
+      </Card>
+    )
+  }
+
+  const fmt = (v: number): string => {
+    if (activeMetric === 'pace') return formatPace(v)
+    if (activeMetric === 'distance') return v.toFixed(1)
+    return String(Math.round(v))
+  }
+
   const yLabel =
     activeMetric === 'pace'
       ? `min/${distUnit}`
@@ -116,6 +210,8 @@ export default function CardioProgressSection() {
   return (
     <Card className="space-y-3">
       <Header />
+
+      {rangePicker}
 
       {/* Sport picker — major categories only, so runs from every city sit together */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -232,11 +328,19 @@ export default function CardioProgressSection() {
         </p>
       )}
 
+      {/* Why the tab count and the number of plotted points can disagree. */}
+      {plotted > 0 && plotted < points.length && (
+        <p className="text-[11px] text-slate-500">
+          Charting {plotted} of {points.length} sessions — the rest have no{' '}
+          {activeMetric === 'kcal' ? 'calorie' : activeMetric === 'durationMin' ? 'duration' : 'distance'}{' '}
+          data recorded.
+        </p>
+      )}
+
       {!hasDistance && (
         <p className="text-[11px] text-slate-500">
           No distance recorded for these activities, so pace and distance charts are hidden.
-          Distance is captured when an activity is first imported — re-importing does not add it
-          to sessions already saved.
+          Older sessions can be filled in with a backfill from Settings → Pull from Garmin.
         </p>
       )}
     </Card>

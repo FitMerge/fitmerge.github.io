@@ -10,8 +10,12 @@ export type GarminPull = {
   message: string
   run: PullRun | null
   lastPull?: number
-  pull: () => Promise<void>
+  /** Pull the last `days` of activity. Defaults to a fortnight — enough to catch up. */
+  pull: (days?: number) => Promise<void>
 }
+
+/** A year is plenty to reach every activity worth charting, without a huge job. */
+export const BACKFILL_DAYS = 365
 
 /**
  * Shared "pull from Garmin" driver used by both the Settings card and the Action
@@ -34,7 +38,7 @@ export function useGarminPull(): GarminPull {
 
   useEffect(() => () => clearInterval(pollRef.current), [])
 
-  async function pull() {
+  async function pull(days = 14) {
     if (!configured) {
       setPhase('error')
       setMessage('Add your GitHub repo and token in Settings → Pull from Garmin first.')
@@ -44,7 +48,7 @@ export function useGarminPull(): GarminPull {
     setMessage('')
     setRun(null)
     try {
-      await triggerGarminPull(token, repo, 14)
+      await triggerGarminPull(token, repo, days)
       setLastPull(Date.now())
       setPhase('running')
       let tries = 0

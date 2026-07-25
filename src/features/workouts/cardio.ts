@@ -1,7 +1,35 @@
 import type { Units, WorkoutSession } from '../../types'
 import { monthDayLabel } from '../progress/utils'
+import { addDays, todayISO } from '../../lib/date'
 
 const KM_PER_MILE = 1.60934
+
+/**
+ * Which slice of history a cardio chart covers. `all` is deliberately the widest
+ * rather than the default: a year of walks makes the recent weeks unreadable.
+ */
+export type CardioRange =
+  | { kind: 'days'; days: number }
+  | { kind: 'all' }
+  | { kind: 'custom'; from: string; to: string }
+
+export const CARDIO_RANGE_PRESETS: { label: string; range: CardioRange }[] = [
+  { label: '30d', range: { kind: 'days', days: 30 } },
+  { label: '90d', range: { kind: 'days', days: 90 } },
+  { label: '1y', range: { kind: 'days', days: 365 } },
+  { label: 'All', range: { kind: 'all' } },
+]
+
+/** `today` is injectable so this stays testable without freezing the clock. */
+export function inCardioRange(date: string, range: CardioRange, today: string = todayISO()): boolean {
+  if (range.kind === 'all') return true
+  if (range.kind === 'custom') {
+    // Tolerate the two ends being entered in either order.
+    const [from, to] = range.from <= range.to ? [range.from, range.to] : [range.to, range.from]
+    return date >= from && date <= to
+  }
+  return date >= addDays(today, -(range.days - 1)) && date <= today
+}
 
 /** A cardio activity is a finished session with a duration and no logged strength sets. */
 export function isCardioSession(s: WorkoutSession): boolean {
@@ -41,10 +69,15 @@ const CATEGORY_ORDER: ActivityCategory[] = ['Run', 'Walk', 'Hike', 'Bike', 'Ski'
 export type CardioActivity = { category: ActivityCategory; count: number; hasDistance: boolean }
 
 /** Major activity categories present in the log, most frequent first. */
-export function cardioActivities(sessions: WorkoutSession[]): CardioActivity[] {
+export function cardioActivities(
+  sessions: WorkoutSession[],
+  range: CardioRange = { kind: 'all' },
+  today: string = todayISO(),
+): CardioActivity[] {
   const map = new Map<ActivityCategory, { count: number; hasDistance: boolean }>()
   for (const s of sessions) {
     if (!isCardioSession(s)) continue
+    if (!inCardioRange(s.date, range, today)) continue
     const category = activityCategory(s.name)
     const cur = map.get(category) ?? { count: 0, hasDistance: false }
     cur.count += 1
@@ -75,10 +108,17 @@ export function cardioSeries(
   sessions: WorkoutSession[],
   category: ActivityCategory,
   units: Units,
+  range: CardioRange = { kind: 'all' },
+  today: string = todayISO(),
 ): CardioPoint[] {
   const imperial = units === 'imperial'
   return sessions
-    .filter((s) => isCardioSession(s) && activityCategory(s.name) === category)
+    .filter(
+      (s) =>
+        isCardioSession(s) &&
+        activityCategory(s.name) === category &&
+        inCardioRange(s.date, range, today),
+    )
     .sort((a, b) => (a.date < b.date ? -1 : 1))
     .map((s) => {
       const durationMin = s.durationMin ?? 0
