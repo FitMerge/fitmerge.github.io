@@ -5,6 +5,7 @@ import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
 import TdeeCard from './TdeeCard'
 import WaterGoalSheet from '../nutrition/WaterGoalSheet'
+import SupplementList from '../assistant/SupplementList'
 import { useSettingsStore } from '../../store/settings'
 import { WATER_UNITS, defaultWaterUnit } from '../../lib/units'
 import type { Goals } from '../../types'
@@ -25,62 +26,74 @@ export default function GoalsSection() {
   }
 
   return (
-    <Card className="space-y-4">
-      <h2 className="text-sm font-semibold text-slate-200">Daily goals</h2>
+    <Card className="space-y-5">
+      <h2 className="text-sm font-semibold text-slate-200">My goals</h2>
 
-      <div className="grid grid-cols-2 gap-3">
-        <NumberField
-          label="Calories"
-          value={draft.calories}
-          onChange={(calories) => setDraft((d) => ({ ...d, calories }))}
-          step={50}
-          min={0}
-          suffix="kcal"
-        />
-        <NumberField
-          label="Protein"
-          value={draft.protein}
-          onChange={(protein) => setDraft((d) => ({ ...d, protein }))}
-          step={5}
-          min={0}
-          suffix="g"
-        />
-        <NumberField
-          label="Carbs"
-          value={draft.carbs}
-          onChange={(carbs) => setDraft((d) => ({ ...d, carbs }))}
-          step={5}
-          min={0}
-          suffix="g"
-        />
-        <NumberField
-          label="Fat"
-          value={draft.fat}
-          onChange={(fat) => setDraft((d) => ({ ...d, fat }))}
-          step={5}
-          min={0}
-          suffix="g"
-        />
+      {/* Macro targets */}
+      <div className="space-y-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Daily macros</p>
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label="Calories"
+            value={draft.calories}
+            onChange={(calories) => setDraft((d) => ({ ...d, calories }))}
+            step={50}
+            min={0}
+            suffix="kcal"
+          />
+          <NumberField
+            label="Protein"
+            value={draft.protein}
+            onChange={(protein) => setDraft((d) => ({ ...d, protein }))}
+            step={5}
+            min={0}
+            suffix="g"
+          />
+          <NumberField
+            label="Carbs"
+            value={draft.carbs}
+            onChange={(carbs) => setDraft((d) => ({ ...d, carbs }))}
+            step={5}
+            min={0}
+            suffix="g"
+          />
+          <NumberField
+            label="Fat"
+            value={draft.fat}
+            onChange={(fat) => setDraft((d) => ({ ...d, fat }))}
+            step={5}
+            min={0}
+            suffix="g"
+          />
+        </div>
+        <Button variant="primary" full onClick={handleSave}>
+          Save macros
+        </Button>
+        <TdeeCard onApply={setDraft} />
       </div>
 
-      <Button variant="primary" full onClick={handleSave}>
-        Save goals
-      </Button>
+      {/* Water */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Hydration</p>
+        <button
+          type="button"
+          onClick={() => setWaterOpen(true)}
+          className="flex w-full items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2.5 text-left active:bg-slate-800"
+        >
+          <span className="flex items-center gap-2 text-sm text-slate-200">
+            <Droplets size={16} className="text-sky-400" /> Water goal
+          </span>
+          <span className="text-sm text-slate-400">
+            {`${wu.fromMl(waterGoalMl).toFixed(wu.decimals)} ${wu.label}`} ›
+          </span>
+        </button>
+      </div>
 
-      <button
-        type="button"
-        onClick={() => setWaterOpen(true)}
-        className="flex w-full items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2.5 text-left active:bg-slate-800"
-      >
-        <span className="flex items-center gap-2 text-sm text-slate-200">
-          <Droplets size={16} className="text-sky-400" /> Water goal
-        </span>
-        <span className="text-sm text-slate-400">
-          {`${wu.fromMl(waterGoalMl).toFixed(wu.decimals)} ${wu.label}`} ›
-        </span>
-      </button>
-
-      <TdeeCard onApply={setDraft} />
+      {/* Daily checklist — habits, supplements, and metric-linked goals */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Daily checklist</p>
+        <SupplementList />
+      </div>
 
       <WaterGoalSheet open={waterOpen} onClose={() => setWaterOpen(false)} />
     </Card>

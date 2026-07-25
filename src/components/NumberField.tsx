@@ -58,16 +58,18 @@ export default function NumberField({ label, value, onChange, step = 1, min = 0,
   return (
     <div>
       <label className="block text-sm text-slate-400 mb-1">{label}</label>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => setBoth(value - step)}
-          className="rounded-lg bg-slate-800 active:bg-slate-700 w-10 h-10 flex items-center justify-center text-lg"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-lg active:bg-slate-700"
           aria-label={`Decrease ${label}`}
         >
           -
         </button>
-        <div className="relative flex-1">
+        {/* Input and suffix are flex siblings, so the unit takes its own space and
+            the number can never run underneath it, however many digits it grows to. */}
+        <div className="flex flex-1 items-center overflow-hidden rounded-lg bg-slate-800 focus-within:ring-2 focus-within:ring-primary-500">
           <input
             type="text"
             inputMode="decimal"
@@ -81,18 +83,14 @@ export default function NumberField({ label, value, onChange, step = 1, min = 0,
               focused.current = false
               setDraft(formatNum(value))
             }}
-            className={`bg-slate-800 rounded-lg text-center w-full py-2 ${suffix ? 'pl-2 pr-9' : ''}`}
+            className="min-w-0 flex-1 bg-transparent py-2 text-center outline-none"
           />
-          {suffix && (
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-              {suffix}
-            </span>
-          )}
+          {suffix && <span className="shrink-0 pr-2.5 text-xs text-slate-500">{suffix}</span>}
         </div>
         <button
           type="button"
           onClick={() => setBoth(value + step)}
-          className="rounded-lg bg-slate-800 active:bg-slate-700 w-10 h-10 flex items-center justify-center text-lg"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-lg active:bg-slate-700"
           aria-label={`Increase ${label}`}
         >
           +
