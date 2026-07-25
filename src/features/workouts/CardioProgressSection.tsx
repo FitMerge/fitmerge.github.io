@@ -1,5 +1,15 @@
 import { useMemo, useState } from 'react'
-import { CartesianGrid, ComposedChart, Line, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceDot,
+  ResponsiveContainer,
+  Scatter,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { Footprints } from 'lucide-react'
 import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
@@ -22,6 +32,21 @@ import { todayISO } from '../../lib/date'
 import { monthDayLabel } from '../progress/utils'
 
 type MetricDef = { key: CardioMetricKey; label: string; needsDistance: boolean }
+
+/** Axis tick: short enough to fit several across a phone. */
+function axisDate(t: number): string {
+  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** Tooltip heading: the full date, since the axis only had room for a hint. */
+function tooltipDate(t: number): string {
+  return new Date(t).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
 
 export default function CardioProgressSection() {
   const sessions = useWorkoutsStore((s) => s.sessions)
@@ -90,12 +115,12 @@ export default function CardioProgressSection() {
 
   // Best session: fastest pace, or the highest value for other metrics.
   const best = useMemo(() => {
-    let bestPt: { label: string; v: number } | null = null
+    let bestPt: { t: number; v: number } | null = null
     for (const p of chartPoints) {
       const v = p[activeMetric] as number | null
       if (v == null) continue
       const better = bestPt === null || (activeMetric === 'pace' ? v < bestPt.v : v > bestPt.v)
-      if (better) bestPt = { label: p.label, v }
+      if (better) bestPt = { t: p.t, v }
     }
     return bestPt
   }, [chartPoints, activeMetric])
@@ -274,7 +299,20 @@ export default function CardioProgressSection() {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartPoints} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={24} />
+              {/* A real time axis: gaps between sessions are drawn to scale and the
+                  ticks fall on sensible dates rather than on whichever session
+                  happened to sit there. */}
+              <XAxis
+                dataKey="t"
+                type="number"
+                scale="time"
+                domain={['dataMin', 'dataMax']}
+                tickFormatter={axisDate}
+                tick={{ fill: '#64748b', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                minTickGap={32}
+              />
               <YAxis
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 axisLine={false}
@@ -288,32 +326,34 @@ export default function CardioProgressSection() {
               <Tooltip
                 contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: '#cbd5e1' }}
+                labelFormatter={(t: number) => tooltipDate(t)}
                 formatter={(v: number, name: string) => [`${fmt(v)} ${yLabel}`, name]}
               />
-              {/* Raw sessions: faint dots + hairline, so variance stays visible. */}
-              <Line
-                type="monotone"
+              {/* Individual sessions as slate dots — no connecting line, because
+                  nothing happened between two runs a fortnight apart. */}
+              <Scatter
                 dataKey={activeMetric}
-                name={activeMetric === 'pace' ? 'Session pace' : activeMetric === 'durationMin' ? 'Session' : activeMetric === 'distance' ? 'Session' : 'Session'}
-                stroke="#34d399"
-                strokeWidth={1}
-                strokeOpacity={0.3}
-                dot={{ r: 2, fill: '#34d399', fillOpacity: 0.5, strokeWidth: 0 }}
-                connectNulls
+                name="Session"
+                fill="#94a3b8"
+                fillOpacity={0.65}
+                isAnimationActive={false}
               />
-              {/* The story: rolling 5-session trend. */}
+              {/* The story: rolling 5-session average, in emerald so it reads as a
+                  different thing entirely rather than a bolder version of the dots.
+                  Straight segments: the average is only defined where a session is. */}
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="trend"
-                name="Trend (5-session avg)"
+                name="5-session average"
                 stroke="#34d399"
                 strokeWidth={2.5}
                 dot={false}
                 connectNulls
+                isAnimationActive={false}
               />
               {best && (
                 <ReferenceDot
-                  x={best.label}
+                  x={best.t}
                   y={best.v}
                   r={4}
                   fill="#fbbf24"

@@ -92,8 +92,20 @@ export function cardioActivities(
     )
 }
 
+/** Epoch ms at local noon on an ISO date — noon so a timezone shift cannot move the day. */
+export function isoToEpochMs(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m ?? 1) - 1, d ?? 1, 12).getTime()
+}
+
 export type CardioPoint = {
   date: string
+  /**
+   * Epoch ms, so the chart's x-axis can be a real time scale. Plotting against the
+   * label instead spaces every session equally, which makes a three-month layoff
+   * look the same as back-to-back days and lands ticks on arbitrary dates.
+   */
+  t: number
   label: string
   durationMin: number
   distance: number | null
@@ -127,6 +139,7 @@ export function cardioSeries(
       const pace = distance && distance > 0 ? durationMin / distance : null
       return {
         date: s.date,
+        t: isoToEpochMs(s.date),
         label: monthDayLabel(s.date),
         durationMin,
         distance,
