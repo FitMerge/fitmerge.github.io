@@ -321,7 +321,18 @@ def sync_all_users(db, private_key, days=3, skip_uid=None, max_users=10):
             blob = json.loads(unseal(cred["secret"], private_key))
             with isolated_tokenstore(blob) as tokenstore:
                 client = _login_with_tokens(tokenstore)
-                _sync_with_client(db, uid, client, days)
+                # Users linked before deep backfill existed have no deep activity
+                # history. Pull it once (a single call covers the whole range) and
+                # seed their wellness cursor; the `deepPulled` flag makes it one-time.
+                status = _status_ref(db, uid).get().to_dict() or {}
+                needs_deep = not status.get("deepPulled")
+                _sync_with_client(
+                    db, uid, client, days,
+                    activity_days=DEEP_HISTORY_DAYS if needs_deep else None,
+                )
+                if needs_deep:
+                    _seed_backfill_cursor(db, uid, days)
+                    print(f"[{uid}] one-time deep history pull done", file=sys.stderr)
                 # Best-effort: walk this user's deep wellness history one chunk
                 # further back. A hiccup here must not fail the routine sync.
                 try:
@@ -391,13 +402,15 @@ def _sync_with_client(db, uid, client, days, activity_days=None):
 
 
 def _seed_backfill_cursor(db, uid, covered_days):
-    """Record how far back the first sync already pulled wellness metrics, so the
-    incremental backfill knows where to carry on from."""
+    """Called right after a user's one-time deep pull: flag it done (`deepPulled`)
+    and start the wellness backfill cursor from the recent window that pull already
+    covered, so the incremental walk knows where to carry on from."""
     from firebase_admin import firestore
 
     oldest = (date.today() - timedelta(days=covered_days)).isoformat()
     _status_ref(db, uid).set(
         {
+            "deepPulled": True,
             "histOldest": oldest,
             "histDone": covered_days >= BACKFILL_FLOOR_DAYS,
             "updatedAt": firestore.SERVER_TIMESTAMP,
