@@ -8,21 +8,55 @@ export function isCardioSession(s: WorkoutSession): boolean {
   return s.finishedAt !== undefined && (s.durationMin ?? 0) > 0 && s.entries.every((e) => e.sets.length === 0)
 }
 
-export type CardioActivity = { name: string; count: number; hasDistance: boolean }
+export type ActivityCategory = 'Run' | 'Walk' | 'Hike' | 'Bike' | 'Ski' | 'Strength' | 'Other'
 
-/** Distinct cardio activity names, most frequent first. */
+/**
+ * Garmin names an activity after where and how you did it — "Denver Running",
+ * "Arvada Running", "Treadmill Running" — so grouping on the raw name produced a
+ * tab per city rather than per sport. Collapse to the sport itself.
+ *
+ * Order matters: the first pattern to match wins, so anything that could read as
+ * two sports (snowshoeing is a hike, not a ski) is resolved by position here.
+ */
+const CATEGORY_PATTERNS: [RegExp, ActivityCategory][] = [
+  [/\b(snowshoe|hik|trek)/i, 'Hike'],
+  [/\b(ski|snowboard)/i, 'Ski'],
+  [/\b(run|jog|sprint)/i, 'Run'],
+  [/\b(walk|steps|stroll)/i, 'Walk'],
+  [/\b(bike|biking|cycl|ride|spinning|peloton)/i, 'Bike'],
+  [/\b(strength|weight|lifting|resistance|gym)/i, 'Strength'],
+]
+
+/** The major sport a session name belongs to, ignoring place and equipment. */
+export function activityCategory(name: string): ActivityCategory {
+  for (const [pattern, category] of CATEGORY_PATTERNS) {
+    if (pattern.test(name)) return category
+  }
+  return 'Other'
+}
+
+/** Tie-break order when two categories have the same session count. */
+const CATEGORY_ORDER: ActivityCategory[] = ['Run', 'Walk', 'Hike', 'Bike', 'Ski', 'Strength', 'Other']
+
+export type CardioActivity = { category: ActivityCategory; count: number; hasDistance: boolean }
+
+/** Major activity categories present in the log, most frequent first. */
 export function cardioActivities(sessions: WorkoutSession[]): CardioActivity[] {
-  const map = new Map<string, { count: number; hasDistance: boolean }>()
+  const map = new Map<ActivityCategory, { count: number; hasDistance: boolean }>()
   for (const s of sessions) {
     if (!isCardioSession(s)) continue
-    const cur = map.get(s.name) ?? { count: 0, hasDistance: false }
+    const category = activityCategory(s.name)
+    const cur = map.get(category) ?? { count: 0, hasDistance: false }
     cur.count += 1
     if ((s.distanceKm ?? 0) > 0) cur.hasDistance = true
-    map.set(s.name, cur)
+    map.set(category, cur)
   }
   return Array.from(map.entries())
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => b.count - a.count)
+    .map(([category, v]) => ({ category, ...v }))
+    .sort(
+      (a, b) =>
+        b.count - a.count || CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
+    )
 }
 
 export type CardioPoint = {
@@ -36,11 +70,15 @@ export type CardioPoint = {
   pace: number | null
 }
 
-/** Time series (oldest→newest) for one cardio activity name, in the user's units. */
-export function cardioSeries(sessions: WorkoutSession[], name: string, units: Units): CardioPoint[] {
+/** Time series (oldest→newest) for one activity category, in the user's units. */
+export function cardioSeries(
+  sessions: WorkoutSession[],
+  category: ActivityCategory,
+  units: Units,
+): CardioPoint[] {
   const imperial = units === 'imperial'
   return sessions
-    .filter((s) => isCardioSession(s) && s.name === name)
+    .filter((s) => isCardioSession(s) && activityCategory(s.name) === category)
     .sort((a, b) => (a.date < b.date ? -1 : 1))
     .map((s) => {
       const durationMin = s.durationMin ?? 0

@@ -10,6 +10,7 @@ import {
   cardioSummary,
   distanceUnitLabel,
   formatPace,
+  type ActivityCategory,
   type CardioMetricKey,
 } from './cardio'
 
@@ -21,10 +22,10 @@ export default function CardioProgressSection() {
   const distUnit = distanceUnitLabel(units)
 
   const activities = useMemo(() => cardioActivities(sessions), [sessions])
-  const [activeName, setActiveName] = useState<string | null>(null)
+  const [activeCategory, setActiveCategory] = useState<ActivityCategory | null>(null)
 
-  const selected = activeName ?? activities[0]?.name ?? null
-  const selectedActivity = activities.find((a) => a.name === selected)
+  const selected = activeCategory ?? activities[0]?.category ?? null
+  const selectedActivity = activities.find((a) => a.category === selected)
 
   const points = useMemo(
     () => (selected ? cardioSeries(sessions, selected, units) : []),
@@ -104,18 +105,20 @@ export default function CardioProgressSection() {
     <Card className="space-y-3">
       <Header />
 
-      {/* Activity type picker */}
+      {/* Sport picker — major categories only, so runs from every city sit together */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        {activities.slice(0, 8).map((a) => (
+        {activities.map((a) => (
           <button
-            key={a.name}
+            key={a.category}
             type="button"
-            onClick={() => setActiveName(a.name)}
+            onClick={() => setActiveCategory(a.category)}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
-              selected === a.name ? 'bg-primary-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300'
+              selected === a.category
+                ? 'bg-primary-500 text-slate-950 font-semibold'
+                : 'bg-slate-800 text-slate-300'
             }`}
           >
-            {a.name} <span className="opacity-60">· {a.count}</span>
+            {a.category} <span className="opacity-60">· {a.count}</span>
           </button>
         ))}
       </div>
@@ -212,8 +215,9 @@ export default function CardioProgressSection() {
 
       {!hasDistance && (
         <p className="text-[11px] text-slate-500">
-          No distance data for this activity yet. Re-run <code className="rounded bg-slate-800 px-1">garmin-sync.py</code>{' '}
-          and re-import to unlock pace &amp; distance charts.
+          No distance recorded for these activities, so pace and distance charts are hidden.
+          Distance is captured when an activity is first imported — re-importing does not add it
+          to sessions already saved.
         </p>
       )}
     </Card>
