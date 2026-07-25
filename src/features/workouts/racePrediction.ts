@@ -20,7 +20,16 @@
 // 5K time tells you much about a marathon.
 
 import type { GarminRecord, Units, WorkoutSession } from '../../types'
-import { isCardioSession, activityCategory, type CardioRange, inCardioRange } from './cardio'
+import {
+  isCardioSession,
+  activityCategory,
+  bucketSizeFor,
+  periodKey,
+  periodLabelFor,
+  type BucketSize,
+  type CardioRange,
+  inCardioRange,
+} from './cardio'
 import { todayISO } from '../../lib/date'
 
 const KM_PER_MILE = 1.60934
@@ -237,6 +246,93 @@ function recordPerformances(
     out.push({ km, durationMin, date: record.date ?? '', name: record.label, vdot: v })
   }
   return out
+}
+
+// --- fitness trend -----------------------------------------------------------
+
+export type VdotPoint = {
+  key: string
+  label: string
+  /** Best VDOT achieved in this period; null for periods with no qualifying run. */
+  vdot: number | null
+  /** Predicted 5K time (minutes) at that VDOT — the readable face of the number. */
+  predicted5k: number | null
+}
+
+/**
+ * Best running fitness per period, oldest first — Garmin's race-predictor trend.
+ *
+ * The *best* run of each period rather than the average, because fitness is what
+ * you are capable of, not what you happened to do on your easy days. Empty
+ * periods are emitted as nulls and drawn as gaps: a month with no hard running
+ * says nothing about fitness, and interpolating across it would invent a trend.
+ */
+export function vdotTrend(
+  sessions: WorkoutSession[],
+  range: CardioRange = { kind: 'all' },
+  today: string = todayISO(),
+): VdotPoint[] {
+  const size: BucketSize = bucketSizeFor(range)
+  const best = new Map<string, number>()
+  for (const s of sessions) {
+    if (!isCardioSession(s)) continue
+    if (activityCategory(s.name, s.sportType) !== 'Run') continue
+    if (!inCardioRange(s.date, range, today)) continue
+    const km = s.distanceKm ?? 0
+    const durationMin = s.durationMin ?? 0
+    if (km < 1.5 || durationMin <= 0) continue
+    const v = vdot(km, durationMin)
+    if (v === null) continue
+    const key = periodKey(s.date, size)
+    const cur = best.get(key)
+    if (cur === undefined || v > cur) best.set(key, v)
+  }
+  if (best.size === 0) return []
+
+  const keys = [...best.keys()].sort()
+  const out: VdotPoint[] = []
+  for (let key = keys[0]; key <= keys[keys.length - 1]; key = nextPeriodKey(key, size)) {
+    const v = best.get(key) ?? null
+    out.push({
+      key,
+      label: periodLabelFor(key, size),
+      vdot: v,
+      predicted5k: v === null ? null : timeAtVdot(v, 5),
+    })
+  }
+  return out
+}
+
+/** Start of the period after `iso`. */
+function nextPeriodKey(iso: string, size: BucketSize): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  if (size === 'month') date.setMonth(date.getMonth() + 1)
+  else date.setDate(date.getDate() + 7)
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${mm}-${dd}`
+}
+
+/**
+ * Race time (minutes) over `distanceKm` for a given VDOT.
+ *
+ * Inverts the VDOT definition, which is circular — the sustainable fraction of
+ * VO2max depends on the duration being solved for — so it is settled by fixed-point
+ * iteration. It converges in a handful of passes because the fraction moves slowly
+ * against the time.
+ */
+export function timeAtVdot(vdotValue: number, distanceKm: number): number {
+  const metres = distanceKm * 1000
+  let minutes = metres / velocityAtVo2(vdotValue * 0.9) || 1
+  for (let i = 0; i < 30; i += 1) {
+    const velocity = velocityAtVo2(vdotValue * fractionOfMax(minutes))
+    if (velocity <= 0) return 0
+    const next = metres / velocity
+    if (Math.abs(next - minutes) < 1e-6) return next
+    minutes = next
+  }
+  return minutes
 }
 
 /** Nearest standard race distance to `km`, for labelling a performance. */

@@ -366,6 +366,16 @@ export function bucketSizeFor(range: CardioRange): BucketSize {
   return range.days > 100 ? 'month' : 'week'
 }
 
+/** ISO date of the period `iso` falls in — Monday for weeks, the 1st for months. */
+export function periodKey(iso: string, size: BucketSize): string {
+  return startOfPeriod(iso, size)
+}
+
+/** Display label for a period start, e.g. "Jun" or "Jun 8". */
+export function periodLabelFor(iso: string, size: BucketSize): string {
+  return periodLabel(iso, size)
+}
+
 function startOfPeriod(iso: string, size: BucketSize): string {
   const [y, m, d] = iso.split('-').map(Number)
   if (size === 'month') return `${y}-${String(m).padStart(2, '0')}-01`

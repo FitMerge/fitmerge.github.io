@@ -8,6 +8,8 @@ import {
   riegel,
   trainingPaces,
   vdot,
+  timeAtVdot,
+  vdotTrend,
   velocityAtVo2,
   vo2AtVelocity,
 } from './racePrediction'
@@ -265,5 +267,70 @@ describe('estimateFitness with Garmin personal records', () => {
   it('skips a 1km record as too short to model', () => {
     const short: GarminRecord[] = [{ typeId: 1, label: 'Fastest 1 km', kind: 'time', value: 200 }]
     expect(estimateFitness([], 'metric', { kind: 'all' }, TODAY, short)).toBeNull()
+  })
+})
+
+describe('timeAtVdot', () => {
+  it('round-trips against vdot', () => {
+    for (const [km, min] of [[5, 20], [10, 43.5], [21.0975, 95]] as [number, number][]) {
+      const v = vdot(km, min) as number
+      expect(timeAtVdot(v, km)).toBeCloseTo(min, 3)
+    }
+  })
+
+  it('predicts a slower time at a longer distance for the same fitness', () => {
+    expect(timeAtVdot(50, 10)).toBeGreaterThan(2 * timeAtVdot(50, 5))
+  })
+
+  it('predicts a faster time for a fitter runner', () => {
+    expect(timeAtVdot(60, 5)).toBeLessThan(timeAtVdot(45, 5))
+  })
+})
+
+describe('vdotTrend', () => {
+  const monthly = [
+    run('2026-03-05', 10, 55),
+    run('2026-03-20', 10, 52), // best of March
+    // April deliberately empty
+    run('2026-05-08', 10, 48),
+  ]
+
+  it('takes the best run of each period, not the average', () => {
+    const trend = vdotTrend(monthly, { kind: 'all' }, TODAY)
+    const march = trend.find((p) => p.key === '2026-03-01')!
+    expect(march.vdot).toBeCloseTo(vdot(10, 52) as number, 6)
+  })
+
+  it('leaves an empty period as a gap rather than interpolating fitness', () => {
+    const trend = vdotTrend(monthly, { kind: 'all' }, TODAY)
+    expect(trend.map((p) => p.key)).toEqual(['2026-03-01', '2026-04-01', '2026-05-01'])
+    expect(trend[1].vdot).toBeNull()
+    expect(trend[1].predicted5k).toBeNull()
+  })
+
+  it('reports a predicted 5K alongside each VDOT', () => {
+    const trend = vdotTrend(monthly, { kind: 'all' }, TODAY)
+    const may = trend.find((p) => p.key === '2026-05-01')!
+    expect(may.predicted5k).toBeCloseTo(timeAtVdot(may.vdot as number, 5), 6)
+  })
+
+  it('shows improvement as a rising VDOT', () => {
+    const trend = vdotTrend(monthly, { kind: 'all' }, TODAY).filter((p) => p.vdot !== null)
+    expect((trend[trend.length - 1].vdot as number)).toBeGreaterThan(trend[0].vdot as number)
+  })
+
+  it('buckets by week for a short range', () => {
+    const trend = vdotTrend(
+      [run('2026-07-06', 10, 50), run('2026-07-20', 10, 48)],
+      { kind: 'days', days: 30 },
+      TODAY,
+    )
+    // Monday-based weeks: Jul 6 and Jul 20 are two weeks apart, so three buckets.
+    expect(trend).toHaveLength(3)
+    expect(trend[0].key).toBe('2026-07-06')
+  })
+
+  it('is empty with nothing to measure', () => {
+    expect(vdotTrend([], { kind: 'all' }, TODAY)).toEqual([])
   })
 })

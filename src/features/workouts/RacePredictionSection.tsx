@@ -9,11 +9,12 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronDown, Gauge } from 'lucide-react'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { distanceUnitLabel, formatDuration, formatPace, type CardioRange } from './cardio'
-import { estimateFitness, type Confidence } from './racePrediction'
+import { estimateFitness, vdotTrend, type Confidence } from './racePrediction'
 import { monthDayLabel } from '../progress/utils'
 
 const CONFIDENCE_STYLE: Record<Confidence, { dot: string; label: string }> = {
@@ -28,6 +29,7 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
   const distUnit = distanceUnitLabel(units)
   const [pacesOpen, setPacesOpen] = useState(false)
 
+  const trend = useMemo(() => vdotTrend(sessions, range), [sessions, range])
   const garminRecords = useWorkoutsStore((s) => s.garminRecords)
   const estimate = useMemo(
     () => estimateFitness(sessions, units, range, undefined, garminRecords),
@@ -98,6 +100,62 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
           )
         })}
       </div>
+
+      {/* Fitness over time — Garmin's race-predictor trend. One point per period,
+          taken from the best run in it, because fitness is what you are capable of
+          rather than what you did on an easy Tuesday. */}
+      {trend.filter((t) => t.vdot !== null).length >= 3 && (
+        <div className="space-y-1 border-t border-slate-800 pt-2.5">
+          <p className="text-[11px] font-medium text-slate-400">Fitness trend</p>
+          <div style={{ height: 120 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trend} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1e293b" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: '#64748b', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={16}
+                />
+                <YAxis
+                  tick={{ fill: '#64748b', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={34}
+                  domain={['dataMin - 2', 'dataMax + 2']}
+                  tickFormatter={(v: number) => v.toFixed(0)}
+                />
+                <Tooltip
+                  cursor={{ stroke: '#334155' }}
+                  contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: '#cbd5e1' }}
+                  formatter={(v: number, _n, entry) => [
+                    `VDOT ${v.toFixed(1)} · 5K ${formatDuration(
+                      (entry?.payload as { predicted5k: number }).predicted5k,
+                    )}`,
+                    'Best',
+                  ]}
+                />
+                {/* No connectNulls: a period with no hard running is a gap in the
+                    evidence, not a straight line between two months of fitness. */}
+                <Line
+                  type="linear"
+                  dataKey="vdot"
+                  stroke="#38bdf8"
+                  strokeWidth={2}
+                  dot={{ r: 2.5, fill: '#38bdf8', strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-[10px] text-slate-500">
+            Best VDOT per period. Rising means you are getting fitter; gaps are periods
+            with no run long enough to judge.
+          </p>
+        </div>
+      )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
         Riegel's model, the same one Garmin's race predictor uses. Green is close to a distance
