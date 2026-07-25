@@ -1,8 +1,10 @@
-import { GlassWater } from 'lucide-react'
+import { useState } from 'react'
+import { GlassWater, SlidersHorizontal } from 'lucide-react'
 import Card from '../../components/Card'
 import { useNutritionStore } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
 import { mlToFloz } from '../../lib/units'
+import LogWaterSheet from './LogWaterSheet'
 
 const CUPS = 8
 const CUP_ML = 250
@@ -16,6 +18,8 @@ export default function WaterCard({ date }: WaterCardProps) {
   const addWater = useNutritionStore((s) => s.addWater)
   const waterGoalMl = useSettingsStore((s) => s.waterGoalMl)
   const units = useSettingsStore((s) => s.units)
+
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const filledCups = Math.min(CUPS, Math.round(water / CUP_ML))
   const waterLabel =
@@ -33,7 +37,15 @@ export default function WaterCard({ date }: WaterCardProps) {
     <Card className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-100">Water</h2>
-        <p className="text-sm text-slate-400">{waterLabel}</p>
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="flex items-center gap-1.5 text-sm text-slate-400 active:text-slate-200"
+          aria-label="Log an exact amount of water in oz, cups or liters"
+        >
+          {waterLabel}
+          <SlidersHorizontal size={14} className="text-sky-400" />
+        </button>
       </div>
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: CUPS }, (_, i) => i + 1).map((cupIndex) => (
@@ -50,6 +62,8 @@ export default function WaterCard({ date }: WaterCardProps) {
           </button>
         ))}
       </div>
+
+      <LogWaterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} date={date} />
     </Card>
   )
 }
