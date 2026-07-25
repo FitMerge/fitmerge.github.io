@@ -111,6 +111,25 @@ export function formatPace(pace: number): string {
 
 export type CardioMetricKey = 'distance' | 'pace' | 'durationMin' | 'kcal'
 
+/**
+ * True when a few outsized sessions would squash the rest of the chart flat — one
+ * half marathon among a season of 5k runs, say.
+ *
+ * Compares the largest value against the median rather than the mean, so the spike
+ * being measured cannot inflate the baseline it is measured against. Needs a few
+ * sessions before it will claim anything: with two or three points there is no
+ * "typical" value to be an outlier from.
+ */
+export function hasOutlierSpike(values: (number | null)[]): boolean {
+  const sorted = values
+    .filter((v): v is number => v !== null && Number.isFinite(v) && v > 0)
+    .sort((a, b) => a - b)
+  if (sorted.length < 4) return false
+  const median = sorted[Math.floor(sorted.length / 2)]
+  if (median <= 0) return false
+  return sorted[sorted.length - 1] > median * 2.5
+}
+
 export type CardioSummary = {
   sessions: number
   totalDistance: number

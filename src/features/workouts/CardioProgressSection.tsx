@@ -10,6 +10,7 @@ import {
   cardioSummary,
   distanceUnitLabel,
   formatPace,
+  hasOutlierSpike,
   type ActivityCategory,
   type CardioMetricKey,
 } from './cardio'
@@ -92,6 +93,17 @@ export default function CardioProgressSection() {
     return bestPt
   }, [chartPoints, activeMetric])
 
+  // One half marathon among a season of 5k runs pins every other point to the floor.
+  // A square-root axis compresses the spike while keeping real numbers on the ticks —
+  // a log axis would read 3.2 / 10 / 31.6, which nobody wants for distance. Pace is
+  // left alone: its range is narrow and the axis is already reversed.
+  const easeSpikes = useMemo(
+    () =>
+      activeMetric !== 'pace' &&
+      hasOutlierSpike(points.map((p) => p[activeMetric] as number | null)),
+    [points, activeMetric],
+  )
+
   const yLabel =
     activeMetric === 'pace'
       ? `min/${distUnit}`
@@ -163,7 +175,8 @@ export default function CardioProgressSection() {
                 axisLine={false}
                 tickLine={false}
                 width={40}
-                domain={['auto', 'auto']}
+                scale={easeSpikes ? 'sqrt' : 'linear'}
+                domain={easeSpikes ? [0, 'auto'] : ['auto', 'auto']}
                 reversed={activeMetric === 'pace'}
                 tickFormatter={fmt}
               />
@@ -212,6 +225,12 @@ export default function CardioProgressSection() {
       )}
 
       {activeMetric === 'pace' && <p className="text-center text-[11px] text-slate-500">Lower is faster.</p>}
+
+      {easeSpikes && (
+        <p className="text-center text-[11px] text-slate-500">
+          Axis eased so one long session doesn&apos;t flatten the rest. Values are unchanged.
+        </p>
+      )}
 
       {!hasDistance && (
         <p className="text-[11px] text-slate-500">

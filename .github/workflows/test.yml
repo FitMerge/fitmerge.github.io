@@ -23,3 +23,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+      # The sync script merges into stored workout history, so its offline checks
+      # run here too. --self-test needs no network and no Garmin credentials.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/garmin-sync.py --self-test

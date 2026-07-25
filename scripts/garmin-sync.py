@@ -184,26 +184,59 @@ def merge_body(existing, weights):
     return {"entries": entries, "measurements": measurements}
 
 
+#: Fields carried from a Garmin activity onto its stored session. Also the fields
+#: backfilled onto sessions already saved — see merge_workouts.
+_IMPORT_FIELDS = ("durationMin", "kcal", "trainingLoad", "distanceKm")
+
+
 def merge_workouts(existing, sessions):
-    """Append Garmin activities as imported sessions, skipping ones that duplicate an
-    existing imported session (same date+name+duration+kcal). Routines/programs and
-    app-logged sessions are left untouched. Returns (merged_store, added_count)."""
+    """Append Garmin activities as imported sessions and backfill missing fields onto
+    ones already stored. Routines/programs and app-logged sessions are left untouched.
+    Returns (merged_store, added_count, updated_count).
+
+    Backfill matters because this import used to be strictly add-only: a session whose
+    key already existed was skipped outright. Fields added to the importer later —
+    distanceKm especially — therefore never reached activities imported before that,
+    and no amount of re-running would fix them. That is what left older runs with no
+    pace or distance charts.
+
+    The dedupe key is date+name+duration+kcal, so a matching session can only really
+    differ in trainingLoad/distanceKm. Only absent values are filled, never
+    overwritten, so a re-import can add what is missing but cannot rewrite history.
+    """
     ex = existing if isinstance(existing, dict) else {}
     routines = ex.get("routines") if isinstance(ex.get("routines"), list) else []
     programs = ex.get("programs") if isinstance(ex.get("programs"), list) else []
     existing_sessions = ex.get("sessions") if isinstance(ex.get("sessions"), list) else []
 
-    seen = {
-        _session_key(s)
-        for s in existing_sessions
-        if isinstance(s, dict) and s.get("imported")
-    }
-    added = []
+    # Copy up front so backfill mutates the rows we are about to return, never the
+    # caller's objects.
+    merged = []
+    by_key = {}
+    for s in existing_sessions:
+        if isinstance(s, dict):
+            row = dict(s)
+            merged.append(row)
+            if row.get("imported"):
+                by_key.setdefault(_session_key(row), row)
+        else:
+            merged.append(s)
+
+    added = 0
+    updated = 0
     for s in sessions:
         key = _session_key(s)
-        if key in seen:
+        target = by_key.get(key)
+        if target is not None:
+            changed = False
+            for k in _IMPORT_FIELDS:
+                if k in s and target.get(k) is None:
+                    target[k] = s[k]
+                    changed = True
+            if changed:
+                updated += 1
             continue
-        seen.add(key)
+
         started = _epoch_noon_ms(s["date"])
         row = {
             "id": secrets.token_hex(8),
@@ -214,12 +247,14 @@ def merge_workouts(existing, sessions):
             "entries": [],
             "imported": True,
         }
-        for k in ("durationMin", "kcal", "trainingLoad", "distanceKm"):
+        for k in _IMPORT_FIELDS:
             if k in s:
                 row[k] = s[k]
-        added.append(row)
+        merged.append(row)
+        by_key[key] = row
+        added += 1
 
-    return {"routines": routines, "sessions": list(existing_sessions) + added, "programs": programs}, len(added)
+    return {"routines": routines, "sessions": merged, "programs": programs}, added, updated
 
 
 def merge_health(existing, health):
@@ -307,8 +342,11 @@ def push_payload(db, uid, payload):
     body = merge_body(read("body"), payload["weights"])
     write("body", body)
 
-    workouts, added = merge_workouts(read("workouts"), payload["sessions"])
+    workouts, added, backfilled = merge_workouts(read("workouts"), payload["sessions"])
     write("workouts", workouts)
+    if backfilled:
+        print(f"Backfilled missing fields on {backfilled} already-imported session(s).",
+              file=sys.stderr)
 
     health = merge_health(read("health"), payload["health"])
     write("health", health)
@@ -843,8 +881,10 @@ def self_test():
              "kcal": 320, "imported": True},
         ],
     }
-    mw, added = merge_workouts(existing_workouts, payload["sessions"])
+    mw, added, backfilled = merge_workouts(existing_workouts, payload["sessions"])
     imported_names = [s["name"] for s in mw["sessions"] if s.get("imported")]
+    imp1 = next(s for s in mw["sessions"] if s.get("id") == "imp1")
+    app1 = next(s for s in mw["sessions"] if s.get("id") == "app1")
     checks += [
         added == 1,  # Running is a dup; only Strength Training is new
         mw["routines"] == existing_workouts["routines"],
@@ -853,10 +893,30 @@ def self_test():
         imported_names.count("Running") == 1,  # not duplicated
         "Strength Training" in imported_names,
         all(s.get("entries") == [] for s in mw["sessions"] if s.get("imported") and s["id"] != "imp1"),
+        # The dup is not skipped outright any more: fields it never had are filled in,
+        # which is what unlocks pace/distance on activities imported before those
+        # fields existed.
+        backfilled == 1,
+        imp1.get("distanceKm") == 5.2,
+        imp1.get("trainingLoad") == 88.0,
+        # Backfill must not invent fields on app-logged sessions.
+        "distanceKm" not in app1,
+        # The caller's objects are never mutated in place.
+        "distanceKm" not in existing_workouts["sessions"][1],
     ]
-    # Re-running against the already-merged store adds nothing (idempotent).
-    _, added_again = merge_workouts(mw, payload["sessions"])
-    checks.append(added_again == 0)
+    # Re-running against the already-merged store adds nothing and, now that the
+    # gaps are filled, backfills nothing either (idempotent).
+    _, added_again, backfilled_again = merge_workouts(mw, payload["sessions"])
+    checks += [added_again == 0, backfilled_again == 0]
+
+    # An existing value is never overwritten — Garmin may report a corrected distance,
+    # but rewriting stored history silently is worse than leaving it alone.
+    stale = {"sessions": [
+        {"id": "imp2", "name": "Running", "date": "2026-06-20", "durationMin": 32.5,
+         "kcal": 320, "distanceKm": 1.1, "imported": True},
+    ]}
+    ms, _, _ = merge_workouts(stale, payload["sessions"])
+    checks.append(ms["sessions"][0]["distanceKm"] == 1.1)
 
     # health: union days, merge metric bags per date (Garmin wins on conflict).
     existing_health = {"days": {
@@ -875,6 +935,7 @@ def self_test():
     checks += [
         merge_body(None, payload["weights"])["entries"] and True,
         merge_workouts(None, payload["sessions"])[1] == 2,  # both sessions new
+        merge_workouts(None, payload["sessions"])[2] == 0,  # nothing to backfill
         len(merge_health(None, payload["health"])["days"]) == 1,
     ]
 

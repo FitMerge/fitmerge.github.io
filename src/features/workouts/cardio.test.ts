@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { activityCategory, cardioActivities, cardioSeries, formatPace } from './cardio'
+import {
+  activityCategory,
+  cardioActivities,
+  cardioSeries,
+  formatPace,
+  hasOutlierSpike,
+} from './cardio'
 import type { WorkoutSession } from '../../types'
 
 const session = (over: Partial<WorkoutSession> = {}): WorkoutSession => ({
@@ -114,6 +120,38 @@ describe('cardioSeries', () => {
     const [point] = cardioSeries([session()], 'Run', 'metric')
     expect(point.pace).toBeNull()
     expect(point.distance).toBeNull()
+  })
+})
+
+describe('hasOutlierSpike', () => {
+  it('spots a half marathon hiding among a season of 5k runs', () => {
+    expect(hasOutlierSpike([5, 5.2, 4.8, 5.1, 5, 21.1])).toBe(true)
+  })
+
+  it('leaves consistent training alone', () => {
+    expect(hasOutlierSpike([5, 5.2, 4.8, 5.1, 6, 4.5])).toBe(false)
+  })
+
+  it('tolerates a steady build without calling it a spike', () => {
+    // Marathon block ramping 5k to 12k — real progression, not an outlier.
+    expect(hasOutlierSpike([5, 6, 7, 8, 9, 10, 11, 12])).toBe(false)
+  })
+
+  it('needs enough history to call anything typical', () => {
+    expect(hasOutlierSpike([5, 21])).toBe(false)
+    expect(hasOutlierSpike([5, 5, 21])).toBe(false)
+  })
+
+  it('ignores gaps and non-positive values', () => {
+    expect(hasOutlierSpike([5, null, 5, null, 5, 5, 21])).toBe(true)
+    expect(hasOutlierSpike([null, null])).toBe(false)
+    expect(hasOutlierSpike([0, 0, 0, 0])).toBe(false)
+  })
+
+  it('measures against the median so the spike cannot inflate its own baseline', () => {
+    // The mean of these is dragged up past 2.5x by the outlier itself; the median
+    // is not, so the spike is still correctly identified.
+    expect(hasOutlierSpike([4, 4, 4, 4, 4, 4, 4, 40])).toBe(true)
   })
 })
 
