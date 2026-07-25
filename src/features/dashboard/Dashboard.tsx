@@ -5,11 +5,15 @@
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Droplets, Dumbbell, Pill, Sparkles } from 'lucide-react'
+import { Check, Droplets, Dumbbell, Minus, Pill, Plus, Sparkles } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
+import Sheet from '../../components/Sheet'
 import RingChart from '../../components/RingChart'
 import CoachSheet from './CoachSheet'
+import LogWaterSheet from '../nutrition/LogWaterSheet'
+import SupplementList from '../assistant/SupplementList'
+import { useNutritionStore } from '../../store/nutrition'
 import { useHomeData } from './homeData'
 import { buildInsights } from './insights'
 import { metricSpark, scoreColor } from '../health/healthToday'
@@ -19,10 +23,16 @@ import { mlToFloz, weightUnit } from '../../lib/units'
 import { weightUnitLabel } from '../workouts/utils'
 import { fmtK, fmtSleep, HomeHeader, INSIGHT_ICONS, InsightRow, StatTile, TONE_BG, TONE_TEXT } from './home/shared'
 
+// One glass, for the home row's quick add/remove.
+const QUICK_WATER_ML = 250
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const d = useHomeData()
+  const addWater = useNutritionStore((s) => s.addWater)
   const [coachOpen, setCoachOpen] = useState(false)
+  const [waterOpen, setWaterOpen] = useState(false)
+  const [goalsOpen, setGoalsOpen] = useState(false)
   const insights = useMemo(() => buildInsights(d, new Date().getHours()), [d])
   const featured = insights[0]
   const FeaturedIcon = featured ? INSIGHT_ICONS[featured.icon] : null
@@ -31,6 +41,10 @@ export default function Dashboard() {
   const overBudget = d.remaining < 0
   const stepsPct = d.steps != null ? Math.min(1, d.steps / d.stepsGoal) : 0
   const waterPct = Math.min(1, d.waterMl / Math.max(1, d.waterGoalMl))
+  const waterLabel =
+    d.units === 'imperial'
+      ? `${Math.round(mlToFloz(d.waterMl))} / ${Math.round(mlToFloz(d.waterGoalMl))} oz`
+      : `${(d.waterMl / 1000).toFixed(1)} / ${(d.waterGoalMl / 1000).toFixed(1)} L`
 
   const hrvSpark = useMemo(() => metricSpark(d.healthDesc, 'hrv', 14), [d.healthDesc])
   const hrvBand = useMemo(() => typicalRangeOf(hrvSpark), [hrvSpark])
@@ -159,7 +173,11 @@ export default function Dashboard() {
 
           {d.todaysRoutine && (
             <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/workouts', { state: { previewRoutineId: d.todaysRoutine?.id } })}
+                className="flex min-w-0 items-center gap-3 text-left active:opacity-80"
+              >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
                   {d.trainedToday ? <Check size={17} /> : <Dumbbell size={17} />}
                 </span>
@@ -169,7 +187,7 @@ export default function Dashboard() {
                     {d.trainedToday ? 'Done — nice work' : `${d.todaysRoutine.items.length} exercises`}
                   </p>
                 </div>
-              </div>
+              </button>
               {!d.trainedToday && !d.activeSessionId && (
                 <Button
                   variant="primary"
@@ -183,7 +201,11 @@ export default function Dashboard() {
           )}
 
           {d.supplements.length > 0 && (
-            <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setGoalsOpen(true)}
+              className="flex w-full items-center justify-between gap-3 text-left active:opacity-80"
+            >
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
                   <Pill size={17} />
@@ -201,25 +223,46 @@ export default function Dashboard() {
                   {d.supplementsTaken}/{d.supplements.length}
                 </span>
               </div>
-            </div>
+            </button>
           )}
 
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-400">
-              <Droplets size={17} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline justify-between">
-                <p className="text-sm text-slate-200">Water</p>
-                <p className="text-xs text-slate-400">
-                  {d.units === 'imperial'
-                    ? `${Math.round(mlToFloz(d.waterMl))} / ${Math.round(mlToFloz(d.waterGoalMl))} oz`
-                    : `${(d.waterMl / 1000).toFixed(1)} / ${(d.waterGoalMl / 1000).toFixed(1)} L`}
-                </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setWaterOpen(true)}
+              className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-80"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-400">
+                <Droplets size={17} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between">
+                  <p className="text-sm text-slate-200">Water</p>
+                  <p className="text-xs text-slate-400">{waterLabel}</p>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-full rounded-full bg-sky-400" style={{ width: `${waterPct * 100}%` }} />
+                </div>
               </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
-                <div className="h-full rounded-full bg-sky-400" style={{ width: `${waterPct * 100}%` }} />
-              </div>
+            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                aria-label="Remove a glass of water"
+                onClick={() => addWater(d.today, -QUICK_WATER_ML)}
+                disabled={d.waterMl <= 0}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-slate-300 active:bg-slate-700 disabled:opacity-40"
+              >
+                <Minus size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="Add a glass of water"
+                onClick={() => addWater(d.today, QUICK_WATER_ML)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/20 text-sky-300 active:bg-sky-500/30"
+              >
+                <Plus size={16} />
+              </button>
             </div>
           </div>
         </Card>
@@ -296,6 +339,10 @@ export default function Dashboard() {
       </div>
 
       <CoachSheet open={coachOpen} onClose={() => setCoachOpen(false)} />
+      <LogWaterSheet open={waterOpen} onClose={() => setWaterOpen(false)} date={d.today} />
+      <Sheet open={goalsOpen} onClose={() => setGoalsOpen(false)} title="Daily goals">
+        <SupplementList />
+      </Sheet>
     </div>
   )
 }

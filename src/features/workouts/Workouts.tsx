@@ -71,11 +71,19 @@ export default function Workouts() {
 
   useEffect(() => {
     const state = location.state as
-      | { startRoutineId?: string; coachSession?: { name: string; items: { exerciseId: string; sets: number; reps: number }[] } }
+      | {
+          startRoutineId?: string
+          previewRoutineId?: string
+          coachSession?: { name: string; items: { exerciseId: string; sets: number; reps: number }[] }
+        }
       | null
-    if (!state?.startRoutineId && !state?.coachSession) return
+    if (!state?.startRoutineId && !state?.previewRoutineId && !state?.coachSession) return
 
-    if (!activeSessionId) {
+    // Open a routine to look at (from Home) without starting it.
+    if (state.previewRoutineId) {
+      const routine = routines.find((r) => r.id === state.previewRoutineId)
+      if (routine) setPreviewRoutine(routine)
+    } else if (!activeSessionId) {
       if (state.startRoutineId) {
         const routine = routines.find((r) => r.id === state.startRoutineId)
         if (routine) startFromRoutine(routine)
