@@ -4,10 +4,11 @@ import {
   cardioActivities,
   cardioSeries,
   bestEfforts,
+  bucketCardio,
+  bucketSizeFor,
   formatDuration,
   formatGarminRecord,
   formatPace,
-  hasOutlierSpike,
   inCardioRange,
 } from './cardio'
 import type { WorkoutSession } from '../../types'
@@ -191,35 +192,93 @@ describe('range filtering', () => {
   })
 })
 
-describe('hasOutlierSpike', () => {
-  it('spots a half marathon hiding among a season of 5k runs', () => {
-    expect(hasOutlierSpike([5, 5.2, 4.8, 5.1, 5, 21.1])).toBe(true)
+describe('bucketSizeFor', () => {
+  it('uses weeks for short ranges and months for long ones', () => {
+    expect(bucketSizeFor({ kind: 'days', days: 30 })).toBe('week')
+    expect(bucketSizeFor({ kind: 'days', days: 90 })).toBe('week')
+    expect(bucketSizeFor({ kind: 'days', days: 365 })).toBe('month')
+    expect(bucketSizeFor({ kind: 'all' })).toBe('month')
   })
 
-  it('leaves consistent training alone', () => {
-    expect(hasOutlierSpike([5, 5.2, 4.8, 5.1, 6, 4.5])).toBe(false)
+  it('sizes a custom window by how long it actually is', () => {
+    expect(bucketSizeFor({ kind: 'custom', from: '2026-01-01', to: '2026-02-01' })).toBe('week')
+    expect(bucketSizeFor({ kind: 'custom', from: '2026-01-01', to: '2026-12-01' })).toBe('month')
+  })
+})
+
+describe('bucketCardio', () => {
+  const runs = (dates: [string, number][]) =>
+    cardioSeries(
+      dates.map(([date, km], i) =>
+        session({ id: `s${i}`, date, distanceKm: km, durationMin: km * 6 }),
+      ),
+      'Run',
+      'metric',
+      { kind: 'all' },
+      '2026-07-24',
+    )
+
+  it('totals sessions falling in the same week', () => {
+    // 2026-07-20 is a Monday; the 22nd is the same training week.
+    const buckets = bucketCardio(runs([['2026-07-20', 5], ['2026-07-22', 7]]), 'week')
+    expect(buckets).toHaveLength(1)
+    expect(buckets[0].sessions).toBe(2)
+    expect(buckets[0].distance).toBe(12)
+    expect(buckets[0].durationMin).toBe(72)
   })
 
-  it('tolerates a steady build without calling it a spike', () => {
-    // Marathon block ramping 5k to 12k — real progression, not an outlier.
-    expect(hasOutlierSpike([5, 6, 7, 8, 9, 10, 11, 12])).toBe(false)
+  it('starts weeks on Monday, so a Sunday belongs to the week before', () => {
+    // 2026-07-19 is a Sunday and 2026-07-20 the Monday after it.
+    const buckets = bucketCardio(runs([['2026-07-19', 5], ['2026-07-20', 5]]), 'week')
+    expect(buckets).toHaveLength(2)
   })
 
-  it('needs enough history to call anything typical', () => {
-    expect(hasOutlierSpike([5, 21])).toBe(false)
-    expect(hasOutlierSpike([5, 5, 21])).toBe(false)
+  it('groups by calendar month when asked', () => {
+    const buckets = bucketCardio(runs([['2026-05-02', 5], ['2026-05-28', 5], ['2026-06-01', 5]]), 'month')
+    expect(buckets.map((b) => b.sessions)).toEqual([2, 1])
   })
 
-  it('ignores gaps and non-positive values', () => {
-    expect(hasOutlierSpike([5, null, 5, null, 5, 5, 21])).toBe(true)
-    expect(hasOutlierSpike([null, null])).toBe(false)
-    expect(hasOutlierSpike([0, 0, 0, 0])).toBe(false)
+  it('emits empty periods rather than skipping them', () => {
+    // A month off must show as a gap, not be compressed out of the timeline.
+    const buckets = bucketCardio(runs([['2026-05-04', 5], ['2026-07-06', 5]]), 'month')
+    expect(buckets).toHaveLength(3)
+    expect(buckets[1].sessions).toBe(0)
+    expect(buckets[1].durationMin).toBe(0)
+    expect(buckets[1].distance).toBeNull()
   })
 
-  it('measures against the median so the spike cannot inflate its own baseline', () => {
-    // The mean of these is dragged up past 2.5x by the outlier itself; the median
-    // is not, so the spike is still correctly identified.
-    expect(hasOutlierSpike([4, 4, 4, 4, 4, 4, 4, 40])).toBe(true)
+  it('averages pace across the period by total time over total distance', () => {
+    // 5km at 6:00/km and 10km at 5:00/km is 80min over 15km — 5:20/km, not 5:30.
+    const points = cardioSeries(
+      [
+        session({ id: 'a', date: '2026-07-20', distanceKm: 5, durationMin: 30 }),
+        session({ id: 'b', date: '2026-07-21', distanceKm: 10, durationMin: 50 }),
+      ],
+      'Run',
+      'metric',
+      { kind: 'all' },
+      '2026-07-24',
+    )
+    const [bucket] = bucketCardio(points, 'week')
+    expect(bucket.pace).toBeCloseTo(80 / 15, 6)
+  })
+
+  it('leaves distance and pace null when no session recorded any', () => {
+    const points = cardioSeries(
+      [session({ id: 'a', date: '2026-07-20', durationMin: 30 })],
+      'Run',
+      'metric',
+      { kind: 'all' },
+      '2026-07-24',
+    )
+    const [bucket] = bucketCardio(points, 'week')
+    expect(bucket.distance).toBeNull()
+    expect(bucket.pace).toBeNull()
+    expect(bucket.durationMin).toBe(30)
+  })
+
+  it('returns nothing for no sessions', () => {
+    expect(bucketCardio([], 'week')).toEqual([])
   })
 })
 

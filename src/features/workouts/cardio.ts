@@ -250,24 +250,115 @@ export function formatPace(pace: number): string {
 
 export type CardioMetricKey = 'distance' | 'pace' | 'durationMin' | 'kcal'
 
-/**
- * True when a few outsized sessions would squash the rest of the chart flat — one
- * half marathon among a season of 5k runs, say.
- *
- * Compares the largest value against the median rather than the mean, so the spike
- * being measured cannot inflate the baseline it is measured against. Needs a few
- * sessions before it will claim anything: with two or three points there is no
- * "typical" value to be an outlier from.
- */
-export function hasOutlierSpike(values: (number | null)[]): boolean {
-  const sorted = values
-    .filter((v): v is number => v !== null && Number.isFinite(v) && v > 0)
-    .sort((a, b) => a - b)
-  if (sorted.length < 4) return false
-  const median = sorted[Math.floor(sorted.length / 2)]
-  if (median <= 0) return false
-  return sorted[sorted.length - 1] > median * 2.5
+// --- period aggregation ------------------------------------------------------
+//
+// Plotting one point per session across a year is unreadable: the dots scatter,
+// the trend line whips about, and a single long run rescales the whole axis.
+// Strava, Garmin Connect and Nike all solve this the same way — aggregate into
+// weekly or monthly totals and draw bars. Uniform periods also make an evenly
+// spaced axis honest, which a per-session axis never was.
+
+export type BucketSize = 'week' | 'month'
+
+export type CardioBucket = {
+  key: string
+  label: string
+  sessions: number
+  /** Period totals, in display units. */
+  distance: number | null
+  durationMin: number
+  kcal: number | null
+  /** Average pace over the period — total time over total distance, not a mean of
+   * per-session paces, so a long steady run counts for more than a short sprint. */
+  pace: number | null
 }
+
+/** Weekly up to a quarter, monthly beyond — about 12-16 bars either way. */
+export function bucketSizeFor(range: CardioRange): BucketSize {
+  if (range.kind === 'all') return 'month'
+  if (range.kind === 'custom') {
+    const days = Math.abs(isoToEpochMs(range.to) - isoToEpochMs(range.from)) / 86_400_000
+    return days > 100 ? 'month' : 'week'
+  }
+  return range.days > 100 ? 'month' : 'week'
+}
+
+function startOfPeriod(iso: string, size: BucketSize): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  if (size === 'month') return `${y}-${String(m).padStart(2, '0')}-01`
+  const date = new Date(y, m - 1, d)
+  // Monday-based weeks, matching how training weeks are usually counted.
+  const shift = (date.getDay() + 6) % 7
+  date.setDate(date.getDate() - shift)
+  const yy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+function nextPeriod(iso: string, size: BucketSize): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  if (size === 'month') date.setMonth(date.getMonth() + 1)
+  else date.setDate(date.getDate() + 7)
+  const yy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+function periodLabel(iso: string, size: BucketSize): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return size === 'month'
+    ? date.toLocaleDateString('en-US', { month: 'short' })
+    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/**
+ * Group a session series into consecutive periods. Periods with no activity are
+ * emitted as zeros rather than skipped — a fortnight off is information, and
+ * dropping it would silently compress the timeline.
+ */
+export function bucketCardio(points: CardioPoint[], size: BucketSize): CardioBucket[] {
+  if (points.length === 0) return []
+
+  const totals = new Map<string, { sessions: number; distance: number; durationMin: number; kcal: number; hasDistance: boolean; hasKcal: boolean }>()
+  for (const p of points) {
+    const key = startOfPeriod(p.date, size)
+    const cur =
+      totals.get(key) ??
+      { sessions: 0, distance: 0, durationMin: 0, kcal: 0, hasDistance: false, hasKcal: false }
+    cur.sessions += 1
+    cur.durationMin += p.durationMin
+    if (p.distance !== null) {
+      cur.distance += p.distance
+      cur.hasDistance = true
+    }
+    if (p.kcal !== null) {
+      cur.kcal += p.kcal
+      cur.hasKcal = true
+    }
+    totals.set(key, cur)
+  }
+
+  const keys = [...totals.keys()].sort()
+  const out: CardioBucket[] = []
+  for (let key = keys[0]; key <= keys[keys.length - 1]; key = nextPeriod(key, size)) {
+    const t = totals.get(key)
+    out.push({
+      key,
+      label: periodLabel(key, size),
+      sessions: t?.sessions ?? 0,
+      distance: t?.hasDistance ? t.distance : null,
+      durationMin: t?.durationMin ?? 0,
+      kcal: t?.hasKcal ? t.kcal : null,
+      pace: t && t.hasDistance && t.distance > 0 ? t.durationMin / t.distance : null,
+    })
+  }
+  return out
+}
+
 
 export type CardioSummary = {
   sessions: number

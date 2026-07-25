@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import {
+  Bar,
   CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceDot,
   ResponsiveContainer,
-  Scatter,
   Tooltip,
   XAxis,
   YAxis,
@@ -17,6 +16,8 @@ import { useSettingsStore } from '../../store/settings'
 import {
   CARDIO_RANGE_PRESETS,
   bestEfforts,
+  bucketCardio,
+  bucketSizeFor,
   cardioActivities,
   cardioSeries,
   cardioSummary,
@@ -24,7 +25,6 @@ import {
   formatDuration,
   formatGarminRecord,
   formatPace,
-  hasOutlierSpike,
   type ActivityCategory,
   type CardioMetricKey,
   type CardioRange,
@@ -34,19 +34,8 @@ import { monthDayLabel } from '../progress/utils'
 
 type MetricDef = { key: CardioMetricKey; label: string; needsDistance: boolean }
 
-/** Axis tick: short enough to fit several across a phone. */
-function axisDate(t: number): string {
-  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-/** Tooltip heading: the full date, since the axis only had room for a hint. */
-function tooltipDate(t: number): string {
-  return new Date(t).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+function periodNoun(size: 'week' | 'month'): string {
+  return size === 'month' ? 'Month' : 'Week'
 }
 
 export default function CardioProgressSection() {
@@ -96,46 +85,12 @@ export default function CardioProgressSection() {
   // and refill the activity list, and a hook that only sometimes runs changes the
   // hook count between renders, which React treats as a fatal error.
 
-  // Session-to-session values bounce around (route, weather, mood) — a rolling
-  // 5-session average is the bold trend, raw sessions become faint dots behind it.
-  const chartPoints = useMemo(() => {
-    const vals = points.map((p) => p[activeMetric] as number | null)
-    return points.map((p, i) => {
-      let sum = 0
-      let n = 0
-      for (let j = Math.max(0, i - 4); j <= i; j++) {
-        const v = vals[j]
-        if (v != null) {
-          sum += v
-          n++
-        }
-      }
-      return { ...p, trend: n ? sum / n : null }
-    })
-  }, [points, activeMetric])
-
-  // Best session: fastest pace, or the highest value for other metrics.
-  const best = useMemo(() => {
-    let bestPt: { t: number; v: number } | null = null
-    for (const p of chartPoints) {
-      const v = p[activeMetric] as number | null
-      if (v == null) continue
-      const better = bestPt === null || (activeMetric === 'pace' ? v < bestPt.v : v > bestPt.v)
-      if (better) bestPt = { t: p.t, v }
-    }
-    return bestPt
-  }, [chartPoints, activeMetric])
-
-  // One half marathon among a season of 5k runs pins every other point to the floor.
-  // A square-root axis compresses the spike while keeping real numbers on the ticks —
-  // a log axis would read 3.2 / 10 / 31.6, which nobody wants for distance. Pace is
-  // left alone: its range is narrow and the axis is already reversed.
-  const easeSpikes = useMemo(
-    () =>
-      activeMetric !== 'pace' &&
-      hasOutlierSpike(points.map((p) => p[activeMetric] as number | null)),
-    [points, activeMetric],
-  )
+  // Weekly or monthly periods, the way Strava and Garmin Connect present this. One
+  // bar per period reads at a glance where one dot per session never did, and it
+  // removes the outlier problem at source: a half marathon is a tall week, not a
+  // spike that rescales the entire axis.
+  const bucketSize = bucketSizeFor(range)
+  const buckets = useMemo(() => bucketCardio(points, bucketSize), [points, bucketSize])
 
   // Only running has standard race distances worth comparing against.
   const efforts = useMemo(
@@ -239,6 +194,7 @@ export default function CardioProgressSection() {
   const fmt = (v: number): string => {
     if (activeMetric === 'pace') return formatPace(v)
     if (activeMetric === 'distance') return v.toFixed(1)
+    if (activeMetric === 'durationMin') return formatDuration(v)
     return String(Math.round(v))
   }
 
@@ -257,16 +213,17 @@ export default function CardioProgressSection() {
 
       {rangePicker}
 
-      {/* Sport picker — major categories only, so runs from every city sit together */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      {/* Sport picker. Wraps rather than scrolling sideways: seven categories fit in
+          two rows, and a horizontal scrollbar hid options below the fold. */}
+      <div className="flex flex-wrap gap-1.5">
         {activities.map((a) => (
           <button
             key={a.category}
             type="button"
             onClick={() => setActiveCategory(a.category)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
+            className={`rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
               selected === a.category
-                ? 'bg-primary-500 text-slate-950 font-semibold'
+                ? 'bg-primary-500 font-semibold text-slate-950'
                 : 'bg-slate-800 text-slate-300'
             }`}
           >
@@ -291,101 +248,74 @@ export default function CardioProgressSection() {
         ))}
       </div>
 
-      {/* Summary tiles */}
+      {/* Summary tiles. Total time replaces "best pace" as the third tile: it is
+          always available, where pace needs distance and was showing a dash. */}
       <div className="grid grid-cols-3 gap-2 text-center">
         <Tile label="Sessions" value={String(summary.sessions)} />
+        <Tile label="Total time" value={formatDuration(summary.totalDuration)} />
         <Tile
           label={`Distance ${distUnit}`}
           value={summary.totalDistance > 0 ? summary.totalDistance.toFixed(1) : '—'}
         />
-        <Tile
-          label={`Best pace`}
-          value={summary.bestPace !== null ? `${formatPace(summary.bestPace)}` : '—'}
-        />
       </div>
 
-      {points.length >= 2 ? (
+      {buckets.length > 0 ? (
         <div style={{ height: 190 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartPoints} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <ComposedChart data={buckets} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#1e293b" vertical={false} />
-              {/* A real time axis: gaps between sessions are drawn to scale and the
-                  ticks fall on sensible dates rather than on whichever session
-                  happened to sit there. */}
+              {/* Categorical is correct here in a way it never was per session: every
+                  bar covers an identical period, so equal spacing is the truth. */}
               <XAxis
-                dataKey="t"
-                type="number"
-                scale="time"
-                domain={['dataMin', 'dataMax']}
-                tickFormatter={axisDate}
+                dataKey="label"
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
-                minTickGap={32}
+                minTickGap={16}
               />
               <YAxis
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={40}
-                scale={easeSpikes ? 'sqrt' : 'linear'}
-                domain={easeSpikes ? [0, 'auto'] : ['auto', 'auto']}
+                domain={activeMetric === 'pace' ? ['auto', 'auto'] : [0, 'auto']}
                 reversed={activeMetric === 'pace'}
                 tickFormatter={fmt}
               />
               <Tooltip
+                cursor={{ fill: '#1e293b', fillOpacity: 0.5 }}
                 contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: '#cbd5e1' }}
-                labelFormatter={(t: number) => tooltipDate(t)}
-                formatter={(v: number, name: string) => [`${fmt(v)} ${yLabel}`, name]}
+                formatter={(v: number) => [`${fmt(v)} ${yLabel}`, periodNoun(bucketSize)]}
               />
-              {/* Individual sessions as slate dots — no connecting line, because
-                  nothing happened between two runs a fortnight apart. */}
-              <Scatter
-                dataKey={activeMetric}
-                name="Session"
-                fill="#94a3b8"
-                fillOpacity={0.65}
-                isAnimationActive={false}
-              />
-              {/* The story: rolling 5-session average, in emerald so it reads as a
-                  different thing entirely rather than a bolder version of the dots.
-                  Straight segments: the average is only defined where a session is. */}
-              <Line
-                type="linear"
-                dataKey="trend"
-                name="5-session average"
-                stroke="#34d399"
-                strokeWidth={2.5}
-                dot={false}
-                connectNulls
-                isAnimationActive={false}
-              />
-              {best && (
-                <ReferenceDot
-                  x={best.t}
-                  y={best.v}
-                  r={4}
-                  fill="#fbbf24"
-                  stroke="#0f172a"
-                  strokeWidth={1.5}
-                  label={{ value: 'best', position: 'top', fill: '#fbbf24', fontSize: 10 }}
+              {/* Pace is an average, so it stays a line — a bar implies a total you
+                  could add up, and averaging is not summing. Everything else is a
+                  period total and reads best as a bar. */}
+              {activeMetric === 'pace' ? (
+                <Line
+                  type="linear"
+                  dataKey="pace"
+                  stroke="#34d399"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: '#34d399', strokeWidth: 0 }}
+                  connectNulls
+                  isAnimationActive={false}
                 />
+              ) : (
+                <Bar dataKey={activeMetric} fill="#34d399" radius={[3, 3, 0, 0]} isAnimationActive={false} />
               )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       ) : (
-        <p className="py-2 text-center text-sm text-slate-500">Not enough sessions to chart a trend yet.</p>
+        <p className="py-2 text-center text-sm text-slate-500">No sessions in this range yet.</p>
       )}
 
-      {activeMetric === 'pace' && <p className="text-center text-[11px] text-slate-500">Lower is faster.</p>}
-
-      {easeSpikes && (
-        <p className="text-center text-[11px] text-slate-500">
-          Axis eased so one long session doesn&apos;t flatten the rest. Values are unchanged.
-        </p>
-      )}
+      <p className="text-center text-[11px] text-slate-500">
+        {activeMetric === 'pace'
+          ? `Average pace per ${periodNoun(bucketSize).toLowerCase()} — lower is faster.`
+          : `Total per ${periodNoun(bucketSize).toLowerCase()}.`}
+      </p>
 
       {/* Garmin's records when we have them: it measures inside activities, so its
           5K beats anything derivable from one distance per session. */}
