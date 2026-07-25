@@ -17,6 +17,7 @@ import type {
   CustomFood,
   ExerciseEntry,
   FoodEntry,
+  GarminRecord,
   Goals,
   HealthDay,
   MeasurementEntry,
@@ -51,6 +52,12 @@ function unionBy<T>(local: T[], cloud: T[], key: (item: T) => string): T[] {
 
 function asArray<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : []
+}
+
+/** First list that has anything in it. For data a single authority recomputes
+ * wholesale, where merging two copies would be meaningless. */
+function pickNonEmpty<T>(preferred: T[], fallback: T[]): T[] {
+  return preferred.length > 0 ? preferred : fallback
 }
 
 function asRecord(v: unknown): Record<string, number> {
@@ -135,13 +142,22 @@ const workouts: StoreAdapter = {
   name: 'workouts',
   read() {
     const s = useWorkoutsStore.getState()
-    return { routines: s.routines, sessions: s.sessions, programs: s.programs }
+    // garminRecords must be read back out as well as applied: the sync job writes
+    // them into this same document, and a read that omitted them would drop them
+    // on the app's next upload.
+    return {
+      routines: s.routines,
+      sessions: s.sessions,
+      programs: s.programs,
+      garminRecords: s.garminRecords,
+    }
   },
   apply(data) {
     useWorkoutsStore.setState({
       routines: asArray<Routine>(data.routines),
       sessions: asArray<WorkoutSession>(data.sessions),
       programs: asArray<Program>(data.programs),
+      garminRecords: asArray<GarminRecord>(data.garminRecords),
     })
   },
   subscribe(cb) {
@@ -153,6 +169,12 @@ const workouts: StoreAdapter = {
       routines: unionBy(asArray<Routine>(local.routines), asArray<Routine>(cloud.routines), (r) => r.id),
       sessions: unionBy(asArray<WorkoutSession>(local.sessions), asArray<WorkoutSession>(cloud.sessions), (s) => s.id),
       programs: unionBy(asArray<Program>(local.programs), asArray<Program>(cloud.programs), (p) => p.id),
+      // Records are Garmin's to compute, not ours to reconcile: take whichever
+      // side actually has them rather than unioning two versions of the same PR.
+      garminRecords: pickNonEmpty(
+        asArray<GarminRecord>(cloud.garminRecords),
+        asArray<GarminRecord>(local.garminRecords),
+      ),
     }
   },
 }

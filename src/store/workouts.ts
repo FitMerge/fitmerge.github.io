@@ -2,12 +2,14 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { uid } from '../lib/id'
 import type { ProgramTemplate } from '../data/programs'
-import type { Program, ProgramDay, Routine, WorkoutSession } from '../types'
+import type { GarminRecord, Program, ProgramDay, Routine, WorkoutSession } from '../types'
 
 type WorkoutsState = {
   routines: Routine[]
   sessions: WorkoutSession[]
   programs: Program[]
+  /** Personal records as Garmin computes them. Written by the sync job, read-only here. */
+  garminRecords: GarminRecord[]
   activeProgramId?: string
   activeSessionId?: string
   addRoutine: (routine: Omit<Routine, 'id'>) => void
@@ -40,6 +42,7 @@ export const useWorkoutsStore = create<WorkoutsState>()(
       routines: [],
       sessions: [],
       programs: [],
+      garminRecords: [],
       activeProgramId: undefined,
       activeSessionId: undefined,
       addRoutine: (routine) => {

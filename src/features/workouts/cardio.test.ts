@@ -5,6 +5,7 @@ import {
   cardioSeries,
   bestEfforts,
   formatDuration,
+  formatGarminRecord,
   formatPace,
   hasOutlierSpike,
   inCardioRange,
@@ -326,6 +327,27 @@ describe('bestEfforts', () => {
       TODAY,
     )
     expect(efforts).toEqual([])
+  })
+})
+
+describe('formatGarminRecord', () => {
+  it('renders a time record as a clock', () => {
+    // Garmin reports seconds; 1355s is a 22:35 5K.
+    expect(formatGarminRecord({ typeId: 3, label: 'Fastest 5K', kind: 'time', value: 1355 }, 'metric')).toBe(
+      '22:35',
+    )
+  })
+
+  it('renders a long time record with hours', () => {
+    expect(
+      formatGarminRecord({ typeId: 5, label: 'Fastest half', kind: 'time', value: 6837.9 }, 'metric'),
+    ).toBe('1:53:58')
+  })
+
+  it('converts a distance record from metres into the display unit', () => {
+    const record = { typeId: 7, label: 'Longest run', kind: 'distance', value: 74701.5 } as const
+    expect(formatGarminRecord(record, 'metric')).toBe('74.7 km')
+    expect(formatGarminRecord(record, 'imperial')).toBe('46.4 mi')
   })
 })
 

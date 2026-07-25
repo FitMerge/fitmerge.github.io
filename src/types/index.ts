@@ -126,6 +126,22 @@ export type WorkoutSession = {
   distanceKm?: number
 }
 
+/**
+ * A personal record as Garmin computes it. Garmin measures these across segments
+ * *within* activities, so "Fastest 5K" can come from a stretch inside a longer run —
+ * something the app cannot derive itself from one distance and duration per session.
+ */
+export type GarminRecord = {
+  /** Garmin's own record type id, kept so unknown types can be added later. */
+  typeId: number
+  label: string
+  /** `time` values are seconds; `distance` values are metres. */
+  kind: 'time' | 'distance'
+  value: number
+  date?: string
+  activityId?: string
+}
+
 export type BodyEntry = {
   date: string
   weightKg: number

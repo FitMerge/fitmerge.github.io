@@ -22,6 +22,7 @@ import {
   cardioSummary,
   distanceUnitLabel,
   formatDuration,
+  formatGarminRecord,
   formatPace,
   hasOutlierSpike,
   type ActivityCategory,
@@ -140,6 +141,15 @@ export default function CardioProgressSection() {
   const efforts = useMemo(
     () => (selected === 'Run' ? bestEfforts(sessions, 'Run', units, range) : []),
     [sessions, selected, units, range],
+  )
+
+  // Garmin's own records beat anything derivable here: it measures across segments
+  // within an activity, so its 5K can come from inside a longer run. All-time by
+  // definition, so they sit outside the range filter and say so.
+  const garminRecords = useWorkoutsStore((s) => s.garminRecords)
+  const runRecords = useMemo(
+    () => (selected === 'Run' ? garminRecords.filter((r) => r.typeId <= 7) : []),
+    [garminRecords, selected],
   )
 
   const rangePicker = (
@@ -377,28 +387,58 @@ export default function CardioProgressSection() {
         </p>
       )}
 
-      {/* Best efforts at standard race distances. Whole sessions only — the import
-          has no GPS splits, so a fast 5k inside a 10k is invisible here. */}
-      {efforts.length > 0 && (
+      {/* Garmin's records when we have them: it measures inside activities, so its
+          5K beats anything derivable from one distance per session. */}
+      {runRecords.length > 0 ? (
         <div className="space-y-1.5 border-t border-slate-800 pt-2.5">
-          <p className="text-[11px] font-medium text-slate-400">Best efforts</p>
+          <p className="text-[11px] font-medium text-slate-400">Personal records · all time</p>
           <div className="grid grid-cols-2 gap-2">
-            {efforts.map((effort) => (
-              <div key={effort.label} className="rounded-xl bg-slate-800/60 p-2.5">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-[11px] font-semibold text-primary-400">{effort.label}</span>
-                  <span className="text-[10px] text-slate-500">{monthDayLabel(effort.date)}</span>
+            {runRecords.map((record) => (
+              <div key={record.typeId} className="rounded-xl bg-slate-800/60 p-2.5">
+                <div className="flex items-baseline justify-between gap-1">
+                  <span className="truncate text-[11px] font-semibold text-primary-400">
+                    {record.label}
+                  </span>
+                  {record.date && (
+                    <span className="shrink-0 text-[10px] text-slate-500">
+                      {monthDayLabel(record.date)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-base font-bold text-slate-100 tabular-nums">
-                  {formatDuration(effort.durationMin)}
-                </p>
-                <p className="text-[10px] text-slate-500 tabular-nums">
-                  {formatPace(effort.pace)} /{distUnit}
+                  {formatGarminRecord(record, units)}
                 </p>
               </div>
             ))}
           </div>
+          <p className="text-[10px] text-slate-500">
+            From Garmin, including efforts inside longer activities.
+          </p>
         </div>
+      ) : (
+        // Fallback until a sync brings Garmin's records in: whole sessions matched
+        // to standard distances, which is all the imported data can support.
+        efforts.length > 0 && (
+          <div className="space-y-1.5 border-t border-slate-800 pt-2.5">
+            <p className="text-[11px] font-medium text-slate-400">Best efforts</p>
+            <div className="grid grid-cols-2 gap-2">
+              {efforts.map((effort) => (
+                <div key={effort.label} className="rounded-xl bg-slate-800/60 p-2.5">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] font-semibold text-primary-400">{effort.label}</span>
+                    <span className="text-[10px] text-slate-500">{monthDayLabel(effort.date)}</span>
+                  </div>
+                  <p className="text-base font-bold text-slate-100 tabular-nums">
+                    {formatDuration(effort.durationMin)}
+                  </p>
+                  <p className="text-[10px] text-slate-500 tabular-nums">
+                    {formatPace(effort.pace)} /{distUnit}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
       )}
 
       {/* Why the tab count and the number of plotted points can disagree. */}

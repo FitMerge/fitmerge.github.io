@@ -354,8 +354,8 @@ def _sync_with_client(db, uid, client, days):
     into that user's account."""
     module = main_module()
 
-    weights, sessions, health = module.fetch_from_garmin(days, client=client)
-    payload = module.build_payload(weights, sessions, health)
+    weights, sessions, health, records = module.fetch_from_garmin(days, client=client)
+    payload = module.build_payload(weights, sessions, health, records)
     counts = module.push_payload(db, uid, payload)
 
     from firebase_admin import firestore

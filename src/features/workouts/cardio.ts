@@ -1,4 +1,4 @@
-import type { Units, WorkoutSession } from '../../types'
+import type { GarminRecord, Units, WorkoutSession } from '../../types'
 import { monthDayLabel } from '../progress/utils'
 import { addDays, todayISO } from '../../lib/date'
 
@@ -216,6 +216,18 @@ export function bestEfforts(
     if (best) out.push(best)
   }
   return out
+}
+
+/**
+ * Garmin's own records, formatted for display. Preferred over locally-computed
+ * best efforts because Garmin measures across segments within an activity, so its
+ * 5K can come from a stretch inside a longer run.
+ */
+export function formatGarminRecord(record: GarminRecord, units: Units): string {
+  if (record.kind === 'time') return formatDuration(record.value / 60)
+  const km = record.value / 1000
+  const distance = units === 'imperial' ? km / KM_PER_MILE : km
+  return `${distance.toFixed(1)} ${distanceUnitLabel(units)}`
 }
 
 /** Formats decimal minutes as "m:ss", or "h:mm:ss" once it runs past an hour. */

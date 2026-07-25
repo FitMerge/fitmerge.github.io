@@ -75,7 +75,7 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SYNC_CLIENT_ID = "garmin-sync-script"
 
 
-def build_payload(weights, sessions, health=None):
+def build_payload(weights, sessions, health=None, records=None):
     """Assembles + validates the version-1 FitMerge JSON payload from already-shaped rows."""
     health = health or []
     clean_weights = []
@@ -129,7 +129,13 @@ def build_payload(weights, sessions, health=None):
         if metrics:
             clean_health.append({"date": d, "metrics": metrics})
 
-    return {"version": 1, "weights": clean_weights, "sessions": clean_sessions, "health": clean_health}
+    return {
+        "version": 1,
+        "weights": clean_weights,
+        "sessions": clean_sessions,
+        "health": clean_health,
+        "records": map_personal_records(records or []),
+    }
 
 
 # --- auto-sync (direct Firestore push) -------------------------------------
@@ -188,8 +194,78 @@ def merge_body(existing, weights):
 #: backfilled onto sessions already saved — see merge_workouts.
 _IMPORT_FIELDS = ("durationMin", "kcal", "trainingLoad", "distanceKm")
 
+#: Garmin's personal-record types, keyed by its typeId. Garmin computes these across
+#: whole activities *and* segments within them, so the 5K here is the fastest 5K you
+#: have ever run — including one buried inside a 10K, which is not something this
+#: import could work out for itself from a single distance and duration per session.
+#:
+#: The API leaves prTypeLabelKey null, so the ids are mapped explicitly. Only the
+#: ones confirmed against real data are listed: the running times come back
+#: monotonically slower as the distance grows, which is the physiological sanity
+#: check that pins the mapping down. Unknown ids are ignored rather than guessed at.
+_PR_TYPES = {
+    1: ("Fastest 1 km", "time"),
+    2: ("Fastest 1 mile", "time"),
+    3: ("Fastest 5K", "time"),
+    4: ("Fastest 10K", "time"),
+    5: ("Fastest half marathon", "time"),
+    6: ("Fastest marathon", "time"),
+    7: ("Longest run", "distance"),
+    8: ("Longest ride", "distance"),
+}
 
-def merge_workouts(existing, sessions):
+
+def _pr_date(record):
+    """First usable YYYY-MM-DD among the several date fields Garmin may populate."""
+    for key in ("prStartTimeGmtFormatted", "activityStartDateTimeLocalFormatted",
+                "actStartDateTimeInGMTFormatted", "prStartTimeLocalFormatted"):
+        value = record.get(key)
+        if isinstance(value, str) and DATE_RE.match(value[:10]):
+            return value[:10]
+    return None
+
+
+def map_personal_records(raw):
+    """Shape Garmin's personal-record list into the app's records.
+
+    Pure so it can be exercised offline; `raw` is whatever get_personal_record()
+    returned. Times are seconds, distances metres — the units Garmin reports.
+    """
+    if isinstance(raw, dict):
+        raw = raw.get("personalRecords") or []
+    if not isinstance(raw, list):
+        return []
+
+    out = []
+    for record in raw:
+        if not isinstance(record, dict):
+            continue
+        mapped = _PR_TYPES.get(record.get("typeId"))
+        if mapped is None:
+            continue
+        label, kind = mapped
+        value = record.get("value")
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+            continue
+        row = {
+            "typeId": record.get("typeId"),
+            "label": label,
+            "kind": kind,
+            "value": round(float(value), 3),
+        }
+        date = _pr_date(record)
+        if date:
+            row["date"] = date
+        activity_id = record.get("activityId")
+        if isinstance(activity_id, (int, str)) and activity_id:
+            row["activityId"] = str(activity_id)
+        out.append(row)
+
+    out.sort(key=lambda r: r["typeId"])
+    return out
+
+
+def merge_workouts(existing, sessions, records=None):
     """Append Garmin activities as imported sessions and backfill missing fields onto
     ones already stored. Routines/programs and app-logged sessions are left untouched.
     Returns (merged_store, added_count, updated_count).
@@ -254,7 +330,17 @@ def merge_workouts(existing, sessions):
         by_key[key] = row
         added += 1
 
-    return {"routines": routines, "sessions": merged, "programs": programs}, added, updated
+    # Personal records are replaced wholesale rather than merged: Garmin recomputes
+    # the whole set, so its list is the truth. Absent (no records fetched this run)
+    # means leave whatever is stored alone.
+    out = {"routines": routines, "sessions": merged, "programs": programs}
+    kept = ex.get("garminRecords")
+    if records:
+        out["garminRecords"] = records
+    elif isinstance(kept, list):
+        out["garminRecords"] = kept
+
+    return out, added, updated
 
 
 def merge_health(existing, health):
@@ -342,7 +428,9 @@ def push_payload(db, uid, payload):
     body = merge_body(read("body"), payload["weights"])
     write("body", body)
 
-    workouts, added, backfilled = merge_workouts(read("workouts"), payload["sessions"])
+    workouts, added, backfilled = merge_workouts(
+        read("workouts"), payload["sessions"], payload.get("records")
+    )
     write("workouts", workouts)
     if backfilled:
         print(f"Backfilled missing fields on {backfilled} already-imported session(s).",
@@ -573,7 +661,19 @@ def fetch_from_garmin(days, client=None):
     for ds, detail in bodycomp_metrics.items():
         by_date.setdefault(ds, {}).update(detail)
     health = [{"date": d, "metrics": m} for d, m in by_date.items()]
-    return weights, sessions, health
+
+    # Personal records are all-time and cheap (one call), so they come back on every
+    # run regardless of the --days window. Garmin computes them across segments
+    # within activities, which is the only way to know the fastest 5K inside a 10K.
+    records = []
+    get_prs = getattr(client, "get_personal_record", None)
+    if get_prs is not None:
+        try:
+            records = get_prs() or []
+        except Exception as exc:  # noqa: BLE001 - never fail a sync over a bonus metric
+            print(f"warning: could not fetch personal records ({exc})", file=sys.stderr)
+
+    return weights, sessions, health, records
 
 
 def _first_num(d, *keys):
@@ -799,7 +899,20 @@ def self_test():
         {"date": "2026-07-02", "metrics": {"nope": "x"}},  # no numeric metrics -> rejected
     ]
 
-    payload = build_payload(canned_weights, canned_sessions, canned_health)
+    # Shaped like a real get_personal_record() response, including the ids this
+    # importer deliberately ignores rather than guesses at.
+    canned_records = [
+        {"typeId": 3, "value": 1355.02, "activityId": 111,
+         "prStartTimeGmtFormatted": "2024-05-01T23:51:11.0"},
+        {"typeId": 7, "value": 74701.45, "activityId": 222,
+         "prStartTimeGmtFormatted": "2024-10-04T10:12:31.0"},
+        {"typeId": 12, "value": 79992.0},   # most steps in a day — not a workout PR
+        {"typeId": 4, "value": 0},          # zero value, dropped
+        {"typeId": 4, "value": True},       # bool masquerading as a number, dropped
+        "not-a-record",
+    ]
+
+    payload = build_payload(canned_weights, canned_sessions, canned_health, canned_records)
 
     m0 = payload["health"][0]["metrics"] if payload["health"] else {}
     checks = [
@@ -833,6 +946,19 @@ def self_test():
         payload["sessions"][0].get("distanceKm") == 5.2,
         "trainingLoad" not in payload["sessions"][1],  # absent when not provided
         "distanceKm" not in payload["sessions"][1],  # absent when not provided
+        # Personal records: only the confirmed ids survive, sorted by type.
+        [r["typeId"] for r in payload["records"]] == [3, 7],
+        payload["records"][0]["label"] == "Fastest 5K",
+        payload["records"][0]["kind"] == "time",
+        payload["records"][0]["value"] == 1355.02,
+        payload["records"][0]["date"] == "2024-05-01",
+        payload["records"][0]["activityId"] == "111",
+        payload["records"][1]["label"] == "Longest run",
+        payload["records"][1]["kind"] == "distance",
+        # A dict response is unwrapped, and junk in is nothing out.
+        map_personal_records({"personalRecords": [{"typeId": 3, "value": 1200.0}]})[0]["value"] == 1200.0,
+        map_personal_records(None) == [],
+        map_personal_records([]) == [],
     ]
 
     # JSON round-trip sanity check.
@@ -917,6 +1043,20 @@ def self_test():
     ]}
     ms, _, _ = merge_workouts(stale, payload["sessions"])
     checks.append(ms["sessions"][0]["distanceKm"] == 1.1)
+
+    # Records replace wholesale (Garmin recomputes the set), but a run that fetched
+    # none must not wipe the ones already stored.
+    with_recs, _, _ = merge_workouts({"sessions": []}, [], payload["records"])
+    kept, _, _ = merge_workouts(with_recs, [])
+    replaced, _, _ = merge_workouts(with_recs, [], [{"typeId": 3, "label": "Fastest 5K",
+                                                     "kind": "time", "value": 1300.0}])
+    checks += [
+        len(with_recs["garminRecords"]) == 2,
+        len(kept["garminRecords"]) == 2,          # absent records leave storage alone
+        len(replaced["garminRecords"]) == 1,      # a fetched set replaces, not appends
+        replaced["garminRecords"][0]["value"] == 1300.0,
+        "garminRecords" not in merge_workouts({"sessions": []}, [])[0],  # nothing invented
+    ]
 
     # health: union days, merge metric bags per date (Garmin wins on conflict).
     existing_health = {"days": {
@@ -1004,8 +1144,8 @@ def main():
                   file=sys.stderr)
             sys.exit(2)
 
-    weights, sessions, health = fetch_from_garmin(args.days)
-    payload = build_payload(weights, sessions, health)
+    weights, sessions, health, records = fetch_from_garmin(args.days)
+    payload = build_payload(weights, sessions, health, records)
 
     if args.firebase:
         n_weights, n_sessions, n_health = push_to_firebase(payload, args.service_account, args.uid)
