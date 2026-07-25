@@ -3,6 +3,7 @@ import { Minus, Plus } from 'lucide-react'
 import SegmentedControl from '../../components/SegmentedControl'
 import Button from '../../components/Button'
 import WaterCupSlider from '../../components/WaterCupSlider'
+import WaterGoalSheet from './WaterGoalSheet'
 import { useNutritionStore } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
 import { WATER_UNITS, defaultWaterUnit, type WaterUnit } from '../../lib/units'
@@ -33,6 +34,7 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
   const [unit, setUnit] = useState<WaterUnit>(() => defaultWaterUnit(units))
   const [amountMl, setAmountMl] = useState(DEFAULT_ADD_ML)
   const [flash, setFlash] = useState<{ sign: 1 | -1; amount: number } | null>(null)
+  const [goalOpen, setGoalOpen] = useState(false)
 
   const u = WATER_UNITS[unit]
   const fmt = (ml: number) => `${u.fromMl(ml).toFixed(u.decimals)} ${u.label}`
@@ -68,7 +70,15 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
         <div className="flex items-baseline justify-between">
           <span className="text-xs font-medium text-slate-400">Today</span>
           <span className="text-sm font-semibold text-slate-100">
-            {fmt(current)} <span className="text-slate-500">/ {fmt(goalMl)}</span>
+            {fmt(current)}{' '}
+            <button
+              type="button"
+              onClick={() => setGoalOpen(true)}
+              className="text-slate-500 underline decoration-dotted underline-offset-2 active:text-slate-300"
+              aria-label="Change your daily water goal"
+            >
+              / {fmt(goalMl)}
+            </button>
           </span>
         </div>
         <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-900">
@@ -99,6 +109,8 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
           Done
         </button>
       )}
+
+      <WaterGoalSheet open={goalOpen} onClose={() => setGoalOpen(false)} />
 
       {flash && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

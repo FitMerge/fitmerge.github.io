@@ -84,3 +84,25 @@ export const WATER_UNITS: Record<
 export function defaultWaterUnit(units: Units): WaterUnit {
   return units === 'imperial' ? 'oz' : 'L'
 }
+
+// US gallon, for people who set their goal that way (e.g. the 75 Hard challenge).
+export const ML_PER_GALLON = 3785.41
+
+export function mlToGallon(ml: number): number {
+  return ml / ML_PER_GALLON
+}
+
+export function gallonToMl(gal: number): number {
+  return gal * ML_PER_GALLON
+}
+
+/** Units a goal can be entered in — the logging units plus gallons. */
+export type GoalWaterUnit = WaterUnit | 'gal'
+
+export const GOAL_WATER_UNITS: Record<
+  GoalWaterUnit,
+  { label: string; fromMl: (ml: number) => number; toMl: (v: number) => number; step: number; decimals: number }
+> = {
+  ...WATER_UNITS,
+  gal: { label: 'gal', fromMl: mlToGallon, toMl: gallonToMl, step: 0.25, decimals: 2 },
+}

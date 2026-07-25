@@ -19,6 +19,15 @@ export function tdee(bmrVal: number, activity: Activity): number {
   return bmrVal * ACTIVITY_MULTIPLIERS[activity]
 }
 
+/**
+ * Suggested daily water from bodyweight: ~35 ml/kg (≈ ½ oz per lb), a common
+ * hydration guideline. Rounded to a tidy 50 ml. Only a starting point — the goal
+ * is freely editable (a gallon, 4 L, whatever).
+ */
+export function suggestWaterGoalMl(weightKg: number): number {
+  return Math.max(1000, Math.round((35 * weightKg) / 50) * 50)
+}
+
 export function suggestGoals(
   tdeeVal: number,
   goalType: 'lose' | 'maintain' | 'gain' | undefined,

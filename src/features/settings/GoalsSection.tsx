@@ -1,16 +1,24 @@
 import { useState } from 'react'
+import { Droplets } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
 import TdeeCard from './TdeeCard'
+import WaterGoalSheet from '../nutrition/WaterGoalSheet'
 import { useSettingsStore } from '../../store/settings'
+import { WATER_UNITS, defaultWaterUnit } from '../../lib/units'
 import type { Goals } from '../../types'
 
 export default function GoalsSection() {
   const goals = useSettingsStore((s) => s.goals)
   const setGoals = useSettingsStore((s) => s.setGoals)
+  const waterGoalMl = useSettingsStore((s) => s.waterGoalMl)
+  const units = useSettingsStore((s) => s.units)
 
   const [draft, setDraft] = useState<Goals>(goals)
+  const [waterOpen, setWaterOpen] = useState(false)
+
+  const wu = WATER_UNITS[defaultWaterUnit(units)]
 
   function handleSave() {
     setGoals(draft)
@@ -59,7 +67,22 @@ export default function GoalsSection() {
         Save goals
       </Button>
 
+      <button
+        type="button"
+        onClick={() => setWaterOpen(true)}
+        className="flex w-full items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2.5 text-left active:bg-slate-800"
+      >
+        <span className="flex items-center gap-2 text-sm text-slate-200">
+          <Droplets size={16} className="text-sky-400" /> Water goal
+        </span>
+        <span className="text-sm text-slate-400">
+          {`${wu.fromMl(waterGoalMl).toFixed(wu.decimals)} ${wu.label}`} ›
+        </span>
+      </button>
+
       <TdeeCard onApply={setDraft} />
+
+      <WaterGoalSheet open={waterOpen} onClose={() => setWaterOpen(false)} />
     </Card>
   )
 }
