@@ -79,7 +79,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
       )}
 
       {screen === 'weight' && <LogWeightSheet onClose={close} />}
-      {screen === 'water' && <WaterLogger date={todayISO()} />}
+      {screen === 'water' && <WaterLogger date={todayISO()} onDone={close} />}
       {screen === 'supplement' && <SupplementList />}
       {screen === 'workout' && <WorkoutScreen onPick={(id) => onNavigate('/workouts', { startRoutineId: id })} onClose={close} />}
       {screen === 'garmin' && <GarminScreen onSetup={() => onNavigate('/settings', null)} />}
