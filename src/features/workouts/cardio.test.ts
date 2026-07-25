@@ -3,6 +3,8 @@ import {
   activityCategory,
   cardioActivities,
   cardioSeries,
+  bestEfforts,
+  formatDuration,
   formatPace,
   hasOutlierSpike,
   inCardioRange,
@@ -217,6 +219,129 @@ describe('hasOutlierSpike', () => {
     // The mean of these is dragged up past 2.5x by the outlier itself; the median
     // is not, so the spike is still correctly identified.
     expect(hasOutlierSpike([4, 4, 4, 4, 4, 4, 4, 40])).toBe(true)
+  })
+})
+
+describe('bestEfforts', () => {
+  const TODAY = '2026-07-24'
+  const ALL = { kind: 'all' } as const
+
+  it('picks the fastest session at each standard distance', () => {
+    const efforts = bestEfforts(
+      [
+        session({ id: 'a', date: '2026-07-01', distanceKm: 5, durationMin: 26 }),
+        session({ id: 'b', date: '2026-07-08', distanceKm: 5, durationMin: 24 }), // faster
+        session({ id: 'c', date: '2026-07-15', distanceKm: 10, durationMin: 52 }),
+      ],
+      'Run',
+      'metric',
+      ALL,
+      TODAY,
+    )
+    expect(efforts.map((e) => e.label)).toEqual(['5K', '10K'])
+    expect(efforts[0].durationMin).toBe(24)
+    expect(efforts[0].date).toBe('2026-07-08')
+  })
+
+  it('ranks on pace, so a longer run does not win on elapsed time alone', () => {
+    // 5.25km in 25min is 4:45/km; 4.75km in 24min is 5:03/km. The slower pace has
+    // the shorter clock, and must not be crowned.
+    const efforts = bestEfforts(
+      [
+        session({ id: 'long', date: '2026-07-01', distanceKm: 5.25, durationMin: 25 }),
+        session({ id: 'short', date: '2026-07-08', distanceKm: 4.75, durationMin: 24 }),
+      ],
+      'Run',
+      'metric',
+      ALL,
+      TODAY,
+    )
+    expect(efforts[0].date).toBe('2026-07-01')
+  })
+
+  it('ignores sessions outside the distance tolerance', () => {
+    // 5.5km is 10% over — a 5k PB should not be claimed from it.
+    const efforts = bestEfforts(
+      [session({ id: 'a', date: '2026-07-01', distanceKm: 5.5, durationMin: 25 })],
+      'Run',
+      'metric',
+      ALL,
+      TODAY,
+    )
+    expect(efforts).toEqual([])
+  })
+
+  it('recognises a half marathon and a marathon', () => {
+    const efforts = bestEfforts(
+      [
+        session({ id: 'h', date: '2026-05-01', distanceKm: 21.1, durationMin: 115 }),
+        session({ id: 'm', date: '2026-06-01', distanceKm: 42.2, durationMin: 245 }),
+      ],
+      'Run',
+      'metric',
+      ALL,
+      TODAY,
+    )
+    expect(efforts.map((e) => e.label)).toEqual(['Half', 'Marathon'])
+  })
+
+  it('only considers the requested sport', () => {
+    const efforts = bestEfforts(
+      [session({ id: 'ride', name: 'Road Cycling', date: '2026-07-01', distanceKm: 5, durationMin: 12 })],
+      'Run',
+      'metric',
+      ALL,
+      TODAY,
+    )
+    expect(efforts).toEqual([])
+  })
+
+  it('respects the selected range', () => {
+    const runs = [session({ id: 'old', date: '2025-01-01', distanceKm: 5, durationMin: 22 })]
+    expect(bestEfforts(runs, 'Run', 'metric', ALL, TODAY)).toHaveLength(1)
+    expect(bestEfforts(runs, 'Run', 'metric', { kind: 'days', days: 30 }, TODAY)).toEqual([])
+  })
+
+  it('reports pace in the display unit', () => {
+    const [effort] = bestEfforts(
+      [session({ id: 'a', date: '2026-07-01', distanceKm: 5, durationMin: 25 })],
+      'Run',
+      'imperial',
+      ALL,
+      TODAY,
+    )
+    // 5km is 3.107mi, so 25 minutes is about 8:03 per mile — not 5:00.
+    expect(effort.pace).toBeCloseTo(25 / (5 / 1.60934), 6)
+  })
+
+  it('skips sessions missing distance or duration', () => {
+    const efforts = bestEfforts(
+      [
+        session({ id: 'a', date: '2026-07-01', distanceKm: 5, durationMin: 0 }),
+        session({ id: 'b', date: '2026-07-02', durationMin: 25 }),
+      ],
+      'Run',
+      'metric',
+      ALL,
+      TODAY,
+    )
+    expect(efforts).toEqual([])
+  })
+})
+
+describe('formatDuration', () => {
+  it('renders under an hour as m:ss', () => {
+    expect(formatDuration(24)).toBe('24:00')
+    expect(formatDuration(24.5)).toBe('24:30')
+  })
+
+  it('switches to h:mm:ss past an hour', () => {
+    expect(formatDuration(115)).toBe('1:55:00')
+    expect(formatDuration(245.5)).toBe('4:05:30')
+  })
+
+  it('rolls 60 rounded seconds into the next minute', () => {
+    expect(formatDuration(24.999)).toBe('25:00')
   })
 })
 

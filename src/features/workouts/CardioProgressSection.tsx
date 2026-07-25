@@ -6,10 +6,12 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import {
   CARDIO_RANGE_PRESETS,
+  bestEfforts,
   cardioActivities,
   cardioSeries,
   cardioSummary,
   distanceUnitLabel,
+  formatDuration,
   formatPace,
   hasOutlierSpike,
   type ActivityCategory,
@@ -17,6 +19,7 @@ import {
   type CardioRange,
 } from './cardio'
 import { todayISO } from '../../lib/date'
+import { monthDayLabel } from '../progress/utils'
 
 type MetricDef = { key: CardioMetricKey; label: string; needsDistance: boolean }
 
@@ -106,6 +109,12 @@ export default function CardioProgressSection() {
       activeMetric !== 'pace' &&
       hasOutlierSpike(points.map((p) => p[activeMetric] as number | null)),
     [points, activeMetric],
+  )
+
+  // Only running has standard race distances worth comparing against.
+  const efforts = useMemo(
+    () => (selected === 'Run' ? bestEfforts(sessions, 'Run', units, range) : []),
+    [sessions, selected, units, range],
   )
 
   const rangePicker = (
@@ -326,6 +335,30 @@ export default function CardioProgressSection() {
         <p className="text-center text-[11px] text-slate-500">
           Axis eased so one long session doesn&apos;t flatten the rest. Values are unchanged.
         </p>
+      )}
+
+      {/* Best efforts at standard race distances. Whole sessions only — the import
+          has no GPS splits, so a fast 5k inside a 10k is invisible here. */}
+      {efforts.length > 0 && (
+        <div className="space-y-1.5 border-t border-slate-800 pt-2.5">
+          <p className="text-[11px] font-medium text-slate-400">Best efforts</p>
+          <div className="grid grid-cols-2 gap-2">
+            {efforts.map((effort) => (
+              <div key={effort.label} className="rounded-xl bg-slate-800/60 p-2.5">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[11px] font-semibold text-primary-400">{effort.label}</span>
+                  <span className="text-[10px] text-slate-500">{monthDayLabel(effort.date)}</span>
+                </div>
+                <p className="text-base font-bold text-slate-100 tabular-nums">
+                  {formatDuration(effort.durationMin)}
+                </p>
+                <p className="text-[10px] text-slate-500 tabular-nums">
+                  {formatPace(effort.pace)} /{distUnit}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Why the tab count and the number of plotted points can disagree. */}

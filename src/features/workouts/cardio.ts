@@ -141,6 +141,80 @@ export function distanceUnitLabel(units: Units): string {
   return units === 'imperial' ? 'mi' : 'km'
 }
 
+/** Standard race distances, in kilometres regardless of display units. */
+export const DISTANCE_BANDS: { label: string; km: number }[] = [
+  { label: '5K', km: 5 },
+  { label: '10K', km: 10 },
+  { label: 'Half', km: 21.0975 },
+  { label: 'Marathon', km: 42.195 },
+]
+
+export type BestEffort = {
+  label: string
+  date: string
+  durationMin: number
+  distanceKm: number
+  /** Pace in minutes per display unit. */
+  pace: number
+}
+
+/**
+ * Fastest session at each standard race distance.
+ *
+ * A deliberate limitation: the import carries one distance and one duration per
+ * activity, not GPS splits, so this cannot find the quickest 5k *inside* a longer
+ * run the way Strava does. It matches whole sessions that were about that far —
+ * within `tolerance` — which is honest about what the data supports.
+ *
+ * Ranked on pace rather than elapsed time so a 5.2km run does not beat a 5.0km run
+ * purely by being measured over more ground.
+ */
+export function bestEfforts(
+  sessions: WorkoutSession[],
+  category: ActivityCategory = 'Run',
+  units: Units = 'metric',
+  range: CardioRange = { kind: 'all' },
+  today: string = todayISO(),
+  tolerance = 0.05,
+): BestEffort[] {
+  const imperial = units === 'imperial'
+  const candidates = sessions.filter(
+    (s) =>
+      isCardioSession(s) &&
+      activityCategory(s.name) === category &&
+      inCardioRange(s.date, range, today) &&
+      (s.distanceKm ?? 0) > 0 &&
+      (s.durationMin ?? 0) > 0,
+  )
+
+  const out: BestEffort[] = []
+  for (const band of DISTANCE_BANDS) {
+    let best: BestEffort | null = null
+    for (const s of candidates) {
+      const km = s.distanceKm as number
+      if (Math.abs(km - band.km) > band.km * tolerance) continue
+      const durationMin = s.durationMin as number
+      const distance = imperial ? km / KM_PER_MILE : km
+      const pace = durationMin / distance
+      if (best === null || pace < best.pace) {
+        best = { label: band.label, date: s.date, durationMin, distanceKm: km, pace }
+      }
+    }
+    if (best) out.push(best)
+  }
+  return out
+}
+
+/** Formats decimal minutes as "m:ss", or "h:mm:ss" once it runs past an hour. */
+export function formatDuration(minutes: number): string {
+  const totalSeconds = Math.round(minutes * 60)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 /** Formats a pace (decimal minutes per unit) as "m:ss". */
 export function formatPace(pace: number): string {
   const m = Math.floor(pace)
