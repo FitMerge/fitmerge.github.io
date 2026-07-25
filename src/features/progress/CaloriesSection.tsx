@@ -50,7 +50,10 @@ export default function CaloriesSection({ range }: CaloriesSectionProps) {
         )}
       </div>
       {!hasAny ? (
-        <p className="text-sm text-slate-500 py-4">No meals logged in this range yet.</p>
+        <div className="py-4">
+          <p className="text-sm text-slate-500">No meals logged in this range yet.</p>
+          <p className="mt-1 text-[11px] text-slate-600">Meals are logged in the app — this won’t fill in from a Garmin sync.</p>
+        </div>
       ) : (
         <>
           <div style={{ height: 180 }}>

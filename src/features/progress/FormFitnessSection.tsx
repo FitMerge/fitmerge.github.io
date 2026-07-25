@@ -35,6 +35,10 @@ const rangeToDays = (key: RangeKey): number => RANGES.find((r) => r.key === key)
 
 const PROJECTION_DAYS = 28
 
+// Fitness (CTL) uses a 42-day time constant, so below this many days of history
+// the curve is still ramping up from its zero seed and understates the truth.
+const CALIBRATION_DAYS = 42
+
 const TONE_CLASSES: Record<string, string> = {
   good: 'text-emerald-400',
   warn: 'text-amber-400',
@@ -178,6 +182,18 @@ export default function FormFitnessSection() {
       <p className="text-xs text-slate-400">
         <span className={`font-semibold ${TONE_CLASSES[fs.tone]}`}>{fs.label}.</span> {fs.detail}
       </p>
+
+      {/* Fitness (CTL) and Form build from a zero seed over a ~42-day window, so
+          until that much history exists the numbers read artificially low — even
+          right after a Garmin backfill. Say so rather than let a new user read a
+          climbing curve as "getting fitter" when it's really still warming up. */}
+      {pmc.length < CALIBRATION_DAYS && (
+        <p className="rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-300/90">
+          Still calibrating. Fitness and Form start from zero and take about six weeks to settle, so
+          for now they read low and will keep rising as more days build up — even with history imported
+          from Garmin.
+        </p>
+      )}
 
       <SegmentedControl size="sm" options={RANGES} value={rangeKey} onChange={setRangeKey} ariaLabel="Form & fitness range" />
 

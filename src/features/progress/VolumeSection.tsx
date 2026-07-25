@@ -45,7 +45,10 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
       </div>
 
       {chartData.every((p) => p.volume === 0) ? (
-        <p className="text-sm text-slate-500 py-2">No finished workouts in this range yet.</p>
+        <div className="py-2">
+          <p className="text-sm text-slate-500">No finished workouts in this range yet.</p>
+          <p className="mt-1 text-[11px] text-slate-600">Strength volume comes from workouts you log in the app — imported Garmin cardio doesn’t count here.</p>
+        </div>
       ) : (
         <div style={{ height: 180 }}>
           <ResponsiveContainer width="100%" height="100%">

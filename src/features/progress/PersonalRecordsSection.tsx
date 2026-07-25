@@ -18,9 +18,12 @@ export default function PersonalRecordsSection() {
     <Card>
       <h2 className="text-sm font-semibold text-slate-200 mb-2">Personal records</h2>
       {records.length === 0 ? (
-        <p className="text-sm text-slate-500 py-2">
-          Finish a workout with completed sets to see your personal records here.
-        </p>
+        <div className="py-2">
+          <p className="text-sm text-slate-500">
+            Finish a workout with completed sets to see your personal records here.
+          </p>
+          <p className="mt-1 text-[11px] text-slate-600">These come from strength sets you log in the app. Your imported Garmin run records show under Cardio.</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {records.map((pr, index) => {

@@ -60,7 +60,10 @@ export default function MeasurementsSection() {
       </div>
 
       {tiles.length === 0 ? (
-        <p className="text-xs text-slate-500">Track chest, arms, waist and more. Tap Log to start.</p>
+        <div>
+          <p className="text-xs text-slate-500">Track chest, arms, waist and more. Tap Log to start.</p>
+          <p className="mt-1 text-[11px] text-slate-600">Entered by hand — measurements don’t come from Garmin.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {tiles.map(({ def, series }) => {

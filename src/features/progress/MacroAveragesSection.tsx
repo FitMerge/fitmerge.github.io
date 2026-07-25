@@ -37,7 +37,10 @@ export default function MacroAveragesSection({ range }: MacroAveragesSectionProp
     <Card>
       <h2 className="text-sm font-semibold text-slate-200 mb-3">Macro averages</h2>
       {loggedDayTotals.length === 0 ? (
-        <p className="text-sm text-slate-500 py-2">No meals logged in this range yet.</p>
+        <div className="py-2">
+          <p className="text-sm text-slate-500">No meals logged in this range yet.</p>
+          <p className="mt-1 text-[11px] text-slate-600">Meals are logged in the app — this won’t fill in from a Garmin sync.</p>
+        </div>
       ) : (
         <div className="space-y-3">
           <MacroBar label="Protein" value={avg.protein} goal={goals.protein} color="bg-emerald-400" />
