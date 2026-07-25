@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Minus, Plus } from 'lucide-react'
 import SegmentedControl from '../../components/SegmentedControl'
 import Button from '../../components/Button'
 import WaterCupSlider from '../../components/WaterCupSlider'
@@ -9,7 +9,7 @@ import { WATER_UNITS, defaultWaterUnit, type WaterUnit } from '../../lib/units'
 
 type WaterLoggerProps = {
   date: string
-  /** Called after an amount is added (e.g. to close the sheet). */
+  /** Called from Done — closes the sheet once the user has finished adjusting. */
   onDone?: () => void
 }
 
@@ -19,8 +19,8 @@ const UNIT_OPTIONS: { key: WaterUnit; label: string }[] = [
   { key: 'L', label: 'Liters' },
 ]
 
-// You drink in pours, not day-totals, so the glass logs one serving at a time. It
-// starts at a glass and tops out at a litre — the biggest single pour you'd log.
+// You drink in pours, so the glass dials one serving. It starts at a glass and
+// tops out at a litre — the biggest single pour you'd log or correct.
 const DEFAULT_ADD_ML = 250
 const MAX_ADD_ML = 1000
 
@@ -32,74 +32,94 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
 
   const [unit, setUnit] = useState<WaterUnit>(() => defaultWaterUnit(units))
   const [amountMl, setAmountMl] = useState(DEFAULT_ADD_ML)
-  const [celebration, setCelebration] = useState<{ amount: number; total: number } | null>(null)
+  const [flash, setFlash] = useState<{ sign: 1 | -1; amount: number } | null>(null)
 
   const u = WATER_UNITS[unit]
   const fmt = (ml: number) => `${u.fromMl(ml).toFixed(u.decimals)} ${u.label}`
 
-  const afterMl = current + amountMl
-  const pctNow = goalMl > 0 ? Math.min(100, (current / goalMl) * 100) : 0
-  const pctAfter = goalMl > 0 ? Math.min(100, (afterMl / goalMl) * 100) : 0
+  const pct = goalMl > 0 ? Math.min(100, (current / goalMl) * 100) : 0
+  const remaining = Math.max(0, goalMl - current)
+  const reached = goalMl > 0 && current >= goalMl
 
-  function confirm() {
+  // Apply the dialed amount as a top-up (+1) or a correction (−1). Stays on screen
+  // so the running total updates in place and an over-pour is easy to walk back.
+  function apply(sign: 1 | -1) {
     if (amountMl <= 0) return
-    const amount = amountMl
-    const total = current + amount
-    addWater(date, amount)
+    addWater(date, sign * amountMl)
     const reduce =
       typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduce) {
-      onDone?.()
-      return
-    }
-    setCelebration({ amount, total })
-    window.setTimeout(() => {
-      setCelebration(null)
-      onDone?.()
-    }, 900)
+    if (reduce) return
+    setFlash({ sign, amount: amountMl })
+    window.setTimeout(() => setFlash(null), 750)
   }
 
   return (
     <div className="relative space-y-3">
       <style>{`
-        @keyframes wcPop { 0%{ transform: scale(.5); opacity:0 } 45%{ transform: scale(1.12); opacity:1 } 100%{ transform: scale(1); opacity:1 } }
-        @keyframes wcRipple { 0%{ transform: scale(.7); opacity:.5 } 100%{ transform: scale(2.2); opacity:0 } }
-        .wc-pop { animation: wcPop .5s cubic-bezier(.2,.8,.2,1) both }
-        .wc-ripple { animation: wcRipple .8s ease-out both }
-        @media (prefers-reduced-motion: reduce) { .wc-pop,.wc-ripple { animation: none } }
+        @keyframes wcPop { 0%{ transform: scale(.6); opacity:0 } 45%{ transform: scale(1.1); opacity:1 } 100%{ transform: scale(1); opacity:1 } }
+        .wc-pop { animation: wcPop .45s cubic-bezier(.2,.8,.2,1) both }
+        @media (prefers-reduced-motion: reduce) { .wc-pop { animation: none } }
       `}</style>
 
       <SegmentedControl options={UNIT_OPTIONS} value={unit} onChange={setUnit} ariaLabel="Water unit" />
 
-      <WaterCupSlider valueMl={amountMl} maxMl={MAX_ADD_ML} unit={unit} onChange={setAmountMl} label="Adding" />
-
-      {/* Today's progress, previewing where this pour lands. */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-[11px] text-slate-500">
-          <span>Today {fmt(current)}</span>
-          <span>Goal {fmt(goalMl)}</span>
+      {/* Running total — always in view, so you know where you're at as you log. */}
+      <div className="rounded-xl bg-slate-800/60 p-3">
+        <div className="flex items-baseline justify-between">
+          <span className="text-xs font-medium text-slate-400">Today</span>
+          <span className="text-sm font-semibold text-slate-100">
+            {fmt(current)} <span className="text-slate-500">/ {fmt(goalMl)}</span>
+          </span>
         </div>
-        <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800">
-          <div className="absolute inset-y-0 left-0 rounded-full bg-sky-500/40" style={{ width: `${pctAfter}%` }} />
-          <div className="absolute inset-y-0 left-0 rounded-full bg-sky-400" style={{ width: `${pctNow}%` }} />
+        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-900">
+          <div className="h-full rounded-full bg-sky-400 transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
+        <p className="mt-1 text-[11px] text-slate-500">
+          {reached ? <span className="text-emerald-400">Goal reached 🎉</span> : `${fmt(remaining)} to go`}
+        </p>
       </div>
 
-      <Button variant="primary" full onClick={confirm} disabled={amountMl <= 0}>
-        <span className="flex items-center justify-center gap-1.5">
-          <Plus size={18} /> Add {fmt(amountMl)}
-        </span>
-      </Button>
+      <WaterCupSlider valueMl={amountMl} maxMl={MAX_ADD_ML} unit={unit} onChange={setAmountMl} label="Amount" />
 
-      {celebration && (
+      <div className="flex gap-2">
+        <Button variant="ghost" full onClick={() => apply(-1)} disabled={amountMl <= 0 || current <= 0}>
+          <span className="flex items-center justify-center gap-1.5">
+            <Minus size={17} /> Remove
+          </span>
+        </Button>
+        <Button variant="primary" full onClick={() => apply(1)} disabled={amountMl <= 0}>
+          <span className="flex items-center justify-center gap-1.5">
+            <Plus size={17} /> Add {fmt(amountMl)}
+          </span>
+        </Button>
+      </div>
+
+      {onDone && (
+        <button type="button" onClick={onDone} className="w-full py-1 text-center text-sm text-slate-400 active:text-slate-200">
+          Done
+        </button>
+      )}
+
+      {flash && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="wc-pop relative flex flex-col items-center gap-1.5 rounded-2xl bg-slate-900/90 px-7 py-6">
-            <span className="wc-ripple absolute top-6 h-14 w-14 rounded-full bg-emerald-400/40" />
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15">
-              <Plus size={30} className="text-emerald-400" />
+          <div
+            className={`wc-pop flex items-center gap-2 rounded-2xl bg-slate-900/90 px-6 py-4 ${
+              flash.sign > 0 ? 'text-emerald-300' : 'text-amber-300'
+            }`}
+          >
+            <div
+              className={`flex h-11 w-11 items-center justify-center rounded-full ${
+                flash.sign > 0 ? 'bg-emerald-500/15' : 'bg-amber-500/15'
+              }`}
+            >
+              {flash.sign > 0 ? <Plus size={24} /> : <Minus size={24} />}
             </div>
-            <span className="text-sm font-medium text-emerald-300">Added {fmt(celebration.amount)} 💧</span>
-            <span className="text-xs text-slate-400">{fmt(celebration.total)} today</span>
+            <div className="text-left">
+              <p className="text-sm font-medium">
+                {flash.sign > 0 ? 'Added' : 'Removed'} {fmt(flash.amount)}
+              </p>
+              <p className="text-xs text-slate-400">{fmt(current)} today</p>
+            </div>
           </div>
         </div>
       )}
