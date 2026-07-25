@@ -34,6 +34,7 @@ import shutil
 import sys
 import tempfile
 import time
+from datetime import date, timedelta
 
 from garmin_crypto import CryptoError, load_private_key, public_key_of, seal, unseal
 
@@ -42,6 +43,15 @@ from garmin_crypto import CryptoError, load_private_key, public_key_of, seal, un
 # job rather than "store it and pick it up on the next run".
 MFA_WAIT_SECONDS = 240
 MFA_POLL_SECONDS = 3
+
+# Wellness metrics are pulled one day at a time, so deep history can't arrive in a
+# single sync without risking Garmin's rate limits or the job timeout. Activities,
+# weigh-ins and PRs are one call each, so those come back in full immediately; the
+# per-day wellness history is walked backwards a chunk at a time across scheduled
+# runs until it reaches the floor. See backfill_step / _next_backfill_window.
+DEEP_HISTORY_DAYS = 3650      # ~10 years: effectively "everything" for the cheap single-call data
+BACKFILL_CHUNK_DAYS = 90      # extra wellness history pulled per scheduled run
+BACKFILL_FLOOR_DAYS = 3650    # don't chase wellness metrics older than this
 
 STATE_PENDING = "pending"
 STATE_NEEDS_MFA = "needs_mfa"
@@ -276,8 +286,12 @@ def link_worker(db, private_key, max_users=3):
                 print(f"[{uid}] linked", file=sys.stderr)
 
                 # Pull straight away so the user sees data instead of an empty app.
-                days = int(cred.get("backfillDays") or 90)
-                _sync_with_client(db, uid, client, days)
+                # Activities, weigh-ins and PRs come back in full (single calls, so
+                # years of history are free); a recent window of daily wellness
+                # metrics comes now, and the rest is filled in over later runs.
+                initial = int(cred.get("backfillDays") or 90)
+                _sync_with_client(db, uid, client, initial, activity_days=DEEP_HISTORY_DAYS)
+                _seed_backfill_cursor(db, uid, initial)
 
         except TimeoutError:
             set_status(db, uid, STATE_ERROR, "The code timed out — tap Connect to try again.")
@@ -308,6 +322,12 @@ def sync_all_users(db, private_key, days=3, skip_uid=None, max_users=10):
             with isolated_tokenstore(blob) as tokenstore:
                 client = _login_with_tokens(tokenstore)
                 _sync_with_client(db, uid, client, days)
+                # Best-effort: walk this user's deep wellness history one chunk
+                # further back. A hiccup here must not fail the routine sync.
+                try:
+                    backfill_step(db, uid, client)
+                except Exception as exc:  # noqa: BLE001 - backfill is best-effort
+                    print(f"[{uid}] wellness backfill step failed: {redact(exc, [])}", file=sys.stderr)
             synced += 1
         except CryptoError:
             failed += 1
@@ -349,12 +369,15 @@ def main_module():
     return _main_module_cache
 
 
-def _sync_with_client(db, uid, client, days):
-    """Pull `days` of Garmin data with an already-logged-in client and merge it
-    into that user's account."""
+def _sync_with_client(db, uid, client, days, activity_days=None):
+    """Pull Garmin data with an already-logged-in client and merge it into that
+    user's account. `days` bounds the per-day wellness metrics; `activity_days`
+    (when given) pulls activities/weigh-ins/PRs from a deeper window for free."""
     module = main_module()
 
-    weights, sessions, health, records = module.fetch_from_garmin(days, client=client)
+    weights, sessions, health, records = module.fetch_from_garmin(
+        days, client=client, activity_days=activity_days
+    )
     payload = module.build_payload(weights, sessions, health, records)
     counts = module.push_payload(db, uid, payload)
 
@@ -365,6 +388,78 @@ def _sync_with_client(db, uid, client, days):
     )
     print(f"[{uid}] synced {counts[0]} weigh-ins, {counts[1]} new activities, {counts[2]} days", file=sys.stderr)
     return counts
+
+
+def _seed_backfill_cursor(db, uid, covered_days):
+    """Record how far back the first sync already pulled wellness metrics, so the
+    incremental backfill knows where to carry on from."""
+    from firebase_admin import firestore
+
+    oldest = (date.today() - timedelta(days=covered_days)).isoformat()
+    _status_ref(db, uid).set(
+        {
+            "histOldest": oldest,
+            "histDone": covered_days >= BACKFILL_FLOOR_DAYS,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
+
+
+def _next_backfill_window(oldest_iso, today, chunk=BACKFILL_CHUNK_DAYS, floor_days=BACKFILL_FLOOR_DAYS):
+    """Pure date math for the incremental backfill: given the oldest wellness day
+    pulled so far, return (start, end, done) for the next older chunk to pull, or
+    None once we've reached the floor. Kept side-effect-free so the self-test can
+    exercise it without Garmin or Firestore."""
+    floor = today - timedelta(days=floor_days)
+    try:
+        end = date.fromisoformat(oldest_iso) if oldest_iso else today
+    except (ValueError, TypeError):
+        end = today
+    if end <= floor:
+        return None
+    start = max(floor, end - timedelta(days=chunk))
+    return start, end, start <= floor
+
+
+def backfill_step(db, uid, client):
+    """Extend one user's wellness-metric history one chunk further into the past.
+
+    Activities, weigh-ins and PRs already come back in full on every sync; only the
+    per-day wellness metrics need this slow walk. Runs once per scheduled sync, so a
+    couple of days of hourly runs reach years of history without ever tripping
+    Garmin's rate limits or the job timeout. Idempotent: re-pulling a chunk merges
+    to no change. Returns True when it pulled a chunk, False when there's none left."""
+    from firebase_admin import firestore
+
+    status = _status_ref(db, uid).get().to_dict() or {}
+    if status.get("histDone"):
+        return False
+
+    window = _next_backfill_window(status.get("histOldest"), date.today())
+    if window is None:
+        _status_ref(db, uid).set(
+            {"histDone": True, "updatedAt": firestore.SERVER_TIMESTAMP}, merge=True
+        )
+        return False
+
+    start, end, done = window
+    module = main_module()
+    # Only the wellness metrics for this older window — activities and weigh-ins are
+    # already complete from the regular sync, so an empty list for those is correct.
+    health = module.fetch_daily_metrics(client, start, end)
+    payload = module.build_payload([], [], health, [])
+    module.push_payload(db, uid, payload)
+
+    _status_ref(db, uid).set(
+        {"histOldest": start.isoformat(), "histDone": done, "updatedAt": firestore.SERVER_TIMESTAMP},
+        merge=True,
+    )
+    print(
+        f"[{uid}] wellness backfill: {start} … {end}" + (" (reached the floor)" if done else ""),
+        file=sys.stderr,
+    )
+    return True
 
 
 def _looks_like_expired_session(message):
@@ -425,6 +520,21 @@ def self_test():
     checks.append(("ordinary errors are not", not _looks_like_expired_session("connection reset")))
     checks.append(("bad passwords get a clear message", "email or password" in _friendly_error("401 invalid credential")))
     checks.append(("rate limits get a clear message", "rate-limiting" in _friendly_error("HTTP 429 too many requests")))
+
+    # Incremental wellness backfill: each run walks one chunk further back, then
+    # stops once it reaches the floor.
+    today = date(2026, 7, 25)
+    first = _next_backfill_window(None, today, chunk=90, floor_days=3650)
+    checks.append(("first backfill window ends today", first[1] == today))
+    checks.append(("first backfill window is one chunk wide", (first[1] - first[0]).days == 90))
+    checks.append(("first backfill window isn't done", first[2] is False))
+    cont = _next_backfill_window((today - timedelta(days=90)).isoformat(), today, chunk=90, floor_days=3650)
+    checks.append(("next window continues from the cursor", cont[1] == today - timedelta(days=90)))
+    near = _next_backfill_window((today - timedelta(days=3600)).isoformat(), today, chunk=90, floor_days=3650)
+    checks.append(("last window clamps to the floor", (today - near[0]).days == 3650))
+    checks.append(("last window is marked done", near[2] is True))
+    checks.append(("past the floor yields no window", _next_backfill_window((today - timedelta(days=3650)).isoformat(), today, chunk=90, floor_days=3650) is None))
+    checks.append(("a garbled cursor falls back to today", _next_backfill_window("not-a-date", today)[1] == today))
 
     for name, ok in checks:
         print(("ok  - " if ok else "FAIL- ") + name)

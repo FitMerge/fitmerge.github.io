@@ -604,14 +604,22 @@ def _garmin_login():
     return client
 
 
-def fetch_from_garmin(days, client=None):
+def fetch_from_garmin(days, client=None, activity_days=None):
     # `client` lets the multi-user runner supply an already-logged-in session for
     # a specific person; left as None this logs in the usual single-user way.
+    #
+    # Two windows: activities, weigh-ins and personal records are a single API
+    # call each for the whole range, so `activity_days` can reach back years for
+    # free. The per-day wellness metrics are pulled one day at a time, so they stay
+    # bounded by the smaller `days` window — their deep history is filled in
+    # incrementally across scheduled runs (see garmin_multi.backfill_step).
     if client is None:
         client = _garmin_login()
 
+    activity_days = days if activity_days is None else activity_days
     end = date.today()
-    start = end - timedelta(days=days)
+    start = end - timedelta(days=activity_days)
+    metrics_start = end - timedelta(days=days)
     start_str, end_str = start.isoformat(), end.isoformat()
 
     weights = []
@@ -725,7 +733,7 @@ def fetch_from_garmin(days, client=None):
 
         sessions.append(row)
 
-    health = fetch_daily_metrics(client, end, days)
+    health = fetch_daily_metrics(client, metrics_start, end)
     # Fold body-composition detail into the matching health day.
     by_date = {h["date"]: h["metrics"] for h in health}
     for ds, detail in bodycomp_metrics.items():
@@ -834,9 +842,10 @@ def fetch_slow_metrics(call, ds, put):
         put(ds, "raceTimeMarathon", _first_num(row, "timeMarathon"))
 
 
-def fetch_daily_metrics(client, end, days):
-    """Pull every daily wellness metric Garmin exposes, one day at a time. Every call is
-    wrapped defensively so a missing endpoint or a day with no data never aborts the run."""
+def fetch_daily_metrics(client, start, end):
+    """Pull every daily wellness metric Garmin exposes for the [start, end] date range,
+    one day at a time. `start` and `end` are datetime.date objects. Every call is wrapped
+    defensively so a missing endpoint or a day with no data never aborts the run."""
     by_date = {}
 
     def put(ds, key, val):
@@ -862,7 +871,7 @@ def fetch_daily_metrics(client, end, days):
                 return None
         return None
 
-    total = days + 1
+    total = (end - start).days + 1
     for i in range(total):
         ds = (end - timedelta(days=i)).isoformat()
 
