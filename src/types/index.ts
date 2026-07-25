@@ -124,6 +124,34 @@ export type WorkoutSession = {
   /** Distance covered (kilometres) for cardio activities, when reported — powers
    * pace/distance progression charts. */
   distanceKm?: number
+
+  // --- rich activity detail, as reported by Garmin -------------------------
+  // All optional: sessions logged in the app, and anything imported before these
+  // were captured, simply do not have them. Every consumer must treat an absent
+  // value as "not measured" rather than zero.
+
+  /** Garmin's canonical sport key — `trail_running`, `indoor_cycling`, `hiking`.
+   * Authoritative for categorisation, where the display name ("Denver Running")
+   * only ever was a guess. */
+  sportType?: string
+  /** Average heart rate over the activity, bpm. */
+  avgHr?: number
+  /** Peak heart rate, bpm. */
+  maxHr?: number
+  /** Total ascent, metres. */
+  elevationGainM?: number
+  /** Steps per minute for foot sports; revolutions per minute for cycling. */
+  avgCadence?: number
+  /** Garmin's aerobic training effect, 0–5. */
+  aerobicTe?: number
+  /** Garmin's anaerobic training effect, 0–5. */
+  anaerobicTe?: number
+  /** Average power in watts, where the device reports it. */
+  avgPower?: number
+  /** Local start time as 'HH:MM' — two runs on one day are otherwise identical. */
+  startTime?: string
+  /** Garmin's own activity id, for deduplication and deep links. */
+  garminActivityId?: string
 }
 
 /**

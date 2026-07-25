@@ -68,6 +68,33 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+TIME_RE = re.compile(r"^\d{2}:\d{2}$")
+
+#: Numeric fields carried onto a stored session, as (key, decimal places, minimum).
+#: A value below the minimum is dropped rather than stored: Garmin reports an
+#: unmeasured heart rate as 0, and a stored 0 would read as a real measurement and
+#: drag every average down. Duration and calories start at 0 because a zero-length
+#: activity is a genuine (if useless) reading, not a missing one.
+_NUMERIC_SESSION_FIELDS = (
+    ("durationMin", 1, 0),
+    ("kcal", 0, 0),
+    ("trainingLoad", 1, 0),
+    ("distanceKm", 3, 0.0001),
+    ("avgHr", 0, 1),
+    ("maxHr", 0, 1),
+    ("elevationGainM", 0, 0.5),
+    ("avgCadence", 0, 1),
+    ("aerobicTe", 1, 0.1),
+    ("anaerobicTe", 1, 0.1),
+    ("avgPower", 0, 1),
+)
+
+#: String fields carried onto a stored session, as (key, validating pattern or None).
+_STRING_SESSION_FIELDS = (
+    ("sportType", None),
+    ("startTime", TIME_RE),
+    ("garminActivityId", None),
+)
 
 # Identifies writes made by this script so they're distinguishable from the app's own
 # writes in the sync log. The app only ignores echoes of ITS OWN per-tab client id, so a
@@ -101,18 +128,18 @@ def build_payload(weights, sessions, health=None, records=None):
         if not isinstance(name, str) or not name.strip():
             continue
         row = {"name": name.strip(), "date": d}
-        duration = s.get("durationMin")
-        if isinstance(duration, (int, float)) and duration >= 0:
-            row["durationMin"] = round(float(duration), 1)
-        kcal = s.get("kcal")
-        if isinstance(kcal, (int, float)) and kcal >= 0:
-            row["kcal"] = round(float(kcal))
-        training_load = s.get("trainingLoad")
-        if isinstance(training_load, (int, float)) and training_load >= 0:
-            row["trainingLoad"] = round(float(training_load), 1)
-        distance_km = s.get("distanceKm")
-        if isinstance(distance_km, (int, float)) and distance_km > 0:
-            row["distanceKm"] = round(float(distance_km), 3)
+        for key, digits, minimum in _NUMERIC_SESSION_FIELDS:
+            v = s.get(key)
+            # bools are ints in Python, so they have to be excluded explicitly.
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                continue
+            if v < minimum:
+                continue
+            row[key] = round(float(v), digits) if digits else round(float(v))
+        for key, pattern in _STRING_SESSION_FIELDS:
+            v = s.get(key)
+            if isinstance(v, str) and v.strip() and (pattern is None or pattern.match(v.strip())):
+                row[key] = v.strip()
         clean_sessions.append(row)
 
     clean_health = []
@@ -192,7 +219,13 @@ def merge_body(existing, weights):
 
 #: Fields carried from a Garmin activity onto its stored session. Also the fields
 #: backfilled onto sessions already saved — see merge_workouts.
-_IMPORT_FIELDS = ("durationMin", "kcal", "trainingLoad", "distanceKm")
+#: Every field the sanitiser knows how to carry, so a backfill fills in metrics that
+#: were added to the importer after a session was first saved — which is the whole
+#: point of the backfill: old activities gain heart rate, elevation and sport type
+#: without being re-created as duplicates.
+_IMPORT_FIELDS = tuple(k for k, _, _ in _NUMERIC_SESSION_FIELDS) + tuple(
+    k for k, _ in _STRING_SESSION_FIELDS
+)
 
 #: Garmin's personal-record types, keyed by its typeId. Garmin computes these across
 #: whole activities *and* segments within them, so the 5K here is the fastest 5K you
@@ -653,6 +686,43 @@ def fetch_from_garmin(days, client=None):
         distance_m = act.get("distance")
         if isinstance(distance_m, (int, float)) and distance_m > 0:
             row["distanceKm"] = distance_m / 1000.0
+
+        # Garmin's canonical sport key ("trail_running", "indoor_cycling"). The
+        # display name is per-activity and location-flavoured; this is not, so the
+        # app groups on it rather than pattern-matching the name.
+        sport = (act.get("activityType") or {}).get("typeKey")
+        if isinstance(sport, str) and sport:
+            row["sportType"] = sport
+
+        # Local start time. Two runs on one day are otherwise indistinguishable in
+        # a list, and the dedup key can't tell them apart either.
+        if isinstance(start_local, str) and len(start_local) >= 16:
+            row["startTime"] = start_local[11:16]
+
+        activity_id = act.get("activityId")
+        if activity_id is not None:
+            row["garminActivityId"] = str(activity_id)
+
+        # The metrics that turn a row in a list into an activity worth reading:
+        # effort (heart rate), terrain (ascent), form (cadence) and what the session
+        # did to you (training effect). Key names vary across Garmin's own
+        # responses, so each is looked up under every spelling seen in the wild.
+        _num(row, "avgHr", act, "averageHR", "averageHr", "avgHr")
+        _num(row, "maxHr", act, "maxHR", "maxHr")
+        _num(row, "elevationGainM", act, "elevationGain", "totalElevationGain")
+        _num(
+            row,
+            "avgCadence",
+            act,
+            "averageRunningCadenceInStepsPerMinute",
+            "averageBikingCadenceInRevPerMinute",
+            "averageCadence",
+            "avgCadence",
+        )
+        _num(row, "aerobicTe", act, "aerobicTrainingEffect")
+        _num(row, "anaerobicTe", act, "anaerobicTrainingEffect")
+        _num(row, "avgPower", act, "avgPower", "averagePower")
+
         sessions.append(row)
 
     health = fetch_daily_metrics(client, end, days)
@@ -674,6 +744,18 @@ def fetch_from_garmin(days, client=None):
             print(f"warning: could not fetch personal records ({exc})", file=sys.stderr)
 
     return weights, sessions, health, records
+
+
+def _num(row, dest, src, *keys):
+    """Copy the first positive number among `keys` of `src` into `row[dest]`.
+
+    Garmin omits a metric the device did not record, but also sometimes reports it
+    as 0 — an average heart rate of zero is a missing reading, not a dead athlete —
+    so non-positive values are treated as absent.
+    """
+    v = _first_num(src, *keys)
+    if v is not None and v > 0:
+        row[dest] = v
 
 
 def _first_num(d, *keys):
@@ -884,7 +966,11 @@ def self_test():
     ]
     canned_sessions = [
         {"name": "Running", "date": "2026-06-20", "durationMin": 32.5, "kcal": 320, "trainingLoad": 88.0,
-         "distanceKm": 5.2},
+         "distanceKm": 5.2, "sportType": "trail_running", "startTime": "06:41",
+         "garminActivityId": "998877", "avgHr": 154, "maxHr": 178, "elevationGainM": 212,
+         "avgCadence": 168, "aerobicTe": 3.4, "anaerobicTe": 0.8,
+         # 0 is how Garmin reports "not measured" — it must not survive as a reading.
+         "avgPower": 0},
         {"name": "Strength Training", "date": "2026-06-25", "durationMin": 48.0, "kcal": 410},
     ]
     canned_health = [
@@ -946,6 +1032,24 @@ def self_test():
         payload["sessions"][0].get("distanceKm") == 5.2,
         "trainingLoad" not in payload["sessions"][1],  # absent when not provided
         "distanceKm" not in payload["sessions"][1],  # absent when not provided
+        # Rich activity detail survives the sanitiser intact...
+        payload["sessions"][0].get("sportType") == "trail_running",
+        payload["sessions"][0].get("startTime") == "06:41",
+        payload["sessions"][0].get("garminActivityId") == "998877",
+        payload["sessions"][0].get("avgHr") == 154,
+        payload["sessions"][0].get("maxHr") == 178,
+        payload["sessions"][0].get("elevationGainM") == 212,
+        payload["sessions"][0].get("avgCadence") == 168,
+        payload["sessions"][0].get("aerobicTe") == 3.4,
+        # ...except a zero, which means "not measured", not "zero watts".
+        "avgPower" not in payload["sessions"][0],
+        # A session with none of it stays clean rather than gaining empty keys.
+        all(k not in payload["sessions"][1] for k in ("sportType", "avgHr", "startTime")),
+        # A malformed clock reading is rejected rather than stored.
+        "startTime" not in build_payload([], [{"name": "R", "date": "2026-06-20",
+                                               "startTime": "6am"}], [], [])["sessions"][0],
+        # Every field the importer can read is also a field the backfill can fill in.
+        "avgHr" in _IMPORT_FIELDS and "sportType" in _IMPORT_FIELDS,
         # Personal records: only the confirmed ids survive, sorted by type.
         [r["typeId"] for r in payload["records"]] == [3, 7],
         payload["records"][0]["label"] == "Fastest 5K",

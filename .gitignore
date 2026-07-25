@@ -19,3 +19,6 @@ garmin-link-private.key
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local dev-server launch config — paths are machine-specific
+.claude/

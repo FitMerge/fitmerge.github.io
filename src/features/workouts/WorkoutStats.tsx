@@ -6,7 +6,7 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { formatDurationMin, weightUnitLabel } from './utils'
 import { lifetimeStats, muscleSetVolume, weeklyStreak, workoutsPerWeek } from './stats'
-import CardioProgressSection from './CardioProgressSection'
+import CardioDashboard from './CardioDashboard'
 
 type WorkoutStatsProps = {
   onBack: () => void
@@ -79,7 +79,7 @@ export default function WorkoutStats({ onBack }: WorkoutStatsProps) {
         </div>
       </Card>
 
-      <CardioProgressSection />
+      <CardioDashboard />
 
       <Card>
         <h2 className="text-sm font-semibold text-slate-200 mb-3">Workouts per week</h2>

@@ -55,8 +55,39 @@ const CATEGORY_PATTERNS: [RegExp, ActivityCategory][] = [
   [/\b(strength|weight|lifting|resistance|gym)/i, 'Strength'],
 ]
 
-/** The major sport a session name belongs to, ignoring place and equipment. */
-export function activityCategory(name: string): ActivityCategory {
+/**
+ * Garmin's sport keys, which the import now carries. These are authoritative
+ * where the display name was always a guess: `indoor_cardio` reads as nothing in
+ * particular by name, but its key says exactly what it is. Matched as substrings
+ * so the long tail (`obstacle_run`, `virtual_ride`, `backcountry_snowboarding`)
+ * lands in the right bucket without enumerating every one.
+ *
+ * Ordered like the name patterns: first match wins, so `snowshoeing` is a hike
+ * before `mountain_biking` can claim anything containing "bik".
+ */
+const SPORT_KEY_PATTERNS: [RegExp, ActivityCategory][] = [
+  [/snowshoe|hiking|mountaineer/, 'Hike'],
+  [/ski|snowboard/, 'Ski'],
+  [/run/, 'Run'],
+  [/walk/, 'Walk'],
+  [/cycling|biking|_ride$|^ride|handcycling/, 'Bike'],
+  [/strength|weight|hiit|pilates|yoga|bouldering|climb/, 'Strength'],
+]
+
+/**
+ * The major sport a session belongs to, ignoring place and equipment.
+ *
+ * `sportType` (Garmin's key) is consulted first and, when it matches, decides
+ * outright. Only sessions without one — logged in the app, or imported before
+ * the field was captured — fall back to reading the name.
+ */
+export function activityCategory(name: string, sportType?: string): ActivityCategory {
+  if (sportType) {
+    const key = sportType.toLowerCase()
+    for (const [pattern, category] of SPORT_KEY_PATTERNS) {
+      if (pattern.test(key)) return category
+    }
+  }
   for (const [pattern, category] of CATEGORY_PATTERNS) {
     if (pattern.test(name)) return category
   }
@@ -78,7 +109,7 @@ export function cardioActivities(
   for (const s of sessions) {
     if (!isCardioSession(s)) continue
     if (!inCardioRange(s.date, range, today)) continue
-    const category = activityCategory(s.name)
+    const category = activityCategory(s.name, s.sportType)
     const cur = map.get(category) ?? { count: 0, hasDistance: false }
     cur.count += 1
     if ((s.distanceKm ?? 0) > 0) cur.hasDistance = true
@@ -99,6 +130,9 @@ export function isoToEpochMs(iso: string): number {
 }
 
 export type CardioPoint = {
+  /** The session this came from, so a list row can open its detail. */
+  id: string
+  name: string
   date: string
   /**
    * Epoch ms, so the chart's x-axis can be a real time scale. Plotting against the
@@ -113,6 +147,19 @@ export type CardioPoint = {
   trainingLoad: number | null
   /** Pace in minutes per display distance unit (min/mi or min/km). */
   pace: number | null
+  /** Detail carried straight through from the import; null where unmeasured. */
+  elevationGainM: number | null
+  avgHr: number | null
+  maxHr: number | null
+  avgCadence: number | null
+  aerobicTe: number | null
+  anaerobicTe: number | null
+  startTime: string | null
+}
+
+/** Reads an optional numeric session field as a value-or-null. */
+function num(v: number | undefined): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
 /** Time series (oldest→newest) for one activity category, in the user's units. */
@@ -128,7 +175,7 @@ export function cardioSeries(
     .filter(
       (s) =>
         isCardioSession(s) &&
-        activityCategory(s.name) === category &&
+        activityCategory(s.name, s.sportType) === category &&
         inCardioRange(s.date, range, today),
     )
     .sort((a, b) => (a.date < b.date ? -1 : 1))
@@ -138,14 +185,23 @@ export function cardioSeries(
       const distance = distanceKm === null ? null : imperial ? distanceKm / KM_PER_MILE : distanceKm
       const pace = distance && distance > 0 ? durationMin / distance : null
       return {
+        id: s.id,
+        name: s.name,
         date: s.date,
         t: isoToEpochMs(s.date),
         label: monthDayLabel(s.date),
         durationMin,
         distance,
-        kcal: typeof s.kcal === 'number' ? s.kcal : null,
-        trainingLoad: typeof s.trainingLoad === 'number' ? s.trainingLoad : null,
+        kcal: num(s.kcal),
+        trainingLoad: num(s.trainingLoad),
         pace,
+        elevationGainM: num(s.elevationGainM),
+        avgHr: num(s.avgHr),
+        maxHr: num(s.maxHr),
+        avgCadence: num(s.avgCadence),
+        aerobicTe: num(s.aerobicTe),
+        anaerobicTe: num(s.anaerobicTe),
+        startTime: s.startTime ?? null,
       }
     })
 }
@@ -194,7 +250,7 @@ export function bestEfforts(
   const candidates = sessions.filter(
     (s) =>
       isCardioSession(s) &&
-      activityCategory(s.name) === category &&
+      activityCategory(s.name, s.sportType) === category &&
       inCardioRange(s.date, range, today) &&
       (s.distanceKm ?? 0) > 0 &&
       (s.durationMin ?? 0) > 0,
@@ -238,6 +294,33 @@ export function formatDuration(minutes: number): string {
   const s = totalSeconds % 60
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/**
+ * Formats a span of hours or days as "45h 49m".
+ *
+ * {@link formatDuration} is right for a single activity, where seconds matter and
+ * "43:30" is how a runner reads a 10K. It is wrong for a period total: 45 hours of
+ * training renders as "45:49:24", which parses as a time of day before it parses
+ * as three-quarters of a working week.
+ */
+export function formatTotalDuration(minutes: number): string {
+  const total = Math.round(minutes)
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  if (h === 0) return `${m}m`
+  return `${h.toLocaleString()}h ${m}m`
+}
+
+const FEET_PER_METRE = 3.28084
+
+export function elevationUnitLabel(units: Units): string {
+  return units === 'imperial' ? 'ft' : 'm'
+}
+
+/** Ascent is stored in metres whatever the display units; convert at the edge. */
+export function toDisplayElevation(metres: number, units: Units): number {
+  return units === 'imperial' ? metres * FEET_PER_METRE : metres
 }
 
 /** Formats a pace (decimal minutes per unit) as "m:ss". */
@@ -366,12 +449,23 @@ export type CardioSummary = {
   bestPace: number | null
   avgPace: number | null
   totalDuration: number
+  /** Total ascent in metres across sessions that recorded it; null if none did. */
+  totalElevationM: number | null
+  /** Heart rate averaged over sessions that recorded one; null if none did. */
+  avgHr: number | null
+  totalKcal: number | null
 }
 
 export function cardioSummary(points: CardioPoint[]): CardioSummary {
   let totalDistance = 0
   let totalDuration = 0
   let bestPace: number | null = null
+  let elevation = 0
+  let elevationCount = 0
+  let hrSum = 0
+  let hrCount = 0
+  let kcal = 0
+  let kcalCount = 0
   const paces: number[] = []
   for (const p of points) {
     totalDuration += p.durationMin
@@ -380,7 +474,91 @@ export function cardioSummary(points: CardioPoint[]): CardioSummary {
       paces.push(p.pace)
       if (bestPace === null || p.pace < bestPace) bestPace = p.pace
     }
+    if (p.elevationGainM !== null) {
+      elevation += p.elevationGainM
+      elevationCount += 1
+    }
+    if (p.avgHr !== null) {
+      hrSum += p.avgHr
+      hrCount += 1
+    }
+    if (p.kcal !== null) {
+      kcal += p.kcal
+      kcalCount += 1
+    }
   }
   const avgPace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : null
-  return { sessions: points.length, totalDistance, bestPace, avgPace, totalDuration }
+  return {
+    sessions: points.length,
+    totalDistance,
+    bestPace,
+    avgPace,
+    totalDuration,
+    // Null rather than 0 when nothing was measured: a flat 0 m of climbing is a
+    // claim about the terrain, and we have no basis for making it.
+    totalElevationM: elevationCount > 0 ? elevation : null,
+    avgHr: hrCount > 0 ? hrSum / hrCount : null,
+    totalKcal: kcalCount > 0 ? kcal : null,
+  }
+}
+
+// --- period-over-period comparison -------------------------------------------
+//
+// "You have run further this month than last" is the single most motivating line
+// in Strava, and it costs nothing to compute: run the same summary over the
+// window immediately before the one on screen and diff the totals.
+
+/**
+ * The window of equal length ending the day before `range` starts.
+ *
+ * Null for `all`, which has no "before" — the log begins where it begins, and
+ * comparing all-time against an empty stretch would be meaningless.
+ */
+export function previousRange(range: CardioRange, today: string = todayISO()): CardioRange | null {
+  if (range.kind === 'all') return null
+  if (range.kind === 'days') {
+    return { kind: 'custom', from: addDays(today, -(range.days * 2 - 1)), to: addDays(today, -range.days) }
+  }
+  const [from, to] = range.from <= range.to ? [range.from, range.to] : [range.to, range.from]
+  const span = Math.round((isoToEpochMs(to) - isoToEpochMs(from)) / 86_400_000) + 1
+  return { kind: 'custom', from: addDays(from, -span), to: addDays(from, -1) }
+}
+
+export type CardioDelta = {
+  label: string
+  value: number
+  previous: number
+  /** Signed fractional change, or null when the previous period was empty —
+   * "up from nothing" has no percentage and showing ∞% would be nonsense. */
+  changePct: number | null
+}
+
+/** Totals for the current period against the one before it. */
+export function compareSummaries(
+  current: CardioSummary,
+  previous: CardioSummary,
+  distUnit: string,
+): CardioDelta[] {
+  // Ascent stays in metres here: the deltas are percentages, and a percentage is
+  // the same number in either unit.
+  const rows: [string, number, number][] = [
+    [`Distance (${distUnit})`, current.totalDistance, previous.totalDistance],
+    ['Time (min)', current.totalDuration, previous.totalDuration],
+    ['Sessions', current.sessions, previous.sessions],
+  ]
+  if (current.totalElevationM !== null || previous.totalElevationM !== null) {
+    rows.push(['Ascent (m)', current.totalElevationM ?? 0, previous.totalElevationM ?? 0])
+  }
+  return (
+    rows
+      // A metric neither period recorded is not news. Skiing has no distance, and
+      // reporting "Distance: new" against nothing is worse than saying nothing.
+      .filter(([, value, prev]) => value > 0 || prev > 0)
+      .map(([label, value, prev]) => ({
+        label,
+        value,
+        previous: prev,
+        changePct: prev > 0 ? (value - prev) / prev : null,
+      }))
+  )
 }

@@ -12,7 +12,13 @@
 
 import type { BodyEntry, HealthDay } from '../../types'
 import type { HealthImportResult, ImportedSessionInput } from './types'
-import { coerceFiniteNumber, ISO_DATE_RE, isRecord } from './types'
+import {
+  coerceFiniteNumber,
+  ISO_DATE_RE,
+  isRecord,
+  NUMERIC_SESSION_FIELDS,
+  STRING_SESSION_FIELDS,
+} from './types'
 
 /** Parse one day of wellness metrics. Accepts either { date, metrics: {...} } or a
  * flat { date, steps, sleepScore, ... } shape — every finite numeric field becomes
@@ -55,16 +61,15 @@ function parseSession(raw: unknown): ImportedSessionInput | undefined {
   const name = typeof raw.name === 'string' ? raw.name.trim() : ''
   if (!name) return undefined
 
-  const durationMin = coerceFiniteNumber(raw.durationMin)
-  const kcal = coerceFiniteNumber(raw.kcal)
-  const trainingLoad = coerceFiniteNumber(raw.trainingLoad)
-  const distanceKm = coerceFiniteNumber(raw.distanceKm)
-
   const session: ImportedSessionInput = { name, date }
-  if (durationMin !== undefined && durationMin >= 0) session.durationMin = durationMin
-  if (kcal !== undefined && kcal >= 0) session.kcal = kcal
-  if (trainingLoad !== undefined && trainingLoad >= 0) session.trainingLoad = trainingLoad
-  if (distanceKm !== undefined && distanceKm > 0) session.distanceKm = distanceKm
+  for (const [field, floor] of NUMERIC_SESSION_FIELDS) {
+    const n = coerceFiniteNumber(raw[field])
+    if (n !== undefined && n >= floor) (session as Record<string, unknown>)[field] = n
+  }
+  for (const field of STRING_SESSION_FIELDS) {
+    const v = raw[field]
+    if (typeof v === 'string' && v.trim()) (session as Record<string, unknown>)[field] = v.trim()
+  }
   return session
 }
 

@@ -78,18 +78,18 @@ export default function HealthConnectSection() {
 
     const importedSessions = addImportedSessions(
       result.sessions.map((session) => {
-        const startedAt = Date.parse(`${session.date}T12:00:00`)
+        // Use the real start time when the source recorded one, so two activities
+        // on the same day order correctly instead of both sitting at noon.
+        const startedAt = Date.parse(`${session.date}T${session.startTime ?? '12:00'}:00`)
+        // Spreading the parsed session carries every detail field it happens to
+        // have — heart rate, ascent, sport type — without this list needing an
+        // edit each time the importer learns to read one more.
         return {
-          name: session.name,
-          date: session.date,
+          ...session,
           startedAt,
           finishedAt: startedAt + (session.durationMin ?? 0) * 60000,
           entries: [],
           imported: true as const,
-          durationMin: session.durationMin,
-          kcal: session.kcal,
-          trainingLoad: session.trainingLoad,
-          distanceKm: session.distanceKm,
         }
       }),
     )

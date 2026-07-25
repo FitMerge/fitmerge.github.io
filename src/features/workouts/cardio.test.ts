@@ -9,7 +9,13 @@ import {
   formatDuration,
   formatGarminRecord,
   formatPace,
+  cardioSummary,
+  compareSummaries,
+  elevationUnitLabel,
+  formatTotalDuration,
+  toDisplayElevation,
   inCardioRange,
+  previousRange,
 } from './cardio'
 import type { WorkoutSession } from '../../types'
 
@@ -435,5 +441,192 @@ describe('formatPace', () => {
 
   it('carries a rounded 60 seconds into the next minute', () => {
     expect(formatPace(5.999)).toBe('6:00')
+  })
+})
+
+describe('activityCategory with Garmin sport keys', () => {
+  it('trusts the sport key over a misleading display name', () => {
+    // The name says nothing useful; the key says exactly what it was.
+    expect(activityCategory('Morning Cardio', 'trail_running')).toBe('Run')
+    expect(activityCategory('Lunch Activity', 'indoor_cycling')).toBe('Bike')
+    expect(activityCategory('Evening Session', 'strength_training')).toBe('Strength')
+  })
+
+  it('catches the long tail of sport keys without listing every one', () => {
+    expect(activityCategory('x', 'obstacle_run')).toBe('Run')
+    expect(activityCategory('x', 'virtual_ride')).toBe('Bike')
+    expect(activityCategory('x', 'backcountry_snowboarding')).toBe('Ski')
+    expect(activityCategory('x', 'mountain_biking')).toBe('Bike')
+    expect(activityCategory('x', 'casual_walking')).toBe('Walk')
+  })
+
+  it('keeps resolving snowshoeing as a hike, not a ski', () => {
+    expect(activityCategory('x', 'snowshoeing')).toBe('Hike')
+  })
+
+  it('falls back to the name when the key is unrecognised or absent', () => {
+    expect(activityCategory('Denver Running', 'open_water_swimming')).toBe('Run')
+    expect(activityCategory('Denver Running', undefined)).toBe('Run')
+    expect(activityCategory('Denver Running', '')).toBe('Run')
+  })
+
+  it('still reaches Other when neither says anything', () => {
+    expect(activityCategory('Pool Swim', 'lap_swimming')).toBe('Other')
+  })
+})
+
+describe('cardioSeries detail fields', () => {
+  const s = session({
+    id: 'rich',
+    distanceKm: 10,
+    durationMin: 50,
+    avgHr: 152,
+    maxHr: 175,
+    elevationGainM: 180,
+    avgCadence: 168,
+    aerobicTe: 3.2,
+    startTime: '06:41',
+  })
+
+  it('carries rich metrics through to the series', () => {
+    const [p] = cardioSeries([s], 'Run', 'metric')
+    expect(p.id).toBe('rich')
+    expect(p.name).toBe('Denver Running')
+    expect(p.avgHr).toBe(152)
+    expect(p.maxHr).toBe(175)
+    expect(p.elevationGainM).toBe(180)
+    expect(p.avgCadence).toBe(168)
+    expect(p.aerobicTe).toBe(3.2)
+    expect(p.startTime).toBe('06:41')
+  })
+
+  it('reports unmeasured metrics as null, never zero', () => {
+    const [p] = cardioSeries([session({ distanceKm: 5 })], 'Run', 'metric')
+    expect(p.avgHr).toBeNull()
+    expect(p.elevationGainM).toBeNull()
+    expect(p.startTime).toBeNull()
+  })
+})
+
+describe('cardioSummary', () => {
+  it('totals ascent and averages heart rate over the sessions that have them', () => {
+    const points = cardioSeries(
+      [
+        session({ id: 'a', date: '2026-01-10', distanceKm: 5, durationMin: 25, avgHr: 150, elevationGainM: 100 }),
+        session({ id: 'b', date: '2026-01-11', distanceKm: 5, durationMin: 25, avgHr: 160, elevationGainM: 50 }),
+        session({ id: 'c', date: '2026-01-12', distanceKm: 5, durationMin: 25 }),
+      ],
+      'Run',
+      'metric',
+    )
+    const summary = cardioSummary(points)
+    expect(summary.sessions).toBe(3)
+    expect(summary.totalElevationM).toBe(150)
+    // Averaged over the two that measured it, not diluted by the third.
+    expect(summary.avgHr).toBe(155)
+  })
+
+  it('reports null rather than zero when nothing measured it', () => {
+    const points = cardioSeries([session({ distanceKm: 5 })], 'Run', 'metric')
+    const summary = cardioSummary(points)
+    expect(summary.totalElevationM).toBeNull()
+    expect(summary.avgHr).toBeNull()
+  })
+})
+
+describe('previousRange', () => {
+  const today = '2026-07-24'
+
+  it('returns the 30 days before the last 30', () => {
+    const prev = previousRange({ kind: 'days', days: 30 }, today)
+    expect(prev).toEqual({ kind: 'custom', from: '2026-05-26', to: '2026-06-24' })
+  })
+
+  it('produces a window that abuts the current one without overlapping', () => {
+    const prev = previousRange({ kind: 'days', days: 30 }, today) as { kind: 'custom'; from: string; to: string }
+    // The current window starts the day after the previous one ends.
+    expect(inCardioRange(prev.to, { kind: 'days', days: 30 }, today)).toBe(false)
+    expect(inCardioRange('2026-06-25', { kind: 'days', days: 30 }, today)).toBe(true)
+  })
+
+  it('mirrors a custom range onto the span before it', () => {
+    const prev = previousRange({ kind: 'custom', from: '2026-07-01', to: '2026-07-10' }, today)
+    expect(prev).toEqual({ kind: 'custom', from: '2026-06-21', to: '2026-06-30' })
+  })
+
+  it('has no answer for all-time', () => {
+    expect(previousRange({ kind: 'all' }, today)).toBeNull()
+  })
+})
+
+describe('compareSummaries', () => {
+  const summary = (over: Partial<ReturnType<typeof cardioSummary>>) => ({
+    sessions: 0,
+    totalDistance: 0,
+    bestPace: null,
+    avgPace: null,
+    totalDuration: 0,
+    totalElevationM: null,
+    avgHr: null,
+    totalKcal: null,
+    ...over,
+  })
+
+  it('reports a signed fractional change per metric', () => {
+    const deltas = compareSummaries(
+      summary({ totalDistance: 60, totalDuration: 300, sessions: 8 }),
+      summary({ totalDistance: 50, totalDuration: 400, sessions: 8 }),
+      'km',
+    )
+    const byLabel = Object.fromEntries(deltas.map((d) => [d.label, d.changePct]))
+    expect(byLabel['Distance (km)']).toBeCloseTo(0.2, 6)
+    expect(byLabel['Time (min)']).toBeCloseTo(-0.25, 6)
+    expect(byLabel['Sessions']).toBe(0)
+  })
+
+  it('declines to compute a percentage against an empty period', () => {
+    const [distance] = compareSummaries(summary({ totalDistance: 20 }), summary({}), 'km')
+    expect(distance.value).toBe(20)
+    expect(distance.previous).toBe(0)
+    expect(distance.changePct).toBeNull()
+  })
+
+  it('drops a metric neither period recorded', () => {
+    // Skiing has no distance. "Distance: new" against nothing is worse than silence.
+    const deltas = compareSummaries(summary({ totalDuration: 60 }), summary({ totalDuration: 40 }), 'km')
+    expect(deltas.map((d) => d.label)).toEqual(['Time (min)'])
+  })
+
+  it('includes ascent only when one of the two periods recorded it', () => {
+    const without = compareSummaries(summary({}), summary({}), 'km')
+    expect(without.some((d) => d.label.startsWith('Ascent'))).toBe(false)
+    const with_ = compareSummaries(summary({ totalElevationM: 400 }), summary({}), 'km')
+    expect(with_.some((d) => d.label.startsWith('Ascent'))).toBe(true)
+  })
+})
+
+describe('formatTotalDuration', () => {
+  it('reads a long total as hours and minutes, not as a clock time', () => {
+    // 45:49:24 is how formatDuration renders this, and it parses as a time of day
+    // long before it parses as three-quarters of a working week.
+    expect(formatTotalDuration(2749.4)).toBe('45h 49m')
+  })
+
+  it('drops the hours entirely under an hour', () => {
+    expect(formatTotalDuration(43)).toBe('43m')
+    expect(formatTotalDuration(0)).toBe('0m')
+  })
+
+  it('groups the thousands for a multi-year total', () => {
+    expect(formatTotalDuration(60 * 1234 + 5)).toBe('1,234h 5m')
+  })
+})
+
+describe('elevation units', () => {
+  it('labels and converts by the display unit', () => {
+    expect(elevationUnitLabel('metric')).toBe('m')
+    expect(elevationUnitLabel('imperial')).toBe('ft')
+    expect(toDisplayElevation(100, 'metric')).toBe(100)
+    expect(toDisplayElevation(100, 'imperial')).toBeCloseTo(328.084, 3)
   })
 })

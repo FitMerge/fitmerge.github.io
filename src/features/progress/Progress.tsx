@@ -7,7 +7,7 @@ import MacroAveragesSection from './MacroAveragesSection'
 import VolumeSection from './VolumeSection'
 import PersonalRecordsSection from './PersonalRecordsSection'
 import ActiveTimeSection from './ActiveTimeSection'
-import CardioProgressSection from '../workouts/CardioProgressSection'
+import CardioDashboard from '../workouts/CardioDashboard'
 import { RANGE_OPTIONS, type RangeKey } from './utils'
 
 type DomainKey = 'body' | 'nutrition' | 'lifting' | 'cardio'
@@ -85,7 +85,7 @@ export default function Progress() {
       {domain === 'cardio' && (
         <div className="space-y-4">
           <ActiveTimeSection />
-          <CardioProgressSection />
+          <CardioDashboard />
         </div>
       )}
     </div>
