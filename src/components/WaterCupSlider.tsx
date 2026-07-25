@@ -10,7 +10,11 @@ type WaterCupSliderProps = {
   /** Top of the slider range, in ml — a full cup. */
   maxMl: number
   unit: WaterUnit
+  /** Fires continuously while dragging — drive the live preview from this. */
   onChange: (ml: number) => void
+  /** Fires once the value settles (drag release, +/- , arrow key) — persist here
+   * so a drag doesn't write to the store on every frame. */
+  onCommit?: (ml: number) => void
 }
 
 // Cup interior spans these y-coordinates within the 120×170 viewBox; the water
@@ -28,7 +32,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  * ruler, but vertical and literal — you're filling a cup. Snaps to the unit's step,
  * shows the daily goal as a line, and is keyboard-driftable with the arrow keys.
  */
-export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange }: WaterCupSliderProps) {
+export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange, onCommit }: WaterCupSliderProps) {
   const u = WATER_UNITS[unit]
   const surfaceRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
@@ -71,13 +75,17 @@ export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange 
     setFromClientY(e.clientY)
   }
   const onPointerUp = (e: ReactPointerEvent) => {
+    if (!dragging.current) return
     dragging.current = false
     e.currentTarget.releasePointerCapture(e.pointerId)
+    onCommit?.(valueMl)
   }
 
   const nudge = (dir: 1 | -1) => {
     const next = clamp(Math.round((display + dir * u.step) / u.step) * u.step, 0, maxDisplay)
-    onChange(u.toMl(next))
+    const ml = u.toMl(next)
+    onChange(ml)
+    onCommit?.(ml)
   }
 
   return (

@@ -18,6 +18,8 @@ type NutritionState = {
   addSavedMeal: (meal: Omit<SavedMeal, 'id'>) => void
   removeSavedMeal: (id: string) => void
   addWater: (date: string, deltaMl: number) => void
+  /** Set the day's water total to an absolute ml amount (used by the cup slider). */
+  setWater: (date: string, ml: number) => void
   addExercise: (date: string, entry: Omit<ExerciseEntry, 'id'>) => void
   removeExercise: (date: string, id: string) => void
 }
@@ -59,6 +61,16 @@ export const useNutritionStore = create<NutritionState>()(
       addWater: (date, deltaMl) => {
         const current = get().water[date] ?? 0
         const next = Math.max(0, current + deltaMl)
+        const water = { ...get().water }
+        if (next === 0) {
+          delete water[date]
+        } else {
+          water[date] = next
+        }
+        set({ water })
+      },
+      setWater: (date, ml) => {
+        const next = Math.max(0, Math.round(ml))
         const water = { ...get().water }
         if (next === 0) {
           delete water[date]

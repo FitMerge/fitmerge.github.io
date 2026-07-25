@@ -17,12 +17,10 @@ import Button from '../../components/Button'
 import LogWeightSheet from '../progress/LogWeightSheet'
 import SupplementList from './SupplementList'
 import CommandBar from './CommandBar'
+import WaterLogger from '../nutrition/WaterLogger'
 import { useGarminPull } from '../settings/useGarminPull'
-import { useNutritionStore } from '../../store/nutrition'
 import { useWorkoutsStore } from '../../store/workouts'
-import { useSettingsStore } from '../../store/settings'
 import { todayISO } from '../../lib/date'
-import { flozToMl, mlToFloz, waterUnit } from '../../lib/units'
 
 type Screen = 'menu' | 'weight' | 'water' | 'supplement' | 'workout' | 'garmin'
 
@@ -81,7 +79,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
       )}
 
       {screen === 'weight' && <LogWeightSheet onClose={close} />}
-      {screen === 'water' && <WaterScreen />}
+      {screen === 'water' && <WaterLogger date={todayISO()} />}
       {screen === 'supplement' && <SupplementList />}
       {screen === 'workout' && <WorkoutScreen onPick={(id) => onNavigate('/workouts', { startRoutineId: id })} onClose={close} />}
       {screen === 'garmin' && <GarminScreen onSetup={() => onNavigate('/settings', null)} />}
@@ -99,47 +97,6 @@ function Tile({ icon: Icon, label, onClick }: { icon: typeof Scale; label: strin
       <Icon size={22} className="text-primary-400" />
       <span className="text-xs">{label}</span>
     </button>
-  )
-}
-
-function WaterScreen() {
-  const units = useSettingsStore((s) => s.units)
-  const water = useNutritionStore((s) => s.water)
-  const addWater = useNutritionStore((s) => s.addWater)
-  const goal = useSettingsStore((s) => s.waterGoalMl)
-  const today = todayISO()
-  const total = water[today] ?? 0
-  const imperial = units === 'imperial'
-  const fmt = (ml: number) => (imperial ? `${Math.round(mlToFloz(ml))} ${waterUnit(units)}` : `${ml} ml`)
-  // Increments defined in the user's own unit so taps add up cleanly (e.g. 8 oz + 8 oz = 16 oz,
-  // not "17" from rounding two 250 ml pours). Metric stays on tidy 250 ml steps.
-  const increments = imperial ? [8, 16, 24].map((oz) => Math.round(flozToMl(oz))) : [250, 500, 750]
-  const undoStep = increments[0]
-
-  return (
-    <div className="space-y-4">
-      <div className="text-center">
-        <p className="text-3xl font-bold text-slate-100">{fmt(total)}</p>
-        <p className="text-xs text-slate-500">of {fmt(goal)} today</p>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        {increments.map((ml) => (
-          <button
-            key={ml}
-            type="button"
-            onClick={() => addWater(today, ml)}
-            className="rounded-xl bg-slate-800 py-3 text-sm font-medium text-slate-200 active:bg-slate-700"
-          >
-            +{fmt(ml)}
-          </button>
-        ))}
-      </div>
-      {total > 0 && (
-        <button type="button" onClick={() => addWater(today, -Math.min(undoStep, total))} className="w-full text-xs text-slate-500">
-          Undo last cup
-        </button>
-      )}
-    </div>
   )
 }
 
