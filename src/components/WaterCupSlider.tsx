@@ -89,15 +89,15 @@ export default function WaterCupSlider({ valueMl, maxMl, unit, onChange, label }
         @media (prefers-reduced-motion: reduce) { .wc-bob-up,.wc-bob-down { animation: none } }
       `}</style>
 
-      <div className="mb-2 text-center">
+      <div className="mb-0.5 text-center">
         {label && <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>}
         <div>
-          <span className="text-5xl font-bold tabular-nums text-sky-300">{display.toFixed(u.decimals)}</span>
-          <span className="ml-1.5 text-xl font-medium text-slate-400">{u.label}</span>
+          <span className="text-4xl font-bold tabular-nums text-sky-300">{display.toFixed(u.decimals)}</span>
+          <span className="ml-1.5 text-lg font-medium text-slate-400">{u.label}</span>
         </div>
       </div>
 
-      <ChevronUp size={20} strokeWidth={2.5} className="wc-bob-up text-sky-300" aria-hidden="true" />
+      <ChevronUp size={18} strokeWidth={2.5} className="wc-bob-up text-sky-300" aria-hidden="true" />
 
       {/* The glass itself is the control: drag anywhere on it, up or down. */}
       <div
@@ -122,7 +122,7 @@ export default function WaterCupSlider({ valueMl, maxMl, unit, onChange, label }
             nudge(-1)
           }
         }}
-        className="my-1 h-52 w-44 cursor-ns-resize touch-none select-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+        className="my-0.5 h-40 w-44 cursor-ns-resize touch-none select-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
       >
         <svg viewBox="0 0 120 170" className="h-full w-full">
           <defs>
@@ -153,9 +153,9 @@ export default function WaterCupSlider({ valueMl, maxMl, unit, onChange, label }
         </svg>
       </div>
 
-      <ChevronDown size={20} strokeWidth={2.5} className="wc-bob-down text-sky-300" aria-hidden="true" />
+      <ChevronDown size={18} strokeWidth={2.5} className="wc-bob-down text-sky-300" aria-hidden="true" />
 
-      <p className="mt-2 text-xs text-slate-400">Drag up or down to adjust the amount</p>
+      <p className="mt-1.5 text-xs text-slate-400">Drag up or down to adjust the amount</p>
     </div>
   )
 }

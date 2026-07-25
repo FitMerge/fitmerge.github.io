@@ -60,7 +60,7 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
   }
 
   return (
-    <div className="relative space-y-4">
+    <div className="relative space-y-3">
       <style>{`
         @keyframes wcPop { 0%{ transform: scale(.5); opacity:0 } 45%{ transform: scale(1.12); opacity:1 } 100%{ transform: scale(1); opacity:1 } }
         @keyframes wcRipple { 0%{ transform: scale(.7); opacity:.5 } 100%{ transform: scale(2.2); opacity:0 } }
