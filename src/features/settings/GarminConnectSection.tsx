@@ -17,6 +17,11 @@ function timeAgo(ts: number): string {
 const INPUT =
   'w-full rounded-lg bg-slate-800 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500'
 
+// A friend has no token to start the worker, so a mistyped password can only be
+// caught by the scheduled sync job — often a few minutes behind. Rather than
+// leave them on an endless spinner, offer a way back to the form after this long.
+const SLOW_CONNECT_MS = 90_000
+
 /** How long the current connection attempt has been waiting, in plain words. */
 function elapsedLabel(since: number): string {
   const s = Math.max(0, Math.round((Date.now() - since) / 1000))
@@ -51,6 +56,9 @@ export default function GarminConnectSection() {
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [understood, setUnderstood] = useState(false)
+  // Set when the user chooses to go back and re-check their details mid-wait, so
+  // a late "pending" push from the worker can't yank them off the form.
+  const [reentering, setReentering] = useState(false)
 
   // Re-render once a second while waiting so the elapsed time actually counts up.
   const [, setTick] = useState(0)
@@ -80,7 +88,17 @@ export default function GarminConnectSection() {
 
   const { state } = status
   const connected = state === 'linked'
-  const working = state === 'pending' || busy
+  const working = (state === 'pending' || busy) && !reentering
+  const elapsedMs = waitingSince ? Date.now() - waitingSince : 0
+  const slow = elapsedMs > SLOW_CONNECT_MS
+
+  // A settled result (or a code prompt) means the wait is genuinely over, so drop
+  // any "let me re-check" override and show that outcome.
+  useEffect(() => {
+    if (connected || state === 'needs_mfa' || state === 'error' || state === 'needs_relink') {
+      setReentering(false)
+    }
+  }, [connected, state])
 
   return (
     <Card className="space-y-3">
@@ -138,10 +156,26 @@ export default function GarminConnectSection() {
           <p className="flex items-start gap-1.5 text-sm text-slate-400">
             <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-primary-400" />
             <span>
-              Connecting…{waitingSince ? ` ${elapsedLabel(waitingSince)}.` : ''} You can leave this
-              screen open — you may need to enter a code.
+              Connecting…{waitingSince ? ` ${elapsedLabel(waitingSince)}.` : ''} This can take a
+              couple of minutes. You can leave this screen open — you may need to enter a code, and
+              we’ll tell you here if the email or password didn’t work.
             </span>
           </p>
+
+          {/* Once the wait is long enough to look like a hang, name the most common
+              cause — a mistyped password — and give a way back to the form. The
+              worker can only report that after it runs, which may be minutes away. */}
+          {slow && (
+            <div className="space-y-2 rounded-lg bg-slate-800/60 p-2.5">
+              <p className="text-xs text-amber-300">
+                Still going. A wrong Garmin email or password looks exactly like this until the sync
+                job catches it. If you’re not sure they were right, start over and re-enter them.
+              </p>
+              <Button variant="ghost" full onClick={() => setReentering(true)} disabled={busy}>
+                Re-enter email &amp; password
+              </Button>
+            </div>
+          )}
 
           {/* The worker runs on a schedule, but GitHub's short crons skip often
               enough that waiting on one looks indistinguishable from a hang.
@@ -220,7 +254,10 @@ export default function GarminConnectSection() {
           <Button
             variant="primary"
             full
-            onClick={() => void connect(email, password)}
+            onClick={() => {
+              setReentering(false)
+              void connect(email, password)
+            }}
             disabled={busy || !understood || !email.trim() || !password}
           >
             {busy ? 'Connecting…' : 'Connect'}
