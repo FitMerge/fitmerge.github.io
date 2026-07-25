@@ -3,14 +3,14 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { WATER_UNITS, type WaterUnit } from '../lib/units'
 
 type WaterCupSliderProps = {
-  /** Current amount, in canonical ml. */
+  /** The amount shown in the glass, in canonical ml. */
   valueMl: number
-  /** The day's goal, in ml — drawn as a line across the cup. */
-  goalMl: number
-  /** Top of the slider range, in ml — a full cup. */
+  /** Top of the range, in ml — a full glass. */
   maxMl: number
   unit: WaterUnit
   onChange: (ml: number) => void
+  /** Small caption above the number, e.g. "Adding". */
+  label?: string
 }
 
 // Cup interior spans these y-coordinates within the 120×170 viewBox; the water
@@ -24,24 +24,20 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /**
  * A glass you fill by dragging up or down: the water level follows your finger and
- * the amount reads out live, in whichever unit is selected. The single control for
- * the day's water — snaps to the unit's step, marks the goal as a line, and takes
- * arrow keys for accessibility. Reflects a draft; the parent decides when to save.
+ * the amount reads out live, in whichever unit is selected. Snaps to the unit's
+ * step and takes arrow keys for accessibility. Reflects a draft amount; the parent
+ * decides what to do with it on save.
  */
-export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange }: WaterCupSliderProps) {
+export default function WaterCupSlider({ valueMl, maxMl, unit, onChange, label }: WaterCupSliderProps) {
   const u = WATER_UNITS[unit]
   const surfaceRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
 
   const fill = maxMl > 0 ? clamp(valueMl / maxMl, 0, 1) : 0
   const waterY = BOTTOM_Y - fill * INNER_H
-  const goalFrac = maxMl > 0 ? clamp(goalMl / maxMl, 0, 1) : 0
-  const goalY = BOTTOM_Y - goalFrac * INNER_H
 
   const display = u.fromMl(valueMl)
-  const goalDisplay = u.fromMl(goalMl)
   const maxDisplay = u.fromMl(maxMl)
-  const reached = valueMl >= goalMl - 1
 
   // Snap an ml amount onto the current unit's step and keep it in range.
   const snapMl = (ml: number) => {
@@ -94,20 +90,11 @@ export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange 
       `}</style>
 
       <div className="mb-2 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Today&apos;s total</p>
+        {label && <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>}
         <div>
           <span className="text-5xl font-bold tabular-nums text-sky-300">{display.toFixed(u.decimals)}</span>
           <span className="ml-1.5 text-xl font-medium text-slate-400">{u.label}</span>
         </div>
-        <p className="mt-0.5 text-xs text-slate-500">
-          {reached ? (
-            <span className="text-emerald-400">Goal reached 🎉</span>
-          ) : (
-            <>
-              Goal {goalDisplay.toFixed(u.decimals)} {u.label}
-            </>
-          )}
-        </p>
       </div>
 
       <ChevronUp size={20} strokeWidth={2.5} className="wc-bob-up text-sky-300" aria-hidden="true" />
@@ -121,7 +108,7 @@ export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange 
         onPointerCancel={onPointerUp}
         role="slider"
         tabIndex={0}
-        aria-label="Water amount"
+        aria-label="Amount of water"
         aria-valuemin={0}
         aria-valuemax={Number(maxDisplay.toFixed(u.decimals))}
         aria-valuenow={Number(display.toFixed(u.decimals))}
@@ -155,12 +142,6 @@ export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange 
             <ellipse cx="60" cy={waterY} rx="40" ry="3.5" fill="#7dd3fc" opacity={fill > 0.02 ? 0.9 : 0} className="transition-[cy] duration-150 ease-out" />
           </g>
 
-          {/* Goal marker. */}
-          <line x1="24" y1={goalY} x2="96" y2={goalY} stroke="#64748b" strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x="99" y={goalY + 3.5} fill="#94a3b8" fontSize="9">
-            goal
-          </text>
-
           {/* Glass outline, drawn last so it sits above the water. */}
           <path
             d="M24 14 L96 14 L83 156 Q83 160 79 160 L41 160 Q37 160 37 156 Z"
@@ -174,7 +155,7 @@ export default function WaterCupSlider({ valueMl, goalMl, maxMl, unit, onChange 
 
       <ChevronDown size={20} strokeWidth={2.5} className="wc-bob-down text-sky-300" aria-hidden="true" />
 
-      <p className="mt-2 text-xs text-slate-400">Drag up or down to adjust the total</p>
+      <p className="mt-2 text-xs text-slate-400">Drag up or down to adjust the amount</p>
     </div>
   )
 }
