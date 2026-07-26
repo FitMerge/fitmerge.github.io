@@ -277,6 +277,7 @@ const settings: StoreAdapter = {
       availableEquipment: s.availableEquipment,
       restTimerSound: s.restTimerSound,
       coachProfile: s.coachProfile,
+      trackingSource: s.trackingSource,
     }
   },
   apply(data) {
@@ -289,6 +290,7 @@ const settings: StoreAdapter = {
       availableEquipment: (data.availableEquipment as string[] | undefined) ?? prev.availableEquipment,
       restTimerSound: (data.restTimerSound as boolean | undefined) ?? prev.restTimerSound,
       coachProfile: (data.coachProfile as typeof prev.coachProfile) ?? prev.coachProfile,
+      trackingSource: (data.trackingSource as typeof prev.trackingSource) ?? prev.trackingSource,
       // `||` (not `??`) so an empty incoming value keeps the existing local one.
       geminiApiKey: (data.geminiApiKey as string | undefined) || prev.geminiApiKey,
       usdaApiKey: (data.usdaApiKey as string | undefined) || prev.usdaApiKey,

@@ -1,14 +1,23 @@
 import { useMemo, useState } from 'react'
-import { Dumbbell, Camera, ScanBarcode, ListChecks } from 'lucide-react'
+import { Dumbbell, Camera, ScanBarcode, ListChecks, Watch, Apple, Activity as ActivityIcon, PencilLine } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
-import { useSettingsStore } from '../../store/settings'
+import GarminConnectSection from '../settings/GarminConnectSection'
+import { useSettingsStore, type TrackingSource } from '../../store/settings'
 import { useBodyStore } from '../../store/body'
+import { useAuth } from '../../auth/AuthProvider'
 import { bmr, suggestGoals, tdee } from '../../lib/tdee'
 import { todayISO } from '../../lib/date'
 import { cmToInch, inchToCm, kgToLb, lbToKg, weightUnit } from '../../lib/units'
 import type { Activity, Sex } from '../../types'
+
+const SOURCE_OPTIONS: { key: TrackingSource; label: string; sub: string; icon: typeof Watch }[] = [
+  { key: 'garmin', label: 'Garmin watch', sub: 'Syncs on its own', icon: Watch },
+  { key: 'apple', label: 'Apple Watch', sub: 'Import from Health', icon: Apple },
+  { key: 'other', label: 'Fitbit, Oura, Whoop…', sub: 'Import a file', icon: ActivityIcon },
+  { key: 'manual', label: 'No watch', sub: 'Log it yourself', icon: PencilLine },
+]
 
 const SEX_OPTIONS: Sex[] = ['male', 'female']
 
@@ -28,15 +37,17 @@ const GOAL_TYPE_OPTIONS: { key: GoalType; label: string }[] = [
   { key: 'gain', label: 'Gain' },
 ]
 
-const TOTAL_STEPS = 3
+const TOTAL_STEPS = 4
 
 export default function OnboardingWizard() {
   const profile = useSettingsStore((s) => s.profile)
   const setProfile = useSettingsStore((s) => s.setProfile)
   const setGoals = useSettingsStore((s) => s.setGoals)
   const setOnboarded = useSettingsStore((s) => s.setOnboarded)
+  const setTrackingSource = useSettingsStore((s) => s.setTrackingSource)
   const units = useSettingsStore((s) => s.units)
   const upsertEntry = useBodyStore((s) => s.upsertEntry)
+  const { status: authStatus, signIn } = useAuth()
 
   const [step, setStep] = useState(1)
   const [sex, setSex] = useState<Sex>(profile.sex ?? 'male')
@@ -46,6 +57,7 @@ export default function OnboardingWizard() {
   const [activity, setActivity] = useState<Activity>(profile.activity ?? 'moderate')
   const [goalType, setGoalType] = useState<GoalType>(profile.goalType ?? 'maintain')
   const [calorieOverride, setCalorieOverride] = useState<number | null>(null)
+  const [source, setSource] = useState<TrackingSource | null>(null)
 
   const localProfile = useMemo(
     () => ({ sex, age: age || undefined, heightCm: heightCm || undefined, activity }),
@@ -68,10 +80,17 @@ export default function OnboardingWizard() {
     setOnboarded(true)
   }
 
-  function finish() {
+  /** Persist profile + goals when leaving the goals step, so nothing is lost if
+   * they skip out of the last step. */
+  function saveGoalsAndContinue() {
     setProfile({ sex, age: age || undefined, heightCm: heightCm || undefined, activity, goalType })
     setGoals(finalGoals)
     upsertEntry({ date: todayISO(), weightKg })
+    setStep(4)
+  }
+
+  function finish() {
+    if (source) setTrackingSource(source)
     setOnboarded(true)
   }
 
@@ -269,8 +288,92 @@ export default function OnboardingWizard() {
               </Card>
 
               <div className="flex-1" />
-              <Button variant="primary" full onClick={finish}>
-                Finish
+              <Button variant="primary" full onClick={saveGoalsAndContinue}>
+                Continue
+              </Button>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="flex-1 flex flex-col gap-4 pt-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-100">How do you track?</h2>
+                <p className="text-sm text-slate-400">
+                  So the app sets itself up for your gear — you can change this later.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {SOURCE_OPTIONS.map((opt) => {
+                  const Icon = opt.icon
+                  const active = source === opt.key
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setSource(opt.key)}
+                      className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left ${
+                        active ? 'border-primary-500 bg-primary-500/10' : 'border-slate-800 bg-slate-900'
+                      }`}
+                    >
+                      <Icon size={20} className={active ? 'text-primary-400' : 'text-slate-400'} />
+                      <span className="text-sm font-medium text-slate-100">{opt.label}</span>
+                      <span className="text-[11px] text-slate-500">{opt.sub}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Garmin is the one source that can connect right here — the rest are
+                  file imports or manual entry, so we just set expectations. */}
+              {source === 'garmin' &&
+                (authStatus === 'signed-in' ? (
+                  <GarminConnectSection />
+                ) : (
+                  <Card className="space-y-2">
+                    <p className="text-sm text-slate-300">Sign in first, then connect your watch.</p>
+                    <p className="text-xs text-slate-500">
+                      Signing in keeps your data on all your devices — and is what lets the watch sync run in the
+                      cloud.
+                    </p>
+                    <Button variant="primary" full onClick={() => void signIn()}>
+                      {authStatus === 'signing-in' ? 'Signing in…' : 'Sign in with Google'}
+                    </Button>
+                  </Card>
+                ))}
+
+              {source === 'apple' && (
+                <Card className="space-y-1.5">
+                  <p className="text-sm text-slate-300">Bring your Apple Watch data over</p>
+                  <p className="text-xs text-slate-400">
+                    In the Health app: tap your photo → Export All Health Data, then import the zip from Settings →
+                    Connect health data. Weight and workouts come across.
+                  </p>
+                </Card>
+              )}
+
+              {source === 'other' && (
+                <Card className="space-y-1.5">
+                  <p className="text-sm text-slate-300">Import from your app</p>
+                  <p className="text-xs text-slate-400">
+                    Export a CSV or JSON from Fitbit, Oura or Whoop, then load it in Settings → Connect health data.
+                  </p>
+                </Card>
+              )}
+
+              {source === 'manual' && (
+                <Card className="space-y-1.5">
+                  <p className="text-sm text-slate-300">No watch needed</p>
+                  <p className="text-xs text-slate-400">
+                    Everything else works the same — meals, workouts, water and weight. You can log sleep and steps
+                    by hand from the + button, and the health charts fill in from those.
+                  </p>
+                </Card>
+              )}
+
+              <div className="flex-1" />
+              <Button variant="primary" full disabled={!source} onClick={finish}>
+                {source === 'garmin' || source === 'apple' ? 'Done' : 'Start tracking'}
               </Button>
             </div>
           )}

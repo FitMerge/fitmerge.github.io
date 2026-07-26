@@ -6,10 +6,18 @@ import Button from '../../components/Button'
 import { useBodyStore } from '../../store/body'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useHealthStore } from '../../store/health'
+import { useSettingsStore, type TrackingSource } from '../../store/settings'
 import { detectAndParse, sourceLabel } from '../../services/healthImport'
 import type { HealthImportResult } from '../../services/healthImport'
 
 type Stage = 'idle' | 'parsing' | 'preview' | 'error'
+
+const SOURCE_CHOICES: { key: TrackingSource; label: string }[] = [
+  { key: 'garmin', label: 'Garmin' },
+  { key: 'apple', label: 'Apple' },
+  { key: 'other', label: 'Other' },
+  { key: 'manual', label: 'No watch' },
+]
 
 type SuccessSummary = { weights: number; sessions: number; health: number }
 
@@ -17,6 +25,8 @@ export default function HealthConnectSection() {
   const bulkUpsertEntries = useBodyStore((s) => s.bulkUpsertEntries)
   const addImportedSessions = useWorkoutsStore((s) => s.addImportedSessions)
   const bulkUpsertDays = useHealthStore((s) => s.bulkUpsertDays)
+  const trackingSource = useSettingsStore((s) => s.trackingSource)
+  const setTrackingSource = useSettingsStore((s) => s.setTrackingSource)
 
   // Live counts of what's actually persisted on THIS device — the ground truth for
   // "did my import land?" (independent of any cloud sync state).
@@ -107,6 +117,26 @@ export default function HealthConnectSection() {
       <p className="text-sm text-slate-400">
         Import weight and workouts from Apple Health, Garmin, or a FitMerge JSON file.
       </p>
+
+      {/* Chosen during onboarding; changeable here so the app keeps shaping itself
+          to the right gear (which quick-log tiles appear, what empty states say). */}
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400">How I track</p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {SOURCE_CHOICES.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setTrackingSource(opt.key)}
+              className={`rounded-lg py-1.5 text-[11px] font-medium ${
+                trackingSource === opt.key ? 'bg-primary-500 text-slate-950' : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {(storedWeights > 0 || storedSessions > 0 || storedHealthDays > 0) && (
         <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-xs text-slate-300">

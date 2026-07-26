@@ -16,6 +16,11 @@ export type CoachProfile = {
   dietNotes?: string
 }
 
+/** Where a user's wearable data comes from — chosen during onboarding so the app
+ * can shape itself instead of showing everyone the Garmin-flavoured setup.
+ * 'manual' means no wearable: health metrics are typed in, not synced. */
+export type TrackingSource = 'garmin' | 'apple' | 'other' | 'manual'
+
 type SettingsState = {
   goals: Goals
   units: Units
@@ -41,6 +46,8 @@ type SettingsState = {
   coachProfile?: CoachProfile
   /** Epoch ms of the last successful manual Garmin pull trigger. */
   lastGarminPullAt?: number
+  /** Which wearable (if any) feeds health data. undefined = never asked. */
+  trackingSource?: TrackingSource
   setGoals: (goals: Goals) => void
   setUnits: (units: Units) => void
   setProfile: (patch: Partial<Profile>) => void
@@ -55,6 +62,7 @@ type SettingsState = {
   setRestTimerSound: (on: boolean) => void
   setCoachProfile: (profile: CoachProfile) => void
   setLastGarminPullAt: (ts: number) => void
+  setTrackingSource: (source: TrackingSource) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -84,6 +92,7 @@ export const useSettingsStore = create<SettingsState>()(
       setRestTimerSound: (on) => set({ restTimerSound: on }),
       setCoachProfile: (profile) => set({ coachProfile: profile }),
       setLastGarminPullAt: (ts) => set({ lastGarminPullAt: ts }),
+      setTrackingSource: (source) => set({ trackingSource: source }),
     }),
     { name: 'fm-settings' },
   ),

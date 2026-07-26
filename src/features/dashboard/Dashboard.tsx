@@ -14,6 +14,7 @@ import CoachSheet from './CoachSheet'
 import LogWaterSheet from '../nutrition/LogWaterSheet'
 import SupplementList from '../assistant/SupplementList'
 import { useNutritionStore } from '../../store/nutrition'
+import { useSettingsStore } from '../../store/settings'
 import { useHomeData } from './homeData'
 import { buildInsights } from './insights'
 import { metricSpark, scoreColor } from '../health/healthToday'
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const d = useHomeData()
   const addWater = useNutritionStore((s) => s.addWater)
+  const trackingSource = useSettingsStore((s) => s.trackingSource)
   const [coachOpen, setCoachOpen] = useState(false)
   const [waterOpen, setWaterOpen] = useState(false)
   const [goalsOpen, setGoalsOpen] = useState(false)
@@ -97,7 +99,8 @@ export default function Dashboard() {
             color={d.hero ? scoreColor(d.hero.value) : '#334155'}
             value={d.hero ? `${Math.round(d.hero.value)}` : '—'}
             label="Recovery"
-            sub={d.hero ? d.hero.label : 'Connect data'}
+            // Without a watch there's nothing to "connect" — point at logging instead.
+            sub={d.hero ? d.hero.label : trackingSource === 'manual' ? 'Log sleep' : 'Connect data'}
             onClick={() => navigate('/health')}
           />
           <Dial

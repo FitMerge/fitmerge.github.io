@@ -7,6 +7,7 @@ import {
   ExternalLink,
   ListChecks,
   Loader2,
+  Moon,
   RefreshCw,
   Scale,
   UtensilsCrossed,
@@ -18,11 +19,14 @@ import LogWeightSheet from '../progress/LogWeightSheet'
 import SupplementList from './SupplementList'
 import CommandBar from './CommandBar'
 import WaterLogger from '../nutrition/WaterLogger'
+import NumberField from '../../components/NumberField'
 import { useGarminPull } from '../settings/useGarminPull'
 import { useWorkoutsStore } from '../../store/workouts'
+import { useHealthStore } from '../../store/health'
+import { useSettingsStore } from '../../store/settings'
 import { todayISO } from '../../lib/date'
 
-type Screen = 'menu' | 'weight' | 'water' | 'supplement' | 'workout' | 'garmin'
+type Screen = 'menu' | 'weight' | 'water' | 'supplement' | 'workout' | 'garmin' | 'health'
 
 type ActionHubProps = {
   open: boolean
@@ -37,10 +41,19 @@ const TITLES: Record<Screen, string> = {
   supplement: 'Daily goals',
   workout: 'Start a workout',
   garmin: 'Pull from Garmin',
+  health: 'Log sleep & steps',
 }
 
 export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps) {
   const [screen, setScreen] = useState<Screen>('menu')
+  const trackingSource = useSettingsStore((s) => s.trackingSource)
+  const githubToken = useSettingsStore((s) => s.githubToken)
+  // The Garmin tile is only meaningful for people whose data comes from Garmin
+  // (or whoever set the repo pull up); everyone else gets manual sleep/steps.
+  const showGarmin = trackingSource === 'garmin' || githubToken.trim().length > 0
+  // Everyone except Garmin users benefits — including people who onboarded before
+  // this question existed (undefined source).
+  const showManualHealth = trackingSource !== 'garmin'
 
   function close() {
     onClose()
@@ -72,7 +85,8 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
               <Tile icon={Scale} label="Weight" onClick={() => setScreen('weight')} />
               <Tile icon={Droplets} label="Water" onClick={() => setScreen('water')} />
               <Tile icon={ListChecks} label="Goals" onClick={() => setScreen('supplement')} />
-              <Tile icon={RefreshCw} label="Garmin" onClick={() => setScreen('garmin')} />
+              {showManualHealth && <Tile icon={Moon} label="Sleep" onClick={() => setScreen('health')} />}
+              {showGarmin && <Tile icon={RefreshCw} label="Garmin" onClick={() => setScreen('garmin')} />}
             </div>
           </div>
         </div>
@@ -81,6 +95,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
       {screen === 'weight' && <LogWeightSheet onClose={close} />}
       {screen === 'water' && <WaterLogger date={todayISO()} onDone={close} />}
       {screen === 'supplement' && <SupplementList />}
+      {screen === 'health' && <ManualHealthScreen onDone={close} />}
       {screen === 'workout' && <WorkoutScreen onPick={(id) => onNavigate('/workouts', { startRoutineId: id })} onClose={close} />}
       {screen === 'garmin' && <GarminScreen onSetup={() => onNavigate('/settings', null)} />}
     </Sheet>
@@ -97,6 +112,46 @@ function Tile({ icon: Icon, label, onClick }: { icon: typeof Scale; label: strin
       <Icon size={22} className="text-primary-400" />
       <span className="text-xs">{label}</span>
     </button>
+  )
+}
+
+/**
+ * Type in the day's sleep and steps when no watch is doing it for you. Writes the
+ * same health-store shape a Garmin/Apple import would, so the Health page, the
+ * charts and the sleep/steps goals all work without a wearable.
+ */
+function ManualHealthScreen({ onDone }: { onDone: () => void }) {
+  const today = todayISO()
+  const existing = useHealthStore((s) => s.days[today]?.metrics)
+  const upsertDay = useHealthStore((s) => s.upsertDay)
+
+  const [hours, setHours] = useState(() =>
+    existing?.sleepMinutes ? Math.round((existing.sleepMinutes / 60) * 10) / 10 : 7.5,
+  )
+  const [steps, setSteps] = useState(() => existing?.steps ?? 0)
+  const [saved, setSaved] = useState(false)
+
+  function save() {
+    const metrics: Record<string, number> = {}
+    if (hours > 0) metrics.sleepMinutes = Math.round(hours * 60)
+    if (steps > 0) metrics.steps = Math.round(steps)
+    if (Object.keys(metrics).length === 0) return
+    upsertDay({ date: today, metrics })
+    setSaved(true)
+    window.setTimeout(onDone, 700)
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500">
+        For today. These feed your health trends and any sleep or step goals you&apos;ve set.
+      </p>
+      <NumberField label="Sleep" value={hours} onChange={setHours} step={0.5} min={0} suffix="h" />
+      <NumberField label="Steps" value={steps} onChange={setSteps} step={500} min={0} suffix="steps" />
+      <Button variant="primary" full onClick={save} disabled={saved}>
+        {saved ? 'Saved ✓' : 'Save'}
+      </Button>
+    </div>
   )
 }
 
