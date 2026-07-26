@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Check, Flame, Plus, Trash2, Zap } from 'lucide-react'
-import { doseFor, fullCompletionStreak, useSupplementStore } from '../../store/supplements'
-import { goalRuleFor } from './goalAutoCheck'
+import { doseFor, fullCompletionStreak, useSupplementStore, type GoalMetric } from '../../store/supplements'
+import { useSettingsStore } from '../../store/settings'
+import { GOAL_METRICS, goalRuleFor, suggestMetric } from './goalAutoCheck'
 import { todayISO } from '../../lib/date'
 
 /** The 75 Hard checklist, one tap to install. Water/diet/workouts are still
@@ -15,43 +16,110 @@ const SEVENTY_FIVE_HARD: { name: string; unit?: string; targetAmount?: number }[
   { name: 'Progress photo' },
 ]
 
-/** Today's daily-goals checklist (supplements, habits, challenge tasks) with a
- * challenge day counter, inline add, and a one-tap 75 Hard preset. Used in the
- * Action Hub and (compact) on the dashboard. */
+type PendingLink = {
+  name: string
+  amount?: number
+  unit?: string
+  metric: GoalMetric
+  /** Target in display units (hours for sleep time), or 0 when none is needed. */
+  target: number
+}
+
+// Sleep time is stored in minutes but entered in hours; everything else is 1:1.
+function targetDisplayUnit(metric: GoalMetric): string {
+  return metric === 'sleepMinutes' ? 'h' : (GOAL_METRICS[metric].targetSuffix ?? '')
+}
+function toStoredTarget(metric: GoalMetric, display: number): number {
+  return metric === 'sleepMinutes' ? Math.round(display * 60) : display
+}
+
 export default function SupplementList({ date = todayISO(), compact = false }: { date?: string; compact?: boolean }) {
   const items = useSupplementStore((s) => s.items)
   const log = useSupplementStore((s) => s.log)
   const toggle = useSupplementStore((s) => s.toggle)
   const addItem = useSupplementStore((s) => s.addItem)
   const removeItem = useSupplementStore((s) => s.removeItem)
+  const proteinGoal = useSettingsStore((s) => s.goals.protein)
 
   const doneCount = items.filter((i) => doseFor(log, date, i.id) > 0).length
   const streak = fullCompletionStreak(items, log, date)
   // "Day N": completed streak, counting today as in-progress until it's finished.
   const dayNumber = doneCount === items.length && items.length > 0 ? streak : streak + 1
   const has75Hard = items.some((i) => i.name.startsWith('Workout 1'))
+  const anyAuto = items.some((i) => i.link != null || goalRuleFor(i.name) !== null)
 
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [unit, setUnit] = useState('')
   const [adding, setAdding] = useState(false)
+  const [pending, setPending] = useState<PendingLink | null>(null)
+
+  // Metric goals worth suggesting — target seeded from settings where relevant.
+  const METRIC_PRESETS: { name: string; metric: GoalMetric; target?: number }[] = [
+    { name: 'Weigh in', metric: 'weighin' },
+    { name: 'Sleep 8h', metric: 'sleepMinutes', target: 480 },
+    { name: 'Hit protein', metric: 'protein', target: proteinGoal || 150 },
+    { name: '10k steps', metric: 'steps', target: 10000 },
+  ]
+
+  function resetForm() {
+    setName('')
+    setAmount('')
+    setUnit('')
+    setAdding(false)
+    setPending(null)
+  }
 
   function add() {
     const n = name.trim()
     if (!n) return
     const amt = parseFloat(amount)
+    const metric = suggestMetric(n)
+    if (metric) {
+      const def = GOAL_METRICS[metric]
+      const display = metric === 'sleepMinutes' ? 8 : metric === 'protein' ? proteinGoal || 150 : def.defaultTarget ?? 0
+      setPending({
+        name: n,
+        amount: Number.isFinite(amt) ? amt : undefined,
+        unit: unit.trim() || undefined,
+        metric,
+        target: display,
+      })
+      setAdding(false)
+      return
+    }
     addItem({ name: n, targetAmount: Number.isFinite(amt) ? amt : undefined, unit: unit.trim() || undefined })
-    setName('')
-    setAmount('')
-    setUnit('')
-    setAdding(false)
+    resetForm()
+  }
+
+  function confirmLink() {
+    if (!pending) return
+    const def = GOAL_METRICS[pending.metric]
+    addItem({
+      name: pending.name,
+      targetAmount: pending.amount,
+      unit: pending.unit,
+      link: { metric: pending.metric, target: def.needsTarget ? toStoredTarget(pending.metric, pending.target) : undefined },
+    })
+    resetForm()
+  }
+
+  function declineLink() {
+    if (!pending) return
+    addItem({ name: pending.name, targetAmount: pending.amount, unit: pending.unit })
+    resetForm()
+  }
+
+  function addPreset(p: { name: string; metric: GoalMetric; target?: number }) {
+    if (items.some((i) => i.name.toLowerCase() === p.name.toLowerCase())) return
+    addItem({ name: p.name, link: { metric: p.metric, target: p.target } })
   }
 
   return (
     <div className="space-y-2">
-      {items.length === 0 && !adding && (
+      {items.length === 0 && !adding && !pending && (
         <p className="text-xs text-slate-500">
-          No daily goals yet. Add creatine, vitamins, protein targets — or install the 75 Hard checklist below.
+          No daily goals yet. Add habits, supplements or targets — many tick themselves from your logs.
         </p>
       )}
 
@@ -60,7 +128,7 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
           <span className="flex items-center gap-1.5 text-xs font-semibold text-orange-400">
             <Flame size={14} />
             Day {dayNumber}
-            {doneCount < items.length && <span className="font-normal text-slate-500">in progress</span>}
+            {doneCount < items.length && <span className="ml-1 font-normal text-slate-500">in progress</span>}
           </span>
           <span className="text-xs text-slate-400">
             {doneCount}/{items.length} done today
@@ -68,16 +136,16 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
         </div>
       )}
 
-      {!compact && items.some((i) => goalRuleFor(i.name) !== null) && (
+      {!compact && anyAuto && (
         <p className="flex items-center gap-1 text-[11px] text-slate-500">
-          <Zap size={11} className="text-sky-400" /> checks itself from your workout &amp; water logs
+          <Zap size={11} className="text-sky-400" /> goals with a bolt tick themselves from your logs &amp; health data
         </p>
       )}
 
       {items.map((s) => {
         const done = doseFor(log, date, s.id) > 0
         const dose = s.targetAmount ? `${s.targetAmount}${s.unit ?? ''}` : null
-        const auto = goalRuleFor(s.name) !== null
+        const auto = s.link != null || goalRuleFor(s.name) !== null
         return (
           <div key={s.id} className="flex items-center gap-2.5">
             <button
@@ -112,13 +180,53 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
         )
       })}
 
+      {!compact && pending && (
+        <div className="space-y-2.5 rounded-lg border border-sky-500/30 bg-slate-800/60 p-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100">
+            <Zap size={14} className="text-sky-400" /> Auto-track “{pending.name}”?
+          </p>
+          <p className="text-xs text-slate-400">
+            This can tick itself from {GOAL_METRICS[pending.metric].source} — no tapping needed.
+          </p>
+          {GOAL_METRICS[pending.metric].needsTarget && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Each day reach</span>
+              <input
+                value={pending.target}
+                onChange={(e) => setPending({ ...pending, target: parseFloat(e.target.value) || 0 })}
+                inputMode="decimal"
+                className="w-20 rounded-lg bg-slate-800 px-3 py-1.5 text-base text-slate-100 outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <span className="text-xs text-slate-500">{targetDisplayUnit(pending.metric)}</span>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={confirmLink}
+              className="flex-1 rounded-lg bg-primary-500 py-2 text-sm font-semibold text-slate-950"
+            >
+              Link it
+            </button>
+            <button
+              type="button"
+              onClick={declineLink}
+              className="flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-slate-300 active:bg-slate-700"
+            >
+              Keep manual
+            </button>
+          </div>
+        </div>
+      )}
+
       {!compact &&
+        !pending &&
         (adding ? (
           <div className="space-y-2 rounded-lg bg-slate-800/60 p-2.5">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Name (e.g. Creatine)"
+              placeholder="Name (e.g. Creatine, Weigh in, Sleep 8h)"
               autoFocus
               className="w-full rounded-lg bg-slate-800 px-3 py-2 text-base text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
             />
@@ -142,27 +250,43 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-primary-400"
-            >
-              <Plus size={14} /> Add goal or supplement
-            </button>
-            {!has75Hard && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <button
                 type="button"
-                onClick={() => {
-                  for (const t of SEVENTY_FIVE_HARD) {
-                    if (!items.some((i) => i.name === t.name)) addItem(t)
-                  }
-                }}
-                className="flex items-center gap-1.5 text-xs font-medium text-orange-400"
+                onClick={() => setAdding(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-primary-400"
               >
-                <Flame size={14} /> Add 75 Hard checklist
+                <Plus size={14} /> Add goal or supplement
               </button>
-            )}
+              {!has75Hard && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    for (const t of SEVENTY_FIVE_HARD) {
+                      if (!items.some((i) => i.name === t.name)) addItem(t)
+                    }
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium text-orange-400"
+                >
+                  <Flame size={14} /> Add 75 Hard checklist
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {METRIC_PRESETS.filter((p) => !items.some((i) => i.name.toLowerCase() === p.name.toLowerCase())).map(
+                (p) => (
+                  <button
+                    key={p.name}
+                    type="button"
+                    onClick={() => addPreset(p)}
+                    className="flex items-center gap-1 rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-sky-300 active:bg-slate-700"
+                  >
+                    <Zap size={11} /> {p.name}
+                  </button>
+                ),
+              )}
+            </div>
           </div>
         ))}
     </div>

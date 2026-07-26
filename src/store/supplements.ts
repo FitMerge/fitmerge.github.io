@@ -7,6 +7,13 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { uid } from '../lib/id'
 
+/** A metric a goal can auto-track from, instead of being a manual check-off. */
+export type GoalMetric = 'weighin' | 'sleepScore' | 'sleepMinutes' | 'protein' | 'steps'
+
+/** When present, the goal ticks itself on any day the metric meets `target`
+ * (weigh-in needs no target — just that one was logged). */
+export type GoalLink = { metric: GoalMetric; target?: number }
+
 export type Supplement = {
   id: string
   name: string
@@ -14,6 +21,8 @@ export type Supplement = {
   unit?: string
   /** Daily target amount; drives the default dose and the "done" threshold. */
   targetAmount?: number
+  /** Auto-track this goal from a real metric rather than a manual tap. */
+  link?: GoalLink
 }
 
 type SupplementState = {
