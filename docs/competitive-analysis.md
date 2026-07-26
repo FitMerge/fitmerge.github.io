@@ -1,6 +1,6 @@
 # FitMerge Competitive Analysis & Gap Roadmap
 
-_Last updated: 2026-07-13_
+_Competitor research: 2026-07-13 · Roadmap status audited against the code: 2026-07-25_
 
 ## Intro
 
