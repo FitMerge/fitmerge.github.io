@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Home, UtensilsCrossed, Dumbbell, HeartPulse, TrendingUp, Plus, Loader2 } from 'lucide-react'
 import ActionHub from '../features/assistant/ActionHub'
 import { useGoalAutoCheck } from '../features/assistant/goalAutoCheck'
+import { useGarminSourceDetect } from '../features/settings/useGarminLink'
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -17,6 +18,8 @@ export default function AppShell() {
   const [hubOpen, setHubOpen] = useState(false)
   // Data-driven goals: workout + gallon-of-water checks tick themselves.
   useGoalAutoCheck()
+  // A connected Garmin answers "how do you track?" without asking.
+  useGarminSourceDetect()
 
   return (
     <div className="h-dvh flex flex-col">

@@ -15,6 +15,38 @@ import { useSettingsStore } from '../../store/settings'
 const IDLE: GarminStatus = { state: 'idle', message: '', lastSyncAt: null }
 
 /**
+ * App-wide: a live Garmin link IS the answer to "how do you track?", so record it
+ * rather than asking again. Covers everyone who connected before that question
+ * existed — their redundant manual sleep/steps tile disappears on its own.
+ * Costs one status-doc listener, and none at all once the source is known.
+ */
+export function useGarminSourceDetect(): void {
+  const { user, status: authStatus } = useAuth()
+  const uid = user?.uid ?? null
+  const trackingSource = useSettingsStore((s) => s.trackingSource)
+
+  useEffect(() => {
+    if (!uid || authStatus !== 'signed-in' || !garminLinkAvailable()) return
+    if (trackingSource === 'garmin') return
+    let cancelled = false
+    let unsub: (() => void) | null = null
+    void subscribeStatus(uid, (next) => {
+      if (cancelled || next.state !== 'linked') return
+      if (useSettingsStore.getState().trackingSource !== 'garmin') {
+        useSettingsStore.getState().setTrackingSource('garmin')
+      }
+    }).then((fn) => {
+      if (cancelled) fn()
+      else unsub = fn
+    })
+    return () => {
+      cancelled = true
+      unsub?.()
+    }
+  }, [uid, authStatus, trackingSource])
+}
+
+/**
  * Drives the in-app Garmin connection. Progress comes from a live subscription
  * to the sync job's status document rather than polling, so the two-factor
  * prompt appears the moment the job asks for it.
@@ -86,6 +118,7 @@ export function useGarminLink() {
       setWaitingSince(null)
     }
   }, [status.state])
+
 
   const run = useCallback(
     async (fn: () => Promise<void>) => {
