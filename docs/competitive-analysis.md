@@ -98,42 +98,56 @@ Legend: **`[HAVE]`** = shipped, **`[PARTIAL]`** = partially present / data exist
 
 ---
 
-## Prioritized roadmap (value ÷ effort, highest first)
+## Roadmap status
 
-These are ordered so the fast, high-value "improvement tracking" wins ship first (they reuse data FitMerge already stores), then the flagged program/plan work, then the higher-effort intelligence layers.
+Audited against the codebase on 2026-07-25. The original 15-item roadmap was written
+on 2026-07-24 and much of it shipped the same week, so this replaces it: the status
+column is what the code actually does, not what was planned. Evidence is the
+implementing file. Re-audit before trusting it — it goes stale fast.
 
-1. **Cardio pace-trend chart** _(S, very high)_ — Derive `pace = session.durationMin ÷ health.distanceKm` (min/km) per activity, group by activity type (run/walk/cycle), and plot over time with a moving-average trend. This is the single biggest gap given the user's data mix and it needs zero new data. Add a per-type toggle and a "faster/slower vs 30-day avg" delta.
+| # | Item | Status | Where it lives / what's missing |
+|---|---|---|---|
+| 1 | Cardio pace-trend chart | **Done** | `features/workouts/cardio.ts` → `CardioProgressSection`. Trend is a weekly/monthly bucketed average, not a per-session moving average |
+| 2 | e1RM-over-time per exercise | **Done** | `epley1RM` in `progress/utils.ts`, charted in `ExerciseProgressSheet` |
+| 3 | Volume & rep-PR progression | **Partial** | Lifetime tonnage, best-set tiles and an all-time e1RM board exist. Missing: per-exercise session-volume and heaviest-weight *trend lines*, and rep-PRs (max reps at load) — `personalRecords` ranks by e1RM only |
+| 4 | Automatic PR detection in the logger | **Done** | `prDetect.ts` → `ActiveSession` → `PRToast`; 1RM/weight/volume/tonnage milestones, 11 tests. Only the optional persisted PR-history feed is absent |
+| 5 | Distance / duration / elevation trends | **Partial** | Distance, duration and kcal are charted. **Elevation is collected but not chartable** — add `'elevation'` to `CardioMetricKey` in `cardio.ts` |
+| 6 | VO2max trend + Race Predictor | **Done** | `racePrediction.ts` (Riegel + Daniels VDOT, per-prediction confidence), 44 tests; VO2max charted via `healthMetrics.ts` |
+| 7 | Pre-built program library | **Done** | `data/programs.ts` (5 templates) → `ProgramLibrary` → `installProgramTemplate`. Strength-only — no couch-to-5K or cardio plans |
+| 8 | Multi-week plan + calendar | **Partial** | Programs have weeks, %-complete and "up next" (`ProgramDetail`). Missing: **any calendar** — days are ordinal, never assigned to dates. No planned-vs-actual, no cardio in plans, no tie-in to the CTL/ATL/TSB projection |
+| 9 | Training Readiness score | **Partial (weak)** | `heroScore` merely *picks* Garmin's imported bodyBattery → trainingReadiness → sleepScore. No FitMerge-computed blend of sleep + HRV-vs-baseline + RHR + TSB, so non-Garmin users get nothing |
+| 10 | Adaptive TDEE + weight smoothing | **Partial** | Weight-trend EMA is done (`weightTrends.ts`). Adaptive TDEE is **not**: `lib/tdee.ts` is static Mifflin-St Jeor × activity multiplier, with no intake-vs-weight-change fit and no macro recalibration |
+| 11 | Muscle-recovery % model | **Not built** | `MuscleMap` exists but only highlights an exercise's anatomy. No freshness/recency-decay model |
+| 12 | Coach-style daily suggestion | **Partial** | `services/coach/` produces a train/recover/rest plan from 5-day context and can launch it. But it's an LLM call (needs a Gemini key), ignores the active Program, and can't swap a scheduled day |
+| 13 | Auto-generated workout | **Partial** | Same coach code as 12, constrained to the real exercise library and equipment. No deterministic ranking, no recovery input, no entry point outside the coach sheet |
+| 14 | Structured interval builder | **Not built** | `RoutineItem` is sets/reps/rest only; no pace/HR targets, no compliance scoring |
+| 15 | Social / sharing | **Not built** | No share cards, no feed. `ActivityFeedSection` is the user's own private list |
 
-2. **e1RM-over-time per exercise** _(S, very high)_ — Compute Epley `e1RM = weight × (1 + reps/30)` for every logged set, take the daily best per exercise, and chart the trend. This is the headline "am I getting stronger" view and directly answers the user's estimated-1RM ask. Reuses existing set logs entirely.
+### Engineering health
 
-3. **Total-volume & rep-PR progression per exercise** _(S, high)_ — For each exercise chart session volume (`Σ weight×reps`), heaviest weight, and best set; store running PRs (max weight, max reps@target, max volume, max e1RM). Pure aggregation over existing logs.
+| Item | Status | Detail |
+|---|---|---|
+| Tests | **Partial** | Vitest 2.1.9, 9 files, 375 cases — all pure logic (cardio, race prediction, PR detect, training load, TDEE, units, exercise). **Zero component, store, or sync tests**; the hand-rolled `healthImport/garminCsv.ts` parser is untested |
+| CSV export | **Not built** | `dataBackup.ts` exports JSON only. All CSV code is import-side |
+| Error monitoring | **Not built** | No Sentry, no `ErrorBoundary`, no `window.onerror`. An unhandled render error white-screens the PWA with no signal |
+| Bundle / splitting | **Partial** | Routes are `React.lazy`, and Firebase / ZXing / the food DB are behind dynamic imports. Missing: no `manualChunks` in `vite.config.ts`, so vendor code isn't shared across route chunks; no size budget |
+| Branch name | **Open** | Default branch is still `claude/fitness-app-macros-workouts-z46rpp`; `deploy-pages.yml` hardcodes it, so renaming without editing that stops deploys |
 
-4. **Automatic PR detection in the live logger** _(S, high)_ — On set save, compare against stored PRs and flash a PR badge (weight/rep/volume/e1RM) inline. High dopamine, cheap; reuses items 2–3. Persist a PR history feed.
+### What's actually next
 
-5. **Distance / duration / elevation trend charts** _(S, high)_ — Sibling to item 1: weekly distance totals, longest activity, and duration trends per activity type from `health.distanceKm` + `durationMin`. Bundle with pace as a "Cardio Progress" tab.
+Ordered by value ÷ effort against the *current* code:
 
-6. **VO2max trend + Race Predictor** _(S→M, medium-high)_ — Chart already-imported `health.vo2max` over time. Then predict 5K/10K/half/marathon using a VO2max→velocity model (e.g. Riegel/Daniels) refined against the user's recent best paces from item 1. Frames endurance improvement the way Garmin does.
+1. **Finish elevation trends** (XS) — one key in `CardioMetricKey`; the data is already imported and summarised.
+2. **Error monitoring + an ErrorBoundary** (S) — today a crash is invisible and unreportable. The React crash found in review on 2026-07-25 would have been caught by users, not telemetry.
+3. **Training Readiness as a real score** (M) — the single biggest "works for everyone" gap: every input is already stored, and it currently degrades to nothing without a Garmin.
+4. **Adaptive TDEE** (M) — the highest-value feature still genuinely missing. Both inputs (intake, smoothed weight trend) are already held; only the expenditure fit is absent.
+5. **Per-exercise volume/weight trend lines + rep-PRs** (S–M) — finishes item 3 with data already logged.
+6. **Calendar for programs** (M/L) — the missing half of item 8, and the thing that would let planned load feed the PMC projection.
+7. **CSV export** (S) — escape hatch from lock-in; cheap.
+8. **Component/store test coverage** (M) — every bug found in the 2026-07-25 review was in UI or store logic, which currently has no test coverage at all.
+9. **Muscle-recovery model** (M) — unlocks a deterministic version of 12 and 13.
 
-7. **Pre-built program/plan library** _(M, very high — user-flagged)_ — Wrap the existing routine schema in a `Program = ordered list of routine templates + week/day scheduling`. Ship a starter catalog (e.g. PPL, Upper/Lower, 5×5, beginner full-body, couch-to-5K) users can browse and "Start", which clones routines into their library and schedules them. Reuses the routine builder; the new part is the program container + a catalog.
-
-8. **Structured multi-week training plan + calendar** _(M/L, high — user-flagged)_ — Layer scheduling on item 7: assign program days to calendar dates, show planned-vs-completed, and support strength + cardio in one plan (base/build/peak/taper phases). Tie planned load into the existing CTL/ATL/TSB projection so the plan drives the PMC forward curve — a differentiator no strength app has.
-
-9. **Training Readiness daily score** _(M, high)_ — Blend already-imported `sleep`, `HRV` (vs baseline), `restingHr`, `stress`, `bodyBattery`, and current `TSB`/ACWR into a single 0–100 "train hard / go easy / recover" number with a plain-language reason. All inputs already exist; this is a scoring function + a card on the dashboard.
-
-10. **Adaptive TDEE + weight-trend smoothing** _(M, high)_ — Fit an expenditure model from the macro diary (calories in) against the smoothed weigh-in trend (exponential moving average of Garmin/Progress weight), then auto-suggest macro targets that adapt as expenditure shifts — the MacroFactor moat, using data FitMerge already has on both sides. Ship the weight-trend line first as a quick win.
-
-11. **Muscle-recovery % model** _(M, medium)_ — Assign each muscle group a 0–100% freshness score from recent set volume + recency decay (and optionally `bodyBattery`). Surface as a body-map heat overlay reusing the existing muscle-map component. Feeds items 8 and 12.
-
-12. **Garmin Coach-style daily suggested workout** _(M→L, medium)_ — Recommend today's session from the active plan (item 8), Training Readiness (item 9), and muscle recovery (item 11); auto-swap in a recovery/easy day after poor sleep or high ACWR. Adaptive coaching layer that unifies strength + cardio.
-
-13. **Fitbod-style auto-generated workout** _(L, medium)_ — Given goal, available equipment, and the recovery model (item 11), rank the exercise library and assemble a full session. Good "no plan today?" fallback; depends on 11.
-
-14. **Structured workout builder (intervals)** _(L, medium)_ — New workout type: ordered intervals with pace/HR targets (e.g. 6×800m @ 4:30/km). Enables TrainingPeaks-grade prescription and compliance scoring against imported activity data.
-
-15. **Social / sharing layer** _(L, low-medium)_ — Shareable workout/PR cards first (cheap, viral), then an opt-in follow feed. Lowest priority: high backend + privacy cost, tangential to the analytics-first positioning.
-
-### Sequencing note
-Items 1–6 are a fast "Improvement Tracking" release that ships in days from data already stored and closes gaps (b) and (c). Items 7–8 close gap (a) and the multi-week-plan ask. Items 9–14 build the adaptive-coaching intelligence layer that turns FitMerge's analytics moat into daily guidance. Item 15 is optional.
+Items 14 and 15 remain low priority: an interval builder needs a new data type, and social carries backend and privacy cost tangential to the analytics-first positioning.
 
 ---
 
