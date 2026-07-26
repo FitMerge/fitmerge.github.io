@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { checkForUpdate, forceReload } from '../../lib/appUpdate'
+import { recentErrors } from '../../components/ErrorBoundary'
 
 export default function AboutSection() {
   const [status, setStatus] = useState<'idle' | 'checking' | 'current'>('idle')
@@ -85,6 +86,38 @@ export default function AboutSection() {
           </button>
         </div>
       )}
+
+      <ErrorLog />
     </Card>
+  )
+}
+
+/**
+ * Anything that went wrong this session. There's no crash reporting service, so
+ * this is the only way a problem on someone's phone becomes reportable — without
+ * it a failure is invisible to everyone including the person hitting it.
+ */
+function ErrorLog() {
+  const errors = recentErrors()
+  if (errors.length === 0) return null
+
+  const report = `FitMerge ${__APP_VERSION__} (${__GIT_SHA__})\n${navigator.userAgent}\n\n${errors.join('\n')}`
+
+  return (
+    <details className="rounded-xl bg-slate-800/60 p-3">
+      <summary className="cursor-pointer text-xs text-amber-300">
+        {errors.length} problem{errors.length === 1 ? '' : 's'} this session
+      </summary>
+      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-400">
+        {errors.join('\n')}
+      </pre>
+      <button
+        type="button"
+        onClick={() => void navigator.clipboard?.writeText(report)}
+        className="mt-2 text-[11px] text-primary-400 underline"
+      >
+        Copy for a bug report
+      </button>
+    </details>
   )
 }

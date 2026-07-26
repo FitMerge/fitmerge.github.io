@@ -3,15 +3,24 @@ import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './auth/AuthProvider'
+import ErrorBoundary, { recordError } from './components/ErrorBoundary'
 import './index.css'
+
+// Errors outside React's render path — a rejected sync write, a failed dynamic
+// import — never reach the boundary, so catch them here too. Recording only; the
+// app keeps running, but Settings → About can then show what actually happened.
+window.addEventListener('error', (e) => recordError(e.error ?? e.message, 'script'))
+window.addEventListener('unhandledrejection', (e) => recordError(e.reason, 'promise'))
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <HashRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </HashRouter>
+    <ErrorBoundary>
+      <HashRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </HashRouter>
+    </ErrorBoundary>
   </React.StrictMode>,
 )
 

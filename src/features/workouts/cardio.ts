@@ -331,7 +331,7 @@ export function formatPace(pace: number): string {
   return `${s === 60 ? m + 1 : m}:${ss}`
 }
 
-export type CardioMetricKey = 'distance' | 'pace' | 'durationMin' | 'kcal'
+export type CardioMetricKey = 'distance' | 'pace' | 'durationMin' | 'kcal' | 'elevation'
 
 // --- period aggregation ------------------------------------------------------
 //
@@ -351,6 +351,9 @@ export type CardioBucket = {
   distance: number | null
   durationMin: number
   kcal: number | null
+  /** Period ascent, in metres — converted at the display edge like every other
+   * elevation figure. Null for sports that never record it. */
+  elevation: number | null
   /** Average pace over the period — total time over total distance, not a mean of
    * per-session paces, so a long steady run counts for more than a short sprint. */
   pace: number | null
@@ -416,12 +419,33 @@ function periodLabel(iso: string, size: BucketSize): string {
 export function bucketCardio(points: CardioPoint[], size: BucketSize): CardioBucket[] {
   if (points.length === 0) return []
 
-  const totals = new Map<string, { sessions: number; distance: number; durationMin: number; kcal: number; hasDistance: boolean; hasKcal: boolean }>()
+  const totals = new Map<
+    string,
+    {
+      sessions: number
+      distance: number
+      durationMin: number
+      kcal: number
+      elevation: number
+      hasDistance: boolean
+      hasKcal: boolean
+      hasElevation: boolean
+    }
+  >()
   for (const p of points) {
     const key = startOfPeriod(p.date, size)
     const cur =
       totals.get(key) ??
-      { sessions: 0, distance: 0, durationMin: 0, kcal: 0, hasDistance: false, hasKcal: false }
+      {
+        sessions: 0,
+        distance: 0,
+        durationMin: 0,
+        kcal: 0,
+        elevation: 0,
+        hasDistance: false,
+        hasKcal: false,
+        hasElevation: false,
+      }
     cur.sessions += 1
     cur.durationMin += p.durationMin
     if (p.distance !== null) {
@@ -431,6 +455,10 @@ export function bucketCardio(points: CardioPoint[], size: BucketSize): CardioBuc
     if (p.kcal !== null) {
       cur.kcal += p.kcal
       cur.hasKcal = true
+    }
+    if (p.elevationGainM !== null) {
+      cur.elevation += p.elevationGainM
+      cur.hasElevation = true
     }
     totals.set(key, cur)
   }
@@ -446,6 +474,7 @@ export function bucketCardio(points: CardioPoint[], size: BucketSize): CardioBuc
       distance: t?.hasDistance ? t.distance : null,
       durationMin: t?.durationMin ?? 0,
       kcal: t?.hasKcal ? t.kcal : null,
+      elevation: t?.hasElevation ? t.elevation : null,
       pace: t && t.hasDistance && t.distance > 0 ? t.durationMin / t.distance : null,
     })
   }

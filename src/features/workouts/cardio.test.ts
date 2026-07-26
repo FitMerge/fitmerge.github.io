@@ -233,6 +233,25 @@ describe('bucketCardio', () => {
     expect(buckets[0].durationMin).toBe(72)
   })
 
+  it('totals ascent over the period, in metres', () => {
+    const climbs = cardioSeries(
+      [
+        session({ id: 'a', date: '2026-07-20', distanceKm: 5, elevationGainM: 120 }),
+        session({ id: 'b', date: '2026-07-22', distanceKm: 5, elevationGainM: 80 }),
+      ],
+      'Run',
+      'metric',
+      { kind: 'all' },
+      '2026-07-24',
+    )
+    expect(bucketCardio(climbs, 'week')[0].elevation).toBe(200)
+  })
+
+  it('leaves ascent null for a period that recorded none', () => {
+    // Flat sports must not chart a misleading zero — the tab is hidden instead.
+    expect(bucketCardio(runs([['2026-07-20', 5]]), 'week')[0].elevation).toBeNull()
+  })
+
   it('starts weeks on Monday, so a Sunday belongs to the week before', () => {
     // 2026-07-19 is a Sunday and 2026-07-20 the Monday after it.
     const buckets = bucketCardio(runs([['2026-07-19', 5], ['2026-07-20', 5]]), 'week')

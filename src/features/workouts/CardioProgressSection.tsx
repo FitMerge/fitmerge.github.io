@@ -42,7 +42,7 @@ import {
 } from './cardio'
 import { monthDayLabel } from '../progress/utils'
 
-type MetricDef = { key: CardioMetricKey; label: string; needsDistance: boolean }
+type MetricDef = { key: CardioMetricKey; label: string; needsDistance: boolean; needsElevation?: boolean }
 
 function periodNoun(size: 'week' | 'month'): string {
   return size === 'month' ? 'Month' : 'Week'
@@ -105,8 +105,14 @@ export default function CardioProgressSection({
     { key: 'pace', label: `Pace /${distUnit}`, needsDistance: true },
     { key: 'durationMin', label: 'Time', needsDistance: false },
     { key: 'kcal', label: 'Calories', needsDistance: false },
+    // Ascent only makes sense where the sport climbs — the same rule the headline
+    // tile already follows, so a pool swim never offers an empty elevation chart.
+    { key: 'elevation', label: 'Ascent', needsDistance: false, needsElevation: true },
   ]
-  const available = metrics.filter((m) => !m.needsDistance || hasDistance)
+  const hasElevation = summary.totalElevationM !== null
+  const available = metrics.filter(
+    (m) => (!m.needsDistance || hasDistance) && (!m.needsElevation || hasElevation),
+  )
   // Distance first: it is the number runners and riders actually track. Pace is a
   // tap away, and is the only one of the four that is an average rather than a total.
   const [metric, setMetric] = useState<CardioMetricKey>('distance')
@@ -115,7 +121,13 @@ export default function CardioProgressSection({
   // How many of the sessions in view actually carry the metric being charted. A
   // Walk tab reading 145 while four dots appear is not a bug, but it reads like
   // one, so the gap is stated rather than left to be inferred.
-  const plotted = points.filter((p) => (p[activeMetric] as number | null) !== null).length
+  // The bucket key and the per-session field differ for ascent (`elevationGainM`),
+  // so map rather than indexing by the metric key — otherwise every session counts
+  // as plotted and the honesty note below silently stops appearing.
+  const plotted = points.filter((p) => {
+    const v = activeMetric === 'elevation' ? p.elevationGainM : (p[activeMetric] as number | null | undefined)
+    return v !== null && v !== undefined
+  }).length
 
   const fmt = (v: number): string => {
     if (activeMetric === 'pace') return formatPace(v)
@@ -123,6 +135,8 @@ export default function CardioProgressSection({
     // A period total of training is hours, not a stopwatch reading: "4h 14m" beats
     // "4:14:00" both on the axis, where width is scarce, and in the tooltip.
     if (activeMetric === 'durationMin') return formatTotalDuration(v)
+    // Ascent is stored in metres; convert only here, at the display edge.
+    if (activeMetric === 'elevation') return Math.round(toDisplayElevation(v, units)).toLocaleString()
     return String(Math.round(v))
   }
 
@@ -134,7 +148,9 @@ export default function CardioProgressSection({
         ? distUnit
         : activeMetric === 'durationMin'
           ? ''
-          : 'kcal'
+          : activeMetric === 'elevation'
+            ? elevUnit
+            : 'kcal'
 
   return (
     <Card className="space-y-3">
@@ -332,7 +348,13 @@ export default function CardioProgressSection({
       {plotted > 0 && plotted < points.length && (
         <p className="text-[11px] text-slate-500">
           Charting {plotted} of {points.length} sessions — the rest have no{' '}
-          {activeMetric === 'kcal' ? 'calorie' : activeMetric === 'durationMin' ? 'duration' : 'distance'}{' '}
+          {activeMetric === 'kcal'
+            ? 'calorie'
+            : activeMetric === 'durationMin'
+              ? 'duration'
+              : activeMetric === 'elevation'
+                ? 'ascent'
+                : 'distance'}{' '}
           data recorded.
         </p>
       )}
