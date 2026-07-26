@@ -18,7 +18,7 @@ export type FoodEntry = {
   qty: number
   unit: string
   photoThumbId?: string
-  source?: 'manual' | 'photo' | 'search'
+  source?: 'manual' | 'photo' | 'search' | 'describe'
   /** Grams. */
   fiber?: number
   /** Grams. */

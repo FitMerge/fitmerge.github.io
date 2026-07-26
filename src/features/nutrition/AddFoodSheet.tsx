@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Camera, ChevronLeft, X, Zap } from 'lucide-react'
+import { Camera, ChevronLeft, Wand2, X, Zap } from 'lucide-react'
+import AddDescribeTab from './AddDescribeTab'
 import AddManualTab from './AddManualTab'
 import AddPhotoTab from './AddPhotoTab'
 import AddSearchTab from './AddSearchTab'
@@ -13,7 +14,7 @@ const MEALS: { type: MealType; label: string }[] = [
   { type: 'snack', label: 'Snacks' },
 ]
 
-type View = 'browse' | 'manual' | 'photo' | 'quickadd'
+type View = 'browse' | 'manual' | 'photo' | 'quickadd' | 'describe'
 
 type AddFoodSheetProps = {
   open: boolean
@@ -113,6 +114,24 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
       >
         {view === 'browse' && (
           <div className="space-y-4">
+            {/* Above search on purpose: a plate of real food is one sentence here,
+                but several separate lookups through the database. */}
+            <button
+              type="button"
+              onClick={() => setView('describe')}
+              className="flex w-full items-center gap-3 rounded-xl bg-gradient-to-br from-primary-500/20 to-slate-900 p-3 text-left active:opacity-80"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500/20">
+                <Wand2 size={17} className="text-primary-300" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-primary-200">Describe your meal</span>
+                <span className="mt-0.5 block text-xs text-slate-300">
+                  Type it how you'd say it — we&apos;ll break it into items and macros
+                </span>
+              </span>
+            </button>
+
             <AddSearchTab date={date} mealType={mealType} onClose={onClose} onManual={() => setView('manual')} />
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -130,6 +149,19 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
                 <Camera size={16} /> Photo
               </button>
             </div>
+          </div>
+        )}
+
+        {view === 'describe' && (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setView('browse')}
+              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
+            >
+              <ChevronLeft size={16} /> Back to search
+            </button>
+            <AddDescribeTab date={date} mealType={mealType} onClose={onClose} />
           </div>
         )}
 
