@@ -85,6 +85,23 @@ export function defaultWaterUnit(units: Units): WaterUnit {
   return units === 'imperial' ? 'oz' : 'L'
 }
 
+/**
+ * Snap an ml amount onto the unit's step grid, clamped to [0, maxMl].
+ *
+ * Rounding happens in DISPLAY units and the ceiling is rounded down onto the same
+ * grid, so the snapped value always converts back to exactly what the UI prints.
+ * Clamping in ml instead would land between steps at the top of the range — the
+ * glass would read "34 oz" while holding 33.8. Shared by the slider and everything
+ * that seeds it, so a label can never disagree with the amount it logs.
+ */
+export function snapWaterMl(ml: number, unit: WaterUnit, maxMl: number): number {
+  const u = WATER_UNITS[unit]
+  const EPSILON = 1e-9 // keeps floating point from shaving a whole step off the top
+  const maxOnGrid = Math.floor((u.fromMl(maxMl) + EPSILON) / u.step) * u.step
+  const stepped = Math.round(u.fromMl(ml) / u.step) * u.step
+  return u.toMl(Math.min(maxOnGrid, Math.max(0, stepped)))
+}
+
 // US gallon, for people who set their goal that way (e.g. the 75 Hard challenge).
 export const ML_PER_GALLON = 3785.41
 

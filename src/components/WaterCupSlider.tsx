@@ -1,6 +1,6 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { WATER_UNITS, type WaterUnit } from '../lib/units'
+import { WATER_UNITS, snapWaterMl, type WaterUnit } from '../lib/units'
 
 type WaterCupSliderProps = {
   /** The amount shown in the glass, in canonical ml. */
@@ -39,11 +39,7 @@ export default function WaterCupSlider({ valueMl, maxMl, unit, onChange, label }
   const display = u.fromMl(valueMl)
   const maxDisplay = u.fromMl(maxMl)
 
-  // Snap an ml amount onto the current unit's step and keep it in range.
-  const snapMl = (ml: number) => {
-    const stepped = Math.round(u.fromMl(ml) / u.step) * u.step
-    return clamp(u.toMl(stepped), 0, maxMl)
-  }
+  const snapMl = (ml: number) => snapWaterMl(ml, unit, maxMl)
 
   const setFromClientY = (clientY: number) => {
     const el = surfaceRef.current

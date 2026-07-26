@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sheet from '../../components/Sheet'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
@@ -35,6 +35,15 @@ export default function WaterGoalSheet({ open, onClose }: WaterGoalSheetProps) {
   const [draftMl, setDraftMl] = useState(goalMl)
   const [unit, setUnit] = useState<GoalWaterUnit>(() => defaultWaterUnit(units))
 
+  // This component lives OUTSIDE its own Sheet, so it never unmounts on close and
+  // the draft would survive a cancel — reopening would show the abandoned value
+  // and Save would commit it over whatever the goal actually is now.
+  useEffect(() => {
+    if (open) setDraftMl(goalMl)
+    // Only on open: re-syncing while editing would fight the user's typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
   const u = GOAL_WATER_UNITS[unit]
   // Show every preset in the user's everyday unit so the numbers are comparable.
   const display = GOAL_WATER_UNITS[defaultWaterUnit(units)]
@@ -47,8 +56,14 @@ export default function WaterGoalSheet({ open, onClose }: WaterGoalSheetProps) {
     { label: '3 L', ml: 3000 },
   ]
 
+  // A goal of zero breaks every readout that divides by it: the bar never fills,
+  // "0 to go" sticks forever, and "Goal reached" can never fire. Keep it positive.
+  const MIN_GOAL_ML = 250
+  const validGoal = draftMl >= MIN_GOAL_ML
+
   function save() {
-    setWaterGoalMl(Math.max(0, Math.round(draftMl)))
+    if (!validGoal) return
+    setWaterGoalMl(Math.round(draftMl))
     onClose()
   }
 
@@ -88,10 +103,16 @@ export default function WaterGoalSheet({ open, onClose }: WaterGoalSheetProps) {
         </div>
 
         <p className="text-center text-sm text-slate-300">
-          Goal: <span className="font-semibold text-sky-300">{fmt(draftMl)}</span>
+          {validGoal ? (
+            <>
+              Goal: <span className="font-semibold text-sky-300">{fmt(draftMl)}</span>
+            </>
+          ) : (
+            <span className="text-amber-300">Pick a goal above {fmt(MIN_GOAL_ML)}</span>
+          )}
         </p>
 
-        <Button variant="primary" full onClick={save}>
+        <Button variant="primary" full onClick={save} disabled={!validGoal}>
           Save goal
         </Button>
       </div>

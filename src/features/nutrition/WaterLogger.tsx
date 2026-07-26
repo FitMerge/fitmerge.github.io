@@ -6,7 +6,7 @@ import WaterCupSlider from '../../components/WaterCupSlider'
 import WaterGoalSheet from './WaterGoalSheet'
 import { useNutritionStore } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
-import { WATER_UNITS, defaultWaterUnit, type WaterUnit } from '../../lib/units'
+import { WATER_UNITS, defaultWaterUnit, snapWaterMl, type WaterUnit } from '../../lib/units'
 
 type WaterLoggerProps = {
   date: string
@@ -32,7 +32,11 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
   const units = useSettingsStore((s) => s.units)
 
   const [unit, setUnit] = useState<WaterUnit>(() => defaultWaterUnit(units))
-  const [amountMl, setAmountMl] = useState(DEFAULT_ADD_ML)
+  // Seeded through the snapper: a raw 250 ml prints as "0.3 L" but would log 250,
+  // so the button would promise less than it delivered.
+  const [amountMl, setAmountMl] = useState(() =>
+    snapWaterMl(DEFAULT_ADD_ML, defaultWaterUnit(units), MAX_ADD_ML),
+  )
   const [flash, setFlash] = useState<{ sign: 1 | -1; amount: number } | null>(null)
   const [goalOpen, setGoalOpen] = useState(false)
 
@@ -47,11 +51,15 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
   // so the running total updates in place and an over-pour is easy to walk back.
   function apply(sign: 1 | -1) {
     if (amountMl <= 0) return
-    addWater(date, sign * amountMl)
+    // Removing more than was logged only takes the day to zero, so report the
+    // amount that actually moved rather than the amount dialed.
+    const applied = sign < 0 ? Math.min(amountMl, current) : amountMl
+    if (applied <= 0) return
+    addWater(date, sign * applied)
     const reduce =
       typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (reduce) return
-    setFlash({ sign, amount: amountMl })
+    setFlash({ sign, amount: applied })
     window.setTimeout(() => setFlash(null), 750)
   }
 
@@ -63,7 +71,17 @@ export default function WaterLogger({ date, onDone }: WaterLoggerProps) {
         @media (prefers-reduced-motion: reduce) { .wc-pop { animation: none } }
       `}</style>
 
-      <SegmentedControl options={UNIT_OPTIONS} value={unit} onChange={setUnit} ariaLabel="Water unit" />
+      {/* Re-snap onto the new unit's grid so the readout keeps matching the amount
+          (0.3 L would otherwise show as "10 oz" while still logging 300 ml). */}
+      <SegmentedControl
+        options={UNIT_OPTIONS}
+        value={unit}
+        onChange={(next) => {
+          setUnit(next)
+          setAmountMl((ml) => snapWaterMl(ml, next, MAX_ADD_ML))
+        }}
+        ariaLabel="Water unit"
+      />
 
       {/* Running total — always in view, so you know where you're at as you log. */}
       <div className="rounded-xl bg-slate-800/60 p-3">
