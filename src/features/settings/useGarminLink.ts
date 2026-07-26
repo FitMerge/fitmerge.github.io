@@ -15,35 +15,44 @@ import { useSettingsStore } from '../../store/settings'
 const IDLE: GarminStatus = { state: 'idle', message: '', lastSyncAt: null }
 
 /**
- * App-wide: a live Garmin link IS the answer to "how do you track?", so record it
- * rather than asking again. Covers everyone who connected before that question
- * existed — their redundant manual sleep/steps tile disappears on its own.
- * Costs one status-doc listener, and none at all once the source is known.
+ * App-wide: a live Garmin link answers "how do you track?" for anyone who never
+ * got asked, so fill it in rather than asking again — their redundant manual
+ * sleep/steps tile disappears on its own.
+ *
+ * Only ever fills a BLANK source. An explicit choice always wins: someone with a
+ * connected Garmin who deliberately picks "No watch" would otherwise see it
+ * revert the instant the status snapshot arrived. Once a source is set (by this
+ * or by the user) the effect stops subscribing entirely.
  */
 export function useGarminSourceDetect(): void {
   const { user, status: authStatus } = useAuth()
   const uid = user?.uid ?? null
-  const trackingSource = useSettingsStore((s) => s.trackingSource)
+  const sourceKnown = useSettingsStore((s) => s.trackingSource !== undefined)
 
   useEffect(() => {
     if (!uid || authStatus !== 'signed-in' || !garminLinkAvailable()) return
-    if (trackingSource === 'garmin') return
+    if (sourceKnown) return
     let cancelled = false
     let unsub: (() => void) | null = null
     void subscribeStatus(uid, (next) => {
       if (cancelled || next.state !== 'linked') return
-      if (useSettingsStore.getState().trackingSource !== 'garmin') {
+      // Re-check against live state: the user may have chosen in the meantime.
+      if (useSettingsStore.getState().trackingSource === undefined) {
         useSettingsStore.getState().setTrackingSource('garmin')
       }
-    }).then((fn) => {
-      if (cancelled) fn()
-      else unsub = fn
     })
+      .then((fn) => {
+        if (cancelled) fn()
+        else unsub = fn
+      })
+      .catch(() => {
+        // Best-effort: failing to detect just means the user picks it themselves.
+      })
     return () => {
       cancelled = true
       unsub?.()
     }
-  }, [uid, authStatus, trackingSource])
+  }, [uid, authStatus, sourceKnown])
 }
 
 /**

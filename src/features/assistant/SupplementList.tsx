@@ -17,12 +17,14 @@ const SEVENTY_FIVE_HARD: { name: string; unit?: string; targetAmount?: number }[
 ]
 
 type PendingLink = {
+  /** The goal is created immediately; this is its id, so dismissing the prompt
+   * can never lose what the user typed. */
+  id: string
   name: string
-  amount?: number
-  unit?: string
   metric: GoalMetric
-  /** Target in display units (hours for sleep time), or 0 when none is needed. */
-  target: number
+  /** Kept as text while editing so a half-typed "7." isn't parsed away — the same
+   * reason NumberField holds a draft string. */
+  target: string
 }
 
 // Sleep time is stored in minutes but entered in hours; everything else is 1:1.
@@ -38,6 +40,7 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
   const log = useSupplementStore((s) => s.log)
   const toggle = useSupplementStore((s) => s.toggle)
   const addItem = useSupplementStore((s) => s.addItem)
+  const updateItem = useSupplementStore((s) => s.updateItem)
   const removeItem = useSupplementStore((s) => s.removeItem)
   const proteinGoal = useSettingsStore((s) => s.goals.protein)
 
@@ -74,39 +77,41 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
     const n = name.trim()
     if (!n) return
     const amt = parseFloat(amount)
+    // Create the goal up front. The link prompt is then a pure upgrade, so
+    // closing the sheet mid-prompt leaves a working manual goal rather than
+    // silently discarding what was typed.
+    const id = addItem({
+      name: n,
+      targetAmount: Number.isFinite(amt) ? amt : undefined,
+      unit: unit.trim() || undefined,
+    })
     const metric = suggestMetric(n)
     if (metric) {
       const def = GOAL_METRICS[metric]
-      const display = metric === 'sleepMinutes' ? 8 : metric === 'protein' ? proteinGoal || 150 : def.defaultTarget ?? 0
-      setPending({
-        name: n,
-        amount: Number.isFinite(amt) ? amt : undefined,
-        unit: unit.trim() || undefined,
-        metric,
-        target: display,
-      })
+      const display =
+        metric === 'sleepMinutes' ? 8 : metric === 'protein' ? proteinGoal || 150 : def.defaultTarget ?? 0
+      setName('')
+      setAmount('')
+      setUnit('')
       setAdding(false)
+      setPending({ id, name: n, metric, target: String(display) })
       return
     }
-    addItem({ name: n, targetAmount: Number.isFinite(amt) ? amt : undefined, unit: unit.trim() || undefined })
     resetForm()
   }
+
+  /** The typed target, or null when it isn't a usable positive number. A zero or
+   * blank target would make the goal complete itself every single day. */
+  const pendingTarget = (() => {
+    if (!pending) return null
+    if (!GOAL_METRICS[pending.metric].needsTarget) return undefined
+    const n = parseFloat(pending.target)
+    return Number.isFinite(n) && n > 0 ? toStoredTarget(pending.metric, n) : null
+  })()
 
   function confirmLink() {
-    if (!pending) return
-    const def = GOAL_METRICS[pending.metric]
-    addItem({
-      name: pending.name,
-      targetAmount: pending.amount,
-      unit: pending.unit,
-      link: { metric: pending.metric, target: def.needsTarget ? toStoredTarget(pending.metric, pending.target) : undefined },
-    })
-    resetForm()
-  }
-
-  function declineLink() {
-    if (!pending) return
-    addItem({ name: pending.name, targetAmount: pending.amount, unit: pending.unit })
+    if (!pending || pendingTarget === null) return
+    updateItem(pending.id, { link: { metric: pending.metric, target: pendingTarget } })
     resetForm()
   }
 
@@ -191,9 +196,11 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
           {GOAL_METRICS[pending.metric].needsTarget && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-400">Each day reach</span>
+              {/* Held as text: parsing on every keystroke would swallow the "."
+                  in "7.5" and turn a cleared field into a target of 0. */}
               <input
                 value={pending.target}
-                onChange={(e) => setPending({ ...pending, target: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => setPending({ ...pending, target: e.target.value.replace(/[^\d.]/g, '') })}
                 inputMode="decimal"
                 className="w-20 rounded-lg bg-slate-800 px-3 py-1.5 text-base text-slate-100 outline-none focus:ring-2 focus:ring-primary-500"
               />
@@ -204,13 +211,14 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
             <button
               type="button"
               onClick={confirmLink}
-              className="flex-1 rounded-lg bg-primary-500 py-2 text-sm font-semibold text-slate-950"
+              disabled={pendingTarget === null}
+              className="flex-1 rounded-lg bg-primary-500 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40"
             >
               Link it
             </button>
             <button
               type="button"
-              onClick={declineLink}
+              onClick={resetForm}
               className="flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-slate-300 active:bg-slate-700"
             >
               Keep manual

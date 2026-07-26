@@ -68,6 +68,19 @@ export default function GarminConnectSection() {
     return () => clearInterval(id)
   }, [waitingSince])
 
+  const { state } = status
+  const connected = state === 'linked'
+
+  // A settled result (or a code prompt) means the wait is genuinely over, so drop
+  // any "let me re-check" override and show that outcome. Must stay above the
+  // early return below — `available` flips when the user signs in, and a hook
+  // after that return would change the hook count mid-session and crash React.
+  useEffect(() => {
+    if (connected || state === 'needs_mfa' || state === 'error' || state === 'needs_relink') {
+      setReentering(false)
+    }
+  }, [connected, state])
+
   if (!available) {
     // Nothing actionable without an account, so say why rather than showing a
     // form that cannot work.
@@ -86,19 +99,9 @@ export default function GarminConnectSection() {
     )
   }
 
-  const { state } = status
-  const connected = state === 'linked'
   const working = (state === 'pending' || busy) && !reentering
   const elapsedMs = waitingSince ? Date.now() - waitingSince : 0
   const slow = elapsedMs > SLOW_CONNECT_MS
-
-  // A settled result (or a code prompt) means the wait is genuinely over, so drop
-  // any "let me re-check" override and show that outcome.
-  useEffect(() => {
-    if (connected || state === 'needs_mfa' || state === 'error' || state === 'needs_relink') {
-      setReentering(false)
-    }
-  }, [connected, state])
 
   return (
     <Card className="space-y-3">

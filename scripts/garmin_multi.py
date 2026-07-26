@@ -49,9 +49,15 @@ MFA_POLL_SECONDS = 3
 # weigh-ins and PRs are one call each, so those come back in full immediately; the
 # per-day wellness history is walked backwards a chunk at a time across scheduled
 # runs until it reaches the floor. See backfill_step / _next_backfill_window.
-DEEP_HISTORY_DAYS = 3650      # ~10 years: effectively "everything" for the cheap single-call data
-BACKFILL_CHUNK_DAYS = 90      # extra wellness history pulled per scheduled run
-BACKFILL_FLOOR_DAYS = 3650    # don't chase wellness metrics older than this
+#
+# These ceilings exist because each store is ONE Firestore document capped at 1 MiB.
+# Measured: a dense wellness day is ~700 B (so ~1,500 days fills the health doc) and
+# an imported activity ~390 B (~2,700 activities fills the workouts doc). Going past
+# either makes every write fail, which would strand the user's whole sync — so we
+# stop well short rather than chase history we cannot store.
+DEEP_HISTORY_DAYS = 1095      # ~3 years of activities/weigh-ins/PRs (single calls, cheap)
+BACKFILL_CHUNK_DAYS = 30      # extra wellness history per run; ~300 API calls, fits the job budget
+BACKFILL_FLOOR_DAYS = 730     # ~2 years of daily wellness — about half the health doc's capacity
 
 STATE_PENDING = "pending"
 STATE_NEEDS_MFA = "needs_mfa"
@@ -331,7 +337,10 @@ def sync_all_users(db, private_key, days=3, skip_uid=None, max_users=10):
                     activity_days=DEEP_HISTORY_DAYS if needs_deep else None,
                 )
                 if needs_deep:
-                    _seed_backfill_cursor(db, uid, days)
+                    # Seed from the window they were originally linked with, not
+                    # this run's 3-day routine window — otherwise the first chunk
+                    # re-pulls three months they already have.
+                    _seed_backfill_cursor(db, uid, max(days, int(cred.get("backfillDays") or 90)))
                     print(f"[{uid}] one-time deep history pull done", file=sys.stderr)
                 # Best-effort: walk this user's deep wellness history one chunk
                 # further back. A hiccup here must not fail the routine sync.

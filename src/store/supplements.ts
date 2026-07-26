@@ -29,6 +29,10 @@ type SupplementState = {
   items: Supplement[]
   /** dateISO → supplementId → amount taken that day (1 for a checked habit). */
   log: Record<string, Record<string, number>>
+  /** dateISO → supplementId → true when the user deliberately unchecked a goal.
+   * Without this an auto-linked goal re-ticks itself the moment any watched data
+   * changes, so unchecking it is impossible. Cleared when they check it again. */
+  manualClears: Record<string, Record<string, true>>
   addItem: (item: Omit<Supplement, 'id'>) => string
   updateItem: (id: string, patch: Partial<Omit<Supplement, 'id'>>) => void
   removeItem: (id: string) => void
@@ -54,6 +58,7 @@ export const useSupplementStore = create<SupplementState>()(
     (set, get) => ({
       items: [],
       log: {},
+      manualClears: {},
       addItem: (item) => {
         const id = uid()
         set({ items: [...get().items, { ...item, id }] })
@@ -80,7 +85,14 @@ export const useSupplementStore = create<SupplementState>()(
       toggle: (date, id) => {
         const item = get().items.find((i) => i.id === id)
         const done = (get().log[date]?.[id] ?? 0) > 0
-        set({ log: writeDose(get().log, date, id, done ? 0 : item?.targetAmount ?? 1) })
+        // Remember a deliberate uncheck so the auto-checker leaves it alone;
+        // checking it again (by hand) lifts that block.
+        const day = { ...(get().manualClears[date] ?? {}) }
+        if (done) day[id] = true
+        else delete day[id]
+        const manualClears = { ...get().manualClears, [date]: day }
+        if (Object.keys(day).length === 0) delete manualClears[date]
+        set({ log: writeDose(get().log, date, id, done ? 0 : item?.targetAmount ?? 1), manualClears })
       },
     }),
     { name: 'fm-supplements' },

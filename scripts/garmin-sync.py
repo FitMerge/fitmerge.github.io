@@ -101,6 +101,11 @@ _STRING_SESSION_FIELDS = (
 # distinct id here means every device applies the script's writes via its realtime listener.
 SYNC_CLIENT_ID = "garmin-sync-script"
 
+# Firestore caps a document at 1 MiB (1,048,576 bytes). Each store is one document
+# holding one JSON string, so stay clear of the ceiling — exceeding it makes every
+# subsequent write fail, not just the oversized one.
+MAX_DOC_BYTES = 900_000
+
 
 def build_payload(weights, sessions, health=None, records=None):
     """Assembles + validates the version-1 FitMerge JSON payload from already-shaped rows."""
@@ -450,6 +455,18 @@ def push_payload(db, uid, payload):
         cost once more than one person is syncing."""
         encoded = json.dumps(obj, separators=(",", ":"))
         if previous.get(store) == encoded:
+            return False
+        # Each store is one Firestore document, hard-capped at 1 MiB. Writing over
+        # that raises, and because this runs inside the shared sync loop a raise
+        # would leave the user's status stuck on a generic error with their whole
+        # sync dead. Skipping loudly keeps everything already stored intact.
+        size = len(encoded.encode("utf-8"))
+        if size > MAX_DOC_BYTES:
+            print(
+                f"warning: {store} document is {size} bytes, over the {MAX_DOC_BYTES} "
+                "safe limit — skipping this write. Older history will stop syncing.",
+                file=sys.stderr,
+            )
             return False
         ref(store).set({
             "payload": encoded,

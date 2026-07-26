@@ -86,11 +86,18 @@ export const GOAL_METRICS: Record<GoalMetric, MetricDef> = {
 // Detection order matters: "sleep score" must win over the looser "sleep".
 const DETECT_ORDER: GoalMetric[] = ['weighin', 'sleepScore', 'sleepMinutes', 'protein', 'steps']
 
+// Words that mean the goal is about a *thing*, not the metric — "Protein powder"
+// is a supplement to tick off, not a macro target, and offering to auto-complete
+// it from the food diary would check it on days it was never taken.
+const NOT_A_METRIC = /\b(powder|shake|bar|scoop|supplement|vest|class|machine|mill|sugar|snack)\b/
+
 /** The metric a freshly-typed goal name looks like it wants, if any. */
 export function suggestMetric(name: string): GoalMetric | null {
   const n = name.toLowerCase()
+  if (NOT_A_METRIC.test(n)) return null
   for (const m of DETECT_ORDER) {
-    if (GOAL_METRICS[m].keywords.some((k) => n.includes(k))) return m
+    // Word-boundary match so "weighted pull-ups" doesn't read as a weigh-in.
+    if (GOAL_METRICS[m].keywords.some((k) => new RegExp(`\\b${k}`).test(n))) return m
   }
   return null
 }
@@ -117,7 +124,7 @@ export function useGoalAutoCheck(): void {
   useEffect(() => {
     const ruled = items.filter((i) => i.link != null || goalRuleFor(i.name) !== null)
     if (ruled.length === 0) return
-    const { log, setDose } = useSupplementStore.getState()
+    const { log, setDose, manualClears } = useSupplementStore.getState()
     const today = todayISO()
     const weighDates = new Set(bodyEntries.map((e) => e.date))
 
@@ -131,6 +138,8 @@ export function useGoalAutoCheck(): void {
 
       for (const item of ruled) {
         if (doseFor(log, date, item.id) > 0) continue
+        // The user unchecked this on purpose — don't tick it straight back on.
+        if (manualClears[date]?.[item.id]) continue
 
         let met = false
         if (item.link) {
