@@ -26,6 +26,9 @@ type AddFoodSheetProps = {
 export default function AddFoodSheet({ open, onClose, date, defaultMealType }: AddFoodSheetProps) {
   const [mealType, setMealType] = useState<MealType>(defaultMealType)
   const [view, setView] = useState<View>('browse')
+  // What the search box was holding when it handed over, so the describe screen
+  // opens already working on it rather than asking for it again.
+  const [describeSeed, setDescribeSeed] = useState('')
   // `mounted` keeps the page in the DOM through its exit slide; `shown` drives the
   // transform so it slides UP from the bottom (MFP's full-screen add flow) instead
   // of hard-popping into place.
@@ -37,6 +40,7 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
     if (open) {
       setMealType(defaultMealType)
       setView('browse')
+      setDescribeSeed('')
     }
   }, [open, defaultMealType])
 
@@ -132,7 +136,16 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
               </span>
             </button>
 
-            <AddSearchTab date={date} mealType={mealType} onClose={onClose} onManual={() => setView('manual')} />
+            <AddSearchTab
+              date={date}
+              mealType={mealType}
+              onClose={onClose}
+              onManual={() => setView('manual')}
+              onDescribe={(q) => {
+                setDescribeSeed(q)
+                setView('describe')
+              }}
+            />
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -161,7 +174,13 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
             >
               <ChevronLeft size={16} /> Back to search
             </button>
-            <AddDescribeTab date={date} mealType={mealType} onClose={onClose} />
+            <AddDescribeTab
+              key={describeSeed}
+              date={date}
+              mealType={mealType}
+              onClose={onClose}
+              initialText={describeSeed}
+            />
           </div>
         )}
 

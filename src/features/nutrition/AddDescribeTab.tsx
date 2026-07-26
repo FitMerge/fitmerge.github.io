@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, Sparkles, Wand2 } from 'lucide-react'
 import Button from '../../components/Button'
 import { parseFoodDescription, VisionError, type FoodAnalysisItem } from '../../services/foodParse'
@@ -14,6 +14,9 @@ type AddDescribeTabProps = {
   date: string
   mealType: MealType
   onClose: () => void
+  /** Carried over from the search box — breaking it down starts immediately, so
+   * arriving here never means retyping what was already typed. */
+  initialText?: string
 }
 
 const EXAMPLES = [
@@ -34,14 +37,25 @@ function confidenceClasses(c: number): string {
  * real food — which is why people give up and estimate elsewhere. Here the whole
  * meal goes in as one sentence and comes back as reviewable, editable items.
  */
-export default function AddDescribeTab({ date, mealType, onClose }: AddDescribeTabProps) {
+export default function AddDescribeTab({ date, mealType, onClose, initialText }: AddDescribeTabProps) {
   const addEntry = useNutritionStore((s) => s.addEntry)
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey)
 
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText ?? '')
   const [stage, setStage] = useState<Stage>('input')
   const [items, setItems] = useState<ReviewItem[]>([])
   const [message, setMessage] = useState('')
+
+  // Coming from search, the intent is already stated — break it down without
+  // making the user press the button again. Guarded so a re-render can't re-ask.
+  const autoRan = useRef(false)
+  useEffect(() => {
+    if (autoRan.current || !initialText?.trim()) return
+    autoRan.current = true
+    void run()
+    // Runs once for the seed it arrived with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText])
 
   const included = items.filter((i) => i.included)
   const totals = included.reduce(

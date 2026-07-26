@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Loader2, PencilLine, Plus, ScanBarcode, Search, Trash2 } from 'lucide-react'
+import { Check, Loader2, PencilLine, Plus, ScanBarcode, Search, Trash2, Wand2 } from 'lucide-react'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
 import EmptyState from '../../components/EmptyState'
@@ -37,9 +37,29 @@ type AddSearchTabProps = {
   mealType: MealType
   onClose: () => void
   onManual?: () => void
+  /** Hand the typed text to the describe flow — the search box doubles as the
+   * "what did you eat" box, so a whole meal never has to be looked up piecemeal. */
+  onDescribe?: (query: string) => void
 }
 
-export default function AddSearchTab({ date, mealType, onClose, onManual }: AddSearchTabProps) {
+/**
+ * Whether a query reads like a meal rather than a single food. A database lookup
+ * can find "chicken breast"; it cannot find "chicken burrito bowl with rice and
+ * guac", and the honest thing is to offer the breakdown before showing rows the
+ * user will scroll past. Deliberately generous: the offer sits alongside results
+ * rather than replacing them, so a false positive costs nothing.
+ */
+export function looksLikeMeal(query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (q.length < 6) return false
+  if (/[,+]|\bwith\b|\band\b|\bplus\b/.test(q)) return true
+  // A leading quantity ("two eggs", "8oz sirloin", "1 cup rice") is a portion
+  // statement, which search handles badly and the parser handles well.
+  if (/^\d|\b(one|two|three|four|half|large|small|medium)\b/.test(q)) return true
+  return q.split(/\s+/).length >= 3
+}
+
+export default function AddSearchTab({ date, mealType, onClose, onManual, onDescribe }: AddSearchTabProps) {
   const customFoods = useNutritionStore((s) => s.customFoods)
   const entries = useNutritionStore((s) => s.entries)
   const savedMeals = useNutritionStore((s) => s.savedMeals)
@@ -311,7 +331,7 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
               }
             }}
             enterKeyHint="search"
-            placeholder="Search for a food"
+            placeholder={onDescribe ? 'Search, or describe what you ate' : 'Search for a food'}
             className="w-full bg-slate-800 rounded-lg pl-9 pr-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
@@ -427,6 +447,27 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
             </p>
           )}
         </div>
+      )}
+
+      {/* Sits above the rows, because for a described meal none of them are the
+          answer — but stays alongside rather than replacing them, so a plain
+          "chicken breast" search is untouched. */}
+      {trimmedQuery && onDescribe && looksLikeMeal(trimmedQuery) && (
+        <button
+          type="button"
+          onClick={() => onDescribe(trimmedQuery)}
+          className="flex w-full items-center gap-3 rounded-xl bg-gradient-to-br from-primary-500/20 to-slate-900 p-3 text-left active:opacity-80"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500/20">
+            <Wand2 size={17} className="text-primary-300" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-primary-200">Log this as a meal</span>
+            <span className="mt-0.5 block truncate text-xs text-slate-300">
+              Break “{trimmedQuery}” into items and macros
+            </span>
+          </span>
+        </button>
       )}
 
       {trimmedQuery && commonResults.length > 0 && (
@@ -548,6 +589,17 @@ export default function AddSearchTab({ date, mealType, onClose, onManual }: AddS
         brandedCombined.length === 0 && (
           <div className="space-y-3">
             <EmptyState icon={Search} title="No foods found" subtitle={`No results for "${trimmedQuery}"`} />
+            {/* Nothing matched, so offer the breakdown regardless of how the query
+                reads — a dead end is the worst place to leave someone mid-meal. */}
+            {onDescribe && !looksLikeMeal(trimmedQuery) && (
+              <button
+                type="button"
+                onClick={() => onDescribe(trimmedQuery)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500/15 py-3 text-sm font-medium text-primary-200 active:bg-primary-500/25"
+              >
+                <Wand2 size={16} /> Describe it instead
+              </button>
+            )}
             {onManual && (
               <button
                 type="button"
