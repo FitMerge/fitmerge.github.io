@@ -27,6 +27,7 @@ import SleepSection from '../progress/SleepSection'
 import FitnessTipsSection from './FitnessTipsSection'
 import IntensityDistributionSection from '../progress/IntensityDistributionSection'
 import HealthMetricsSection from '../progress/HealthMetricsSection'
+import HealthStorySection from '../progress/HealthStorySection'
 
 type TabKey = 'today' | 'vitals' | 'fitness'
 
@@ -86,7 +87,14 @@ export default function Health() {
 
       <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} ariaLabel="Health view" />
 
-      {tab === 'today' && <TodayTab desc={desc} />}
+      {tab === 'today' && (
+        <div className="space-y-4">
+          {/* Above the snapshot: what today's numbers mean only lands once you
+              know which way they have been moving. */}
+          <HealthStorySection />
+          <TodayTab desc={desc} />
+        </div>
+      )}
 
       {tab === 'vitals' && (
         <div className="space-y-4">
