@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import ScrubChart from '../../components/ScrubChart'
 import { Flame } from 'lucide-react'
 import Card from '../../components/Card'
 import SegmentedControl from '../../components/SegmentedControl'
@@ -97,8 +98,19 @@ export default function IntensityDistributionSection() {
 
       <SegmentedControl size="sm" options={RANGES} value={rangeKey} onChange={setRangeKey} ariaLabel="Intensity range" />
 
-      <div style={{ height: 200 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <ScrubChart<SplitPoint | TotalPoint>
+        data={data.points}
+        height={200}
+        label={(p) => `week of ${p.label}`}
+        values={(p) =>
+          'total' in p
+            ? [{ key: 'total', value: `${Math.round(p.total)} min` }]
+            : [
+                { key: 'mod', name: 'moderate', value: `${Math.round(p.moderate)}m`, color: '#38bdf8' },
+                { key: 'vig', name: 'vigorous', value: `${Math.round(p.vigorous)}m`, color: '#f97316' },
+              ]
+        }
+      >
           <BarChart data={data.points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#1e293b" vertical={false} />
             <XAxis
@@ -109,10 +121,6 @@ export default function IntensityDistributionSection() {
               minTickGap={20}
             />
             <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
-            <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#cbd5e1' }}
-            />
             {data.mode === 'split' ? (
               <>
                 <Bar dataKey="moderate" stackId="a" fill="#38bdf8" name="Moderate" radius={[2, 2, 0, 0]} />
@@ -122,8 +130,7 @@ export default function IntensityDistributionSection() {
               <Bar dataKey="total" fill="#38bdf8" name="Intensity minutes" radius={[2, 2, 0, 0]} />
             )}
           </BarChart>
-        </ResponsiveContainer>
-      </div>
+      </ScrubChart>
 
       <div className="flex items-center justify-center gap-4 text-[11px] text-slate-400">
         {data.mode === 'split' ? (

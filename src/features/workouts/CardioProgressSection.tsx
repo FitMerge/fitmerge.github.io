@@ -11,13 +11,12 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import { Footprints, TrendingDown, TrendingUp } from 'lucide-react'
 import Card from '../../components/Card'
+import ScrubChart from '../../components/ScrubChart'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import {
@@ -233,8 +232,23 @@ export default function CardioProgressSection({
       </div>
 
       {buckets.length > 0 ? (
-        <div style={{ height: 190 }}>
-          <ResponsiveContainer width="100%" height="100%">
+        <ScrubChart
+          data={buckets}
+          height={190}
+          label={(b) => b.label}
+          values={(b) => {
+            const v = b[activeMetric]
+            if (v === null || b.sessions === 0) return []
+            return [
+              {
+                key: 'v',
+                name: `${b.sessions} session${b.sessions === 1 ? '' : 's'} ·`,
+                value: `${fmt(v)}${yLabel ? ` ${yLabel}` : ''}`,
+              },
+            ]
+          }}
+          empty="no sessions"
+        >
             <ComposedChart data={buckets} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#1e293b" vertical={false} />
               {/* Categorical is correct here in a way it never was per session: every
@@ -255,12 +269,6 @@ export default function CardioProgressSection({
                 reversed={activeMetric === 'pace'}
                 tickFormatter={fmt}
               />
-              <Tooltip
-                cursor={{ fill: '#1e293b', fillOpacity: 0.5 }}
-                contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#cbd5e1' }}
-                formatter={(v: number) => [`${fmt(v)}${yLabel ? ` ${yLabel}` : ''}`, periodNoun(bucketSize)]}
-              />
               {/* Pace is an average, so it stays a line — a bar implies a total you
                   could add up, and averaging is not summing. Everything else is a
                   period total and reads best as a bar. */}
@@ -278,8 +286,7 @@ export default function CardioProgressSection({
                 <Bar dataKey={activeMetric} fill="#34d399" radius={[3, 3, 0, 0]} isAnimationActive={false} />
               )}
             </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+        </ScrubChart>
       ) : (
         <p className="py-2 text-center text-sm text-slate-500">No sessions in this range yet.</p>
       )}

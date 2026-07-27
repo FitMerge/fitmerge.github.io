@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import ScrubChart from '../../components/ScrubChart'
 import { Minus, Ruler, TrendingDown, TrendingUp } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
@@ -144,8 +145,12 @@ function MeasurementDetail({ series, unitLabel }: { series: SeriesPoint[]; unitL
         />
       </div>
 
-      <div style={{ height: 200 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <ScrubChart
+        data={series}
+        height={200}
+        label={(p) => p.label}
+        values={(p) => (p.value == null ? [] : [{ key: 'v', value: `${p.value.toFixed(1)} ${unitLabel}` }])}
+      >
           <LineChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#1e293b" vertical={false} />
             <XAxis
@@ -163,15 +168,9 @@ function MeasurementDetail({ series, unitLabel }: { series: SeriesPoint[]; unitL
               width={44}
               tickFormatter={(v: number) => v.toFixed(0)}
             />
-            <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#cbd5e1' }}
-              formatter={(v: number) => [`${v.toFixed(1)} ${unitLabel}`, '']}
-            />
             <Line type="monotone" dataKey="value" stroke="#34d399" strokeWidth={2} dot={{ r: 3, fill: '#34d399' }} connectNulls />
           </LineChart>
-        </ResponsiveContainer>
-      </div>
+      </ScrubChart>
     </div>
   )
 }

@@ -9,8 +9,9 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronDown, Gauge } from 'lucide-react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import Card from '../../components/Card'
+import ScrubChart from '../../components/ScrubChart'
 import { useWorkoutsStore } from '../../store/workouts'
 import { healthDaysDesc, useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
@@ -186,8 +187,22 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
       {trend.filter((t) => t.vdot !== null).length >= 3 && (
         <div className="space-y-1 border-t border-slate-800 pt-2.5">
           <p className="text-[11px] font-medium text-slate-400">Fitness trend</p>
-          <div style={{ height: 120 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <ScrubChart
+            data={trend}
+            height={120}
+            label={(t) => t.label}
+            values={(t) =>
+              t.vdot === null
+                ? []
+                : [
+                    { key: 'score', name: showingVo2 ? 'VO₂ max' : 'VDOT', value: t.vdot.toFixed(1) },
+                    ...(t.predicted5k !== null
+                      ? [{ key: '5k', name: '5K', value: formatDuration(t.predicted5k), color: '#64748b' }]
+                      : []),
+                  ]
+            }
+            empty="no run recorded"
+          >
               <LineChart data={trend} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#1e293b" vertical={false} />
                 <XAxis
@@ -205,17 +220,6 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
                   domain={['dataMin - 2', 'dataMax + 2']}
                   tickFormatter={(v: number) => v.toFixed(0)}
                 />
-                <Tooltip
-                  cursor={{ stroke: '#334155' }}
-                  contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#cbd5e1' }}
-                  formatter={(v: number, _n, entry) => [
-                    `VDOT ${v.toFixed(1)} · 5K ${formatDuration(
-                      (entry?.payload as { predicted5k: number }).predicted5k,
-                    )}`,
-                    'Best',
-                  ]}
-                />
                 {/* connectNulls, because a quiet week is not a loss of fitness and
                     breaking the line there left isolated dots that read as broken
                     rendering. The dots still mark only the periods with real data,
@@ -230,8 +234,7 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
                   isAnimationActive={false}
                 />
               </LineChart>
-            </ResponsiveContainer>
-          </div>
+          </ScrubChart>
           <p className="text-[10px] text-slate-500">
             {showingVo2
               ? 'Best VO₂ max per period, as recorded by your watch. It only moves on runs it measures.'

@@ -4,6 +4,7 @@ import {
   familyFor,
   familyMembers,
   groupedMetricEntries,
+  metricAxisValue,
   metricMeta,
   resolveFamily,
 } from './healthMetrics'
@@ -169,5 +170,31 @@ describe('resolveFamily', () => {
     const sleep = METRIC_FAMILIES.find((f) => f.key === 'sleepMinutes')!
     const r = resolveFamily(sleep, new Set(['sleepMinutes', 'deepSleepMinutes']))!
     expect(r.components).toEqual(['deepSleepMinutes'])
+  })
+})
+
+describe('metricAxisValue', () => {
+  it('labels a race-time axis with times, not thousands', () => {
+    // The bug: race predictions are stored in seconds, so the generic
+    // "over 1,000 → 1k" rule turned a 21:32 5K into "1k" and the whole y-axis
+    // of the race-predictor chart read like a list of distances.
+    expect(metricAxisValue('raceTime5k', 1292)).toBe('21:32')
+    expect(metricAxisValue('raceTimeMarathon', 12440)).toBe('3:27:20')
+  })
+
+  it('labels a duration axis in hours', () => {
+    expect(metricAxisValue('sleepMinutes', 420)).toBe('7h')
+    expect(metricAxisValue('sleepMinutes', 450)).toBe('7.5h')
+    expect(metricAxisValue('deepSleepMinutes', 45)).toBe('45m')
+  })
+
+  it('still abbreviates counts, which is what the rule was for', () => {
+    expect(metricAxisValue('steps', 17000)).toBe('17k')
+    expect(metricAxisValue('steps', 1500)).toBe('1.5k')
+  })
+
+  it('leaves ordinary scores alone', () => {
+    expect(metricAxisValue('hrv', 60)).toBe('60')
+    expect(metricAxisValue('vo2max', 47.3)).toBe('47')
   })
 })

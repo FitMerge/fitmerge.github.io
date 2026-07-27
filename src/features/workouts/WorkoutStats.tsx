@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import ScrubChart from '../../components/ScrubChart'
 import { ChevronLeft } from 'lucide-react'
 import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
@@ -83,8 +84,13 @@ export default function WorkoutStats({ onBack }: WorkoutStatsProps) {
 
       <Card>
         <h2 className="text-sm font-semibold text-slate-200 mb-3">Workouts per week</h2>
-        <div style={{ height: 180 }}>
-          <ResponsiveContainer width="100%" height="100%">
+        <ScrubChart
+          data={weekly}
+          height={180}
+          label={(w) => `week of ${w.label}`}
+          values={(w) => (w.count > 0 ? [{ key: 'n', value: `${w.count} workout${w.count === 1 ? '' : 's'}` }] : [])}
+          empty="none"
+        >
             <BarChart data={weekly} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#1e293b" vertical={false} />
               <XAxis
@@ -101,15 +107,9 @@ export default function WorkoutStats({ onBack }: WorkoutStatsProps) {
                 width={44}
                 allowDecimals={false}
               />
-              <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#cbd5e1' }}
-                formatter={(value: number) => [`${value} workout${value === 1 ? '' : 's'}`, 'Workouts']}
-              />
               <Bar dataKey="count" fill="#34d399" radius={[4, 4, 0, 0]} />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
+        </ScrubChart>
       </Card>
 
       <Card>

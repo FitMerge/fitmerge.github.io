@@ -9,6 +9,9 @@ export type MetricMeta = {
   label: string
   unit?: string
   format?: (v: number) => string
+  /** Tick label for a chart axis, where there is room for ~5 characters and no
+   * unit. Defaults to a rounded number with a `k` suffix over 10,000. */
+  axisFormat?: (v: number) => string
   order: number
   group: MetricGroup
   /** When true, a downward trend is an improvement (resting HR, stress, race times…). */
@@ -19,6 +22,8 @@ const round = (v: number) => String(Math.round(v))
 const commas = (v: number) => Math.round(v).toLocaleString()
 const one = (v: number) => v.toFixed(1)
 const hoursMinutes = (v: number) => `${Math.floor(v / 60)}h ${Math.round(v % 60)}m`
+/** Minutes → "7h" / "45m", for an axis where "7h 12m" does not fit. */
+const axisHours = (v: number) => (Math.abs(v) >= 60 ? `${(v / 60).toFixed(v % 60 === 0 ? 0 : 1)}h` : `${Math.round(v)}m`)
 /** Seconds → race-time string (m:ss under an hour, h:mm:ss over). */
 const raceTime = (secs: number) => {
   const s = Math.round(secs)
@@ -62,12 +67,12 @@ const CATALOG: Record<string, CatalogEntry> = {
   respirationMax: { label: 'Respiration (max)', unit: 'brpm', group: 'heart', order: 16.2, format: round },
 
   // ── Sleep ─────────────────────────────────────────────────────────────────
-  sleepMinutes: { label: 'Sleep', group: 'sleep', order: 20, format: hoursMinutes },
+  sleepMinutes: { label: 'Sleep', group: 'sleep', order: 20, format: hoursMinutes, axisFormat: axisHours },
   sleepScore: { label: 'Sleep score', group: 'sleep', order: 21, format: round },
-  deepSleepMinutes: { label: 'Deep sleep', group: 'sleep', order: 22, format: hoursMinutes },
-  remSleepMinutes: { label: 'REM sleep', group: 'sleep', order: 23, format: hoursMinutes },
-  lightSleepMinutes: { label: 'Light sleep', group: 'sleep', order: 24, format: hoursMinutes },
-  awakeMinutes: { label: 'Awake time', group: 'sleep', order: 25, format: hoursMinutes, lowerIsBetter: true },
+  deepSleepMinutes: { label: 'Deep sleep', group: 'sleep', order: 22, format: hoursMinutes, axisFormat: axisHours },
+  remSleepMinutes: { label: 'REM sleep', group: 'sleep', order: 23, format: hoursMinutes, axisFormat: axisHours },
+  lightSleepMinutes: { label: 'Light sleep', group: 'sleep', order: 24, format: hoursMinutes, axisFormat: axisHours },
+  awakeMinutes: { label: 'Awake time', group: 'sleep', order: 25, format: hoursMinutes, axisFormat: axisHours, lowerIsBetter: true },
 
   // ── Training & performance ─────────────────────────────────────────────────
   vo2max: { label: 'VO₂ Max', group: 'training', order: 30, format: one },
@@ -77,10 +82,10 @@ const CATALOG: Record<string, CatalogEntry> = {
   enduranceScore: { label: 'Endurance score', group: 'training', order: 34, format: round },
   hillScore: { label: 'Hill score', group: 'training', order: 35, format: round },
   fitnessAge: { label: 'Fitness age', unit: 'yr', group: 'training', order: 36, format: one, lowerIsBetter: true },
-  raceTime5k: { label: 'Race predictor · 5K', group: 'training', order: 37, format: raceTime, lowerIsBetter: true },
-  raceTime10k: { label: 'Race predictor · 10K', group: 'training', order: 38, format: raceTime, lowerIsBetter: true },
-  raceTimeHalf: { label: 'Race predictor · Half', group: 'training', order: 39, format: raceTime, lowerIsBetter: true },
-  raceTimeMarathon: { label: 'Race predictor · Marathon', group: 'training', order: 40, format: raceTime, lowerIsBetter: true },
+  raceTime5k: { label: 'Race predictor · 5K', group: 'training', order: 37, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
+  raceTime10k: { label: 'Race predictor · 10K', group: 'training', order: 38, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
+  raceTimeHalf: { label: 'Race predictor · Half', group: 'training', order: 39, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
+  raceTimeMarathon: { label: 'Race predictor · Marathon', group: 'training', order: 40, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
 
   // ── Body composition ────────────────────────────────────────────────────────
   bmi: { label: 'BMI', group: 'body', order: 50, format: one },
@@ -127,6 +132,20 @@ export function formatMetric(key: string, v: number): string {
 export function metricValue(key: string, v: number): string {
   const m = metricMeta(key)
   return m.format ? m.format(v) : Number.isInteger(v) ? String(v) : v.toFixed(1)
+}
+
+/**
+ * A y-axis tick label. Axis ticks are not just short values — they have to be the
+ * right KIND of value, and the generic "over 1,000 → 1k" rule was not. A 5K race
+ * prediction is stored in seconds, so 1,500 became "2k" and the race-predictor
+ * chart's axis read "1k, 2k, 3k" — a list of distances, on a chart about time.
+ */
+export function metricAxisValue(key: string, v: number): string {
+  const m = metricMeta(key)
+  if (m.axisFormat) return m.axisFormat(v)
+  if (Math.abs(v) >= 10000) return `${Math.round(v / 1000)}k`
+  if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`
+  return String(Math.round(v))
 }
 
 /** Order metric keys by catalog priority, then alphabetically. */

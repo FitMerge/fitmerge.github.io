@@ -2,7 +2,8 @@
 // hikes…) — the consistency view that per-activity pace charts can't show.
 
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts'
+import ScrubChart from '../../components/ScrubChart'
 import { Timer } from 'lucide-react'
 import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
@@ -62,8 +63,13 @@ export default function ActiveTimeSection() {
         </p>
       </div>
 
-      <div style={{ height: 150 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <ScrubChart
+        data={weeks}
+        height={150}
+        label={(w) => `week of ${w.label}`}
+        values={(w) => (w.minutes > 0 ? [{ key: 'min', value: fmtH(w.minutes) }] : [])}
+        empty="no activity"
+      >
           <BarChart data={weeks} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#1e293b" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={24} />
@@ -74,18 +80,12 @@ export default function ActiveTimeSection() {
               width={32}
               tickFormatter={(v: number) => (v >= 60 ? `${Math.round(v / 60)}h` : `${v}m`)}
             />
-            <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#cbd5e1' }}
-              formatter={(v: number) => [fmtH(v), 'Active time']}
-            />
             {avgMin > 0 && (
               <ReferenceLine y={avgMin} stroke="#64748b" strokeDasharray="4 3" label={{ value: 'usual', position: 'insideBottomLeft', fill: '#64748b', fontSize: 10 }} />
             )}
             <Bar dataKey="minutes" fill="#38bdf8" radius={[5, 5, 0, 0]} />
           </BarChart>
-        </ResponsiveContainer>
-      </div>
+      </ScrubChart>
       <p className="text-[11px] text-slate-500">Each bar is a week (label = week start). All cardio activities combined.</p>
     </Card>
   )

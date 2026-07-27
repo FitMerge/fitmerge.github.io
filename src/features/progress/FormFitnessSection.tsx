@@ -5,13 +5,12 @@ import {
   ComposedChart,
   Line,
   ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import { Activity, Loader2, Sparkles } from 'lucide-react'
 import Card from '../../components/Card'
+import ScrubChart from '../../components/ScrubChart'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
 import SegmentedControl from '../../components/SegmentedControl'
@@ -197,18 +196,34 @@ export default function FormFitnessSection() {
 
       <SegmentedControl size="sm" options={RANGES} value={rangeKey} onChange={setRangeKey} ariaLabel="Form & fitness range" />
 
-      <div style={{ height: 200 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <ScrubChart
+        data={chartData}
+        height={200}
+        label={(p) => p.label}
+        // The series runs 28 days into the future. "Latest" should mean the last
+        // day that actually happened, not the end of a forecast.
+        defaultIndex={chartData.map((p) => p.ctl != null).lastIndexOf(true)}
+        values={(p) => {
+          const ctl = p.ctl ?? p.ctlProj
+          const tsb = p.tsb ?? p.tsbProj
+          const projected = p.ctl == null && p.ctlProj != null
+          if (ctl == null && tsb == null) return []
+          return [
+            ...(ctl != null
+              ? [{ key: 'ctl', name: projected ? 'fitness (proj)' : 'fitness', value: ctl.toFixed(0), color: '#38bdf8' }]
+              : []),
+            ...(p.atl != null ? [{ key: 'atl', name: 'fatigue', value: p.atl.toFixed(0), color: '#fbbf24' }] : []),
+            ...(tsb != null
+              ? [{ key: 'tsb', name: 'form', value: `${tsb > 0 ? '+' : ''}${tsb.toFixed(0)}`, color: '#34d399' }]
+              : []),
+          ]
+        }}
+      >
           <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#1e293b" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={28} />
             <YAxis yAxisId="load" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
             <YAxis yAxisId="tsb" orientation="right" hide domain={['auto', 'auto']} />
-            <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#cbd5e1' }}
-              formatter={(v: number, name: string) => [v.toFixed(0), name]}
-            />
             <ReferenceLine yAxisId="tsb" y={0} stroke="#334155" strokeDasharray="3 3" />
             <Area yAxisId="tsb" type="monotone" dataKey="tsb" name="Form" stroke="#34d399" fill="#34d399" fillOpacity={0.14} strokeWidth={2} connectNulls={false} />
             <Line yAxisId="load" type="monotone" dataKey="ctl" name="Fitness" stroke="#38bdf8" strokeWidth={2.5} dot={false} connectNulls={false} />
@@ -216,8 +231,7 @@ export default function FormFitnessSection() {
             <Line yAxisId="load" type="monotone" dataKey="ctlProj" name="Projected fitness" stroke="#38bdf8" strokeWidth={1.5} dot={false} strokeDasharray="2 3" strokeOpacity={0.7} connectNulls />
             <Line yAxisId="tsb" type="monotone" dataKey="tsbProj" name="Projected form" stroke="#34d399" strokeWidth={1.5} dot={false} strokeDasharray="2 3" strokeOpacity={0.7} connectNulls />
           </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+      </ScrubChart>
 
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
         <Legend color="#38bdf8" label="Fitness" />

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, XAxis, YAxis } from 'recharts'
+import ScrubChart from '../../components/ScrubChart'
 import Card from '../../components/Card'
 import { useNutritionStore, entriesForDate } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
@@ -56,8 +57,23 @@ export default function CaloriesSection({ range }: CaloriesSectionProps) {
         </div>
       ) : (
         <>
-          <div style={{ height: 180 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <ScrubChart
+            data={chartData}
+            height={180}
+            label={(p) => p.label}
+            values={(p) =>
+              p.calories > 0
+                ? [
+                    {
+                      key: 'kcal',
+                      value: `${p.calories.toLocaleString()} kcal`,
+                      color: p.calories > goals.calories ? '#fbbf24' : undefined,
+                    },
+                  ]
+                : []
+            }
+            empty="nothing logged"
+          >
               <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#1e293b" vertical={false} />
                 <XAxis
@@ -74,11 +90,6 @@ export default function CaloriesSection({ range }: CaloriesSectionProps) {
                   width={38}
                   tickFormatter={kFmt}
                 />
-                <Tooltip
-                  contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#cbd5e1' }}
-                  formatter={(value: number) => [`${value.toLocaleString()} kcal`, 'Calories']}
-                />
                 {/* extendDomain keeps the goal line visible even when every bar is under it. */}
                 <ReferenceLine
                   y={goals.calories}
@@ -93,8 +104,7 @@ export default function CaloriesSection({ range }: CaloriesSectionProps) {
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
-          </div>
+          </ScrubChart>
           {logged.length > 0 && (
             <p className="mt-1.5 text-[11px] text-slate-500">
               {overDays === 0

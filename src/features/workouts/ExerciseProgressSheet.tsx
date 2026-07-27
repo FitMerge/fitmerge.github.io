@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import ScrubChart from '../../components/ScrubChart'
 import Sheet from '../../components/Sheet'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
@@ -98,8 +99,12 @@ export default function ExerciseProgressSheet({ exerciseId, onClose }: ExerciseP
           )}
 
           {points.length >= 2 ? (
-            <div style={{ height: 180 }}>
-              <ResponsiveContainer width="100%" height="100%">
+            <ScrubChart
+              data={points}
+              height={180}
+              label={(p) => p.label}
+              values={(p) => [{ key: 'e1rm', name: 'est. 1RM', value: `${p.est1RM.toFixed(1)} ${unitLabel}` }]}
+            >
                 <LineChart data={points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="#1e293b" vertical={false} />
                   <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -111,11 +116,6 @@ export default function ExerciseProgressSheet({ exerciseId, onClose }: ExerciseP
                     width={44}
                     tickFormatter={(value: number) => value.toFixed(0)}
                   />
-                  <Tooltip
-                    contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-                    labelStyle={{ color: '#cbd5e1' }}
-                    formatter={(value: number) => [`${value.toFixed(1)} ${unitLabel}`, 'Est. 1RM']}
-                  />
                   <Line
                     type="monotone"
                     dataKey="est1RM"
@@ -124,8 +124,7 @@ export default function ExerciseProgressSheet({ exerciseId, onClose }: ExerciseP
                     dot={{ r: 3, fill: '#34d399' }}
                   />
                 </LineChart>
-              </ResponsiveContainer>
-            </div>
+            </ScrubChart>
           ) : (
             <p className="text-sm text-slate-500 py-2 text-center">Log more sessions to see a trend.</p>
           )}

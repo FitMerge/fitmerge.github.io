@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts'
 import Card from '../../components/Card'
+import ScrubChart from '../../components/ScrubChart'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { weightUnitLabel } from '../workouts/utils'
@@ -50,9 +51,16 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
           <p className="mt-1 text-[11px] text-slate-600">Strength volume comes from workouts you log in the app — imported Garmin cardio doesn’t count here.</p>
         </div>
       ) : (
-        <div style={{ height: 180 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+        <ScrubChart
+          data={chartData}
+          height={180}
+          label={(p) => p.label}
+          values={(p) =>
+            p.volume > 0 ? [{ key: 'v', value: `${Math.round(p.volume).toLocaleString()} ${unitLabel}` }] : []
+          }
+          empty="no lifting"
+        >
+          <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#1e293b" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis
@@ -61,11 +69,6 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
                 tickLine={false}
                 width={36}
                 tickFormatter={kFmt}
-              />
-              <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#cbd5e1' }}
-                formatter={(value: number) => [`${Math.round(value).toLocaleString()} ${unitLabel}`, 'Volume']}
               />
               {avgVolume > 0 && (
                 <ReferenceLine
@@ -76,9 +79,8 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
                 />
               )}
               <Bar dataKey="volume" fill="#818cf8" radius={[5, 5, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+          </BarChart>
+        </ScrubChart>
       )}
     </Card>
   )

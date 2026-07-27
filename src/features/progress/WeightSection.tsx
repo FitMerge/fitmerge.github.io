@@ -4,13 +4,12 @@ import {
   Line,
   LineChart,
   ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import { ArrowDown, ArrowUp, Flag, Plus, Scale, Target, Trash2 } from 'lucide-react'
 import Card from '../../components/Card'
+import ScrubChart from '../../components/ScrubChart'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
 import SegmentedControl from '../../components/SegmentedControl'
@@ -151,8 +150,18 @@ export default function WeightSection() {
         )}
       </button>
 
-      <div style={{ height: 190 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <ScrubChart
+        data={chartData}
+        height={190}
+        label={(p) => p.label}
+        values={(p) => [
+          ...(p.weight != null ? [{ key: 'w', name: 'weigh-in', value: `${p.weight.toFixed(1)} ${unitLabel}` }] : []),
+          ...(p.trend != null
+            ? [{ key: 't', name: 'trend', value: `${p.trend.toFixed(1)} ${unitLabel}`, color: '#34d399' }]
+            : []),
+        ]}
+        empty="no weigh-in"
+      >
           <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#1e293b" vertical={false} />
             <XAxis
@@ -169,14 +178,6 @@ export default function WeightSection() {
               domain={yDomain}
               width={40}
               tickFormatter={(value: number) => value.toFixed(0)}
-            />
-            <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#cbd5e1' }}
-              formatter={(value: number, name) => [
-                `${value.toFixed(1)} ${unitLabel}`,
-                name === 'trend' ? 'Trend' : 'Weigh-in',
-              ]}
             />
             {goalDisplay !== undefined && (
               <ReferenceLine
@@ -208,8 +209,7 @@ export default function WeightSection() {
               isAnimationActive={false}
             />
           </LineChart>
-        </ResponsiveContainer>
-      </div>
+      </ScrubChart>
       <p className="mt-1 text-center text-[11px] text-slate-500">
         Bold line = smoothed trend · dots = actual weigh-ins
       </p>

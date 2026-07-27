@@ -6,15 +6,14 @@ import {
   Line,
   ReferenceArea,
   ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import Sheet from '../../components/Sheet'
 import SegmentedControl from '../../components/SegmentedControl'
-import { formatMetric, metricMeta } from '../../lib/healthMetrics'
+import ScrubChart from '../../components/ScrubChart'
+import { formatMetric, metricAxisValue, metricMeta } from '../../lib/healthMetrics'
 import {
   HEALTH_RANGE_OPTIONS,
   bandPosition,
@@ -129,9 +128,22 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                 </div>
               )}
 
-              <div style={{ height: 200 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <ScrubChart
+                data={series}
+                height={200}
+                label={(p) => p.label}
+                values={(p) =>
+                  p.value === null
+                    ? []
+                    : [
+                        { key: 'value', value: formatMetric(charted, p.value) },
+                        ...(showAvg && p.avg != null
+                          ? [{ key: 'avg', name: '7d', value: formatMetric(charted, p.avg), color: '#38bdf8' }]
+                          : []),
+                      ]
+                }
+              >
+                <ComposedChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="metricFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#34d399" stopOpacity={0.35} />
@@ -151,16 +163,8 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                       axisLine={false}
                       tickLine={false}
                       domain={['auto', 'auto']}
-                      width={44}
-                      tickFormatter={(v: number) => (Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))}
-                    />
-                    <Tooltip
-                      contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
-                      labelStyle={{ color: '#cbd5e1' }}
-                      formatter={(v: number, name) => [
-                        formatMetric(charted, v),
-                        name === 'avg' ? '7-pt avg' : meta?.label ?? '',
-                      ]}
+                      width={48}
+                      tickFormatter={(v: number) => metricAxisValue(charted, v)}
                     />
                     {/* Typical-range band (15th–85th pct) + median = "your normal". */}
                     {band && (
@@ -198,9 +202,8 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                         isAnimationActive={false}
                       />
                     )}
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
+                </ComposedChart>
+              </ScrubChart>
 
               <p className="text-center text-xs text-slate-500">
                 {stats.count} day{stats.count === 1 ? '' : 's'} of data
