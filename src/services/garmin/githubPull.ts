@@ -83,8 +83,25 @@ async function dispatchWorkflow(
   if (!res.ok) throw new GarminPullError(await ghError(res))
 }
 
-export async function triggerGarminPull(token: string, repo: string, days = 14): Promise<void> {
-  return dispatchWorkflow(token, repo, WORKFLOW_FILE, { days: String(days) })
+/**
+ * Run the Garmin pull now.
+ *
+ * `days` bounds daily wellness metrics, which cost ~9 API calls each — keep it
+ * small. `activityDays` bounds activities, weigh-ins and personal records, which
+ * are one ranged call however far back they reach, so a backfill asks for years
+ * there and leaves `days` alone. Widening both together is what made the owner's
+ * backfill overrun the job timeout and, since the write happens only at the end,
+ * save nothing at all.
+ */
+export async function triggerGarminPull(
+  token: string,
+  repo: string,
+  days = 14,
+  activityDays?: number,
+): Promise<void> {
+  const inputs: Record<string, string> = { days: String(days) }
+  if (activityDays !== undefined) inputs.activity_days = String(activityDays)
+  return dispatchWorkflow(token, repo, WORKFLOW_FILE, inputs)
 }
 
 /**

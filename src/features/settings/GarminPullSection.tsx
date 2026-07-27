@@ -87,20 +87,24 @@ export default function GarminPullSection() {
             </span>
           </Button>
 
-          {/* Fields like distance were added to the importer over time and only
-              land when an activity is first saved, so older sessions can be
-              missing them. This refills those gaps across a year of history. */}
+          {/* Fields like distance, heart rate and ascent were added to the importer
+              over time and only land when an activity is first saved, so older
+              sessions can be missing them. Activities come back in one ranged call,
+              so this sweeps years of them while leaving the expensive per-day
+              wellness metrics on their normal short window — widening both is what
+              used to make this exceed the job timeout and save nothing. */}
           <Button
             variant="ghost"
             full
-            onClick={() => pull(BACKFILL_DAYS)}
+            onClick={() => void pull(14, BACKFILL_DAYS)}
             disabled={status === 'dispatching' || status === 'running'}
           >
-            Backfill last 12 months
+            Backfill 3 years of activities
           </Button>
           <p className="text-[11px] text-slate-500">
-            Use this once if older activities are missing distance or pace. It fills in gaps
-            without changing anything already recorded, and takes a few minutes.
+            Use this once if older activities are missing distance, pace, heart rate or ascent.
+            It fills in gaps without changing anything already recorded, and takes about as long
+            as an ordinary sync.
           </p>
 
           {status === 'running' && (

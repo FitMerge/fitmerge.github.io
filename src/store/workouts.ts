@@ -61,17 +61,32 @@ export const useWorkoutsStore = create<WorkoutsState>()(
       },
       addImportedSessions: (incoming) => {
         const existing = get().sessions
-        // Key on date+name+duration+kcal so two distinct activities on the same day
-        // (e.g. a morning and evening walk) are both kept, while re-importing the
-        // same file stays idempotent.
-        const key = (s: Pick<WorkoutSession, 'date' | 'name' | 'durationMin' | 'kcal'>) =>
-          `${s.date}::${s.name}::${s.durationMin ?? ''}::${s.kcal ?? ''}`
-        const seen = new Set(existing.filter((s) => s.imported).map(key))
+        // Two keys per session, strongest first — this must stay in step with
+        // `_session_keys` in scripts/garmin-sync.py.
+        //
+        // Garmin's activity id is exact and survives Garmin revising a duration. The
+        // date+name+duration+kcal fallback covers sessions stored before that id was
+        // captured, and keeps two activities on one day (a morning and an evening
+        // walk) distinct.
+        //
+        // The fallback rounds both numbers first: the sync stores rounded values
+        // while a file import keeps the raw ones, so comparing them unrounded made
+        // one activity produce two different keys — importing it twice instead of
+        // recognising it.
+        const keysFor = (s: Partial<WorkoutSession>): string[] => {
+          const keys: string[] = []
+          if (s.garminActivityId) keys.push(`gid::${s.garminActivityId}`)
+          const duration = typeof s.durationMin === 'number' ? s.durationMin.toFixed(1) : ''
+          const kcal = typeof s.kcal === 'number' ? String(Math.round(s.kcal)) : ''
+          keys.push(`${s.date}::${s.name}::${duration}::${kcal}`)
+          return keys
+        }
+        const seen = new Set(existing.filter((s) => s.imported).flatMap(keysFor))
         const added: WorkoutSession[] = []
         for (const s of incoming) {
-          const k = key(s)
-          if (seen.has(k)) continue
-          seen.add(k)
+          const keys = keysFor(s)
+          if (keys.some((k) => seen.has(k))) continue
+          for (const k of keys) seen.add(k)
           added.push({ ...s, id: uid() })
         }
         if (added.length > 0) set({ sessions: [...existing, ...added] })

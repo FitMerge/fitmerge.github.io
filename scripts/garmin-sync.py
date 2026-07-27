@@ -190,14 +190,47 @@ def _js_num_str(v):
 
 
 def _session_key(s):
-    """Dedupe key for an imported session — must match the app's
-    `${date}::${name}::${durationMin ?? ''}::${kcal ?? ''}` (workouts store)."""
-    return "::".join([
+    """Strongest key for an imported session. See _session_keys."""
+    return _session_keys(s)[0]
+
+
+def _session_keys(s):
+    """Every key an imported session can be matched on, strongest first.
+
+    Garmin's activity id is exact, and survives Garmin revising a duration or a
+    calorie estimate after the fact. The date+name+duration+kcal fallback matches
+    the app's `${date}::${name}::${durationMin ?? ''}::${kcal ?? ''}` and covers
+    sessions stored before that id was captured.
+
+    Both are indexed and an incoming activity is looked up under each in turn, which
+    is what makes adopting the id safe: matching an old session on the composite key
+    lets the backfill stamp the id on, so later runs match exactly. Keying on the id
+    alone would have made every stored session look new and duplicated the lot.
+
+    The fallback rounds both numbers BEFORE formatting, which the earlier version did
+    not. Incoming activities are rounded by the sanitiser (43.5, 690) while a session
+    stored from a file import keeps the raw value (43.516666, 690.4), so one activity
+    produced two different keys and was never recognised — never backfilled with
+    distance, and silently duplicated on every run.
+    """
+    keys = []
+    activity_id = s.get("garminActivityId")
+    if activity_id:
+        keys.append("gid::%s" % activity_id)
+    keys.append("::".join([
         str(s.get("date")),
         str(s.get("name")),
-        _js_num_str(s.get("durationMin")),
-        _js_num_str(s.get("kcal")),
-    ])
+        _js_num_str(_round_like_sanitiser(s.get("durationMin"), 1)),
+        _js_num_str(_round_like_sanitiser(s.get("kcal"), 0)),
+    ]))
+    return keys
+
+
+def _round_like_sanitiser(v, digits):
+    """Round the way build_payload does, passing a missing value straight through."""
+    if v is None or isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return round(float(v), digits) if digits else round(float(v))
 
 
 def _epoch_noon_ms(ds):
@@ -332,15 +365,15 @@ def merge_workouts(existing, sessions, records=None):
             row = dict(s)
             merged.append(row)
             if row.get("imported"):
-                by_key.setdefault(_session_key(row), row)
+                for key in _session_keys(row):
+                    by_key.setdefault(key, row)
         else:
             merged.append(s)
 
     added = 0
     updated = 0
     for s in sessions:
-        key = _session_key(s)
-        target = by_key.get(key)
+        target = next((by_key[k] for k in _session_keys(s) if k in by_key), None)
         if target is not None:
             changed = False
             for k in _IMPORT_FIELDS:
@@ -348,6 +381,10 @@ def merge_workouts(existing, sessions, records=None):
                     target[k] = s[k]
                     changed = True
             if changed:
+                # A session matched on the composite key may have just gained its
+                # activity id — index it under that too so later runs match exactly.
+                for key in _session_keys(target):
+                    by_key.setdefault(key, target)
                 updated += 1
             continue
 
@@ -365,7 +402,8 @@ def merge_workouts(existing, sessions, records=None):
             if k in s:
                 row[k] = s[k]
         merged.append(row)
-        by_key[key] = row
+        for key in _session_keys(row):
+            by_key.setdefault(key, row)
         added += 1
 
     # Personal records are replaced wholesale rather than merged: Garmin recomputes
@@ -984,6 +1022,68 @@ def fetch_daily_metrics(client, start, end):
     return [{"date": d, "metrics": m} for d, m in by_date.items()]
 
 
+
+def gs_backfill_unrounded():
+    """A session stored with raw values is matched by the rounded incoming one, so it
+    gains distance instead of being duplicated."""
+    inc = build_payload([], [{"name": "Run", "date": "2026-07-19",
+                              "durationMin": 2611.0 / 60.0, "kcal": 690.4,
+                              "distanceKm": 10.0}], [], [])["sessions"][0]
+    stored = {"id": "a", "name": "Run", "date": "2026-07-19", "imported": True,
+              "entries": [], "durationMin": 2611.0 / 60.0, "kcal": 690.4}
+    merged, added, updated = merge_workouts({"sessions": [stored]}, [inc])
+    return (added == 0 and updated == 1
+            and len(merged["sessions"]) == 1
+            and merged["sessions"][0].get("distanceKm") == 10.0)
+
+
+def gs_backfill_by_activity_id():
+    """Sessions stored before activity ids existed still match, gain the id, and then
+    survive Garmin revising the duration without duplicating."""
+    inc = build_payload([], [{"name": "Run", "date": "2026-07-19", "durationMin": 43.5,
+                              "kcal": 690, "distanceKm": 10.0,
+                              "garminActivityId": "555"}], [], [])["sessions"][0]
+    stored = {"id": "a", "name": "Run", "date": "2026-07-19", "imported": True,
+              "entries": [], "durationMin": 43.5, "kcal": 690}
+    merged, added, updated = merge_workouts({"sessions": [stored]}, [inc])
+    first_ok = (added == 0 and updated == 1
+                and merged["sessions"][0].get("garminActivityId") == "555")
+    merged2, added2, _ = merge_workouts(merged, [dict(inc, durationMin=43.7)])
+    return first_ok and added2 == 0 and len(merged2["sessions"]) == 1
+
+
+def gs_two_activities_one_day():
+    """A morning and an evening walk stay two activities, not one."""
+    rows = build_payload([], [
+        {"name": "Walk", "date": "2026-07-19", "durationMin": 30, "kcal": 100},
+        {"name": "Walk", "date": "2026-07-19", "durationMin": 45, "kcal": 160},
+    ], [], [])["sessions"]
+    merged, added, _ = merge_workouts({"sessions": []}, rows)
+    return added == 2 and len(merged["sessions"]) == 2
+
+
+def gs_owner_activity_window():
+    """The owner's own pull can reach years of activities on a short metrics window."""
+    seen = {}
+
+    class FakeClient:
+        def get_activities_by_date(self, start, end):
+            seen["activities"] = (start, end)
+            return []
+
+        def get_body_composition(self, start, end):
+            return {}
+
+        def get_stats(self, ds):
+            seen.setdefault("metric_days", set()).add(ds)
+            return {}
+
+    fetch_from_garmin(3, client=FakeClient(), activity_days=1095)
+    a_start, a_end = seen["activities"]
+    span = (date.fromisoformat(a_end) - date.fromisoformat(a_start)).days
+    return span == 1095 and len(seen.get("metric_days", ())) == 4
+
+
 def self_test():
     canned_weights = [
         {"date": "2026-06-01", "weightKg": 82.4, "bodyFatPct": 21.5},
@@ -1088,6 +1188,13 @@ def self_test():
         # A dict response is unwrapped, and junk in is nothing out.
         map_personal_records({"personalRecords": [{"typeId": 3, "value": 1200.0}]})[0]["value"] == 1200.0,
         map_personal_records(None) == [],
+        # Backfill matching. A session that cannot be recognised is never filled in
+        # with distance AND is duplicated on every run — the failure that left the
+        # cardio charts with a single bar.
+        gs_backfill_unrounded(),
+        gs_backfill_by_activity_id(),
+        gs_two_activities_one_day(),
+        gs_owner_activity_window(),
         map_personal_records([]) == [],
     ]
 
@@ -1217,6 +1324,11 @@ def self_test():
 def main():
     parser = argparse.ArgumentParser(description="Sync Garmin Connect weigh-ins and activities to FitMerge — as a JSON file or straight to your account.")
     parser.add_argument("--days", type=int, default=90, help="How many days back to pull (default 90)")
+    parser.add_argument("--activity-days", type=int, default=None,
+                        help="How many days back to pull ACTIVITIES, weigh-ins and PRs (default: "
+                             "same as --days). Each is a single ranged API call, so a multi-year "
+                             "value costs almost nothing — unlike --days, which is ~9 calls PER DAY. "
+                             "Widening --days for a backfill is what used to overrun the job timeout.")
     parser.add_argument("--out", type=str, default="fitmerge-import.json", help="Output file path (file mode)")
     parser.add_argument("--firebase", action="store_true",
                         help="Push straight to your FitMerge account (auto-sync) instead of writing a file")
@@ -1274,7 +1386,7 @@ def main():
                   file=sys.stderr)
             sys.exit(2)
 
-    weights, sessions, health, records = fetch_from_garmin(args.days)
+    weights, sessions, health, records = fetch_from_garmin(args.days, activity_days=args.activity_days)
     payload = build_payload(weights, sessions, health, records)
 
     if args.firebase:

@@ -10,12 +10,23 @@ export type GarminPull = {
   message: string
   run: PullRun | null
   lastPull?: number
-  /** Pull the last `days` of activity. Defaults to a fortnight — enough to catch up. */
-  pull: (days?: number) => Promise<void>
+  /** Pull `days` of wellness metrics, optionally with a deeper window of activities
+   * (see triggerGarminPull). Defaults to a fortnight of both. */
+  pull: (days?: number, activityDays?: number) => Promise<void>
 }
 
-/** A year is plenty to reach every activity worth charting, without a huge job. */
-export const BACKFILL_DAYS = 365
+/**
+ * How far back a manual backfill reaches for ACTIVITIES only. Matches
+ * DEEP_HISTORY_DAYS in scripts/garmin_multi.py, which is what a friend's first
+ * connect already pulls — this gives the account owner the same depth on demand.
+ *
+ * Daily wellness metrics deliberately stay on the ordinary short window: they are
+ * ~9 API calls per day, so widening them to a year is ~3,300 sequential requests,
+ * which overran the job timeout and therefore wrote nothing at all. Three years
+ * rather than everything because all sessions share one Firestore document with a
+ * 1MB ceiling.
+ */
+export const BACKFILL_DAYS = 1095
 
 /**
  * Shared "pull from Garmin" driver used by both the Settings card and the Action
@@ -38,7 +49,7 @@ export function useGarminPull(): GarminPull {
 
   useEffect(() => () => clearInterval(pollRef.current), [])
 
-  async function pull(days = 14) {
+  async function pull(days = 14, activityDays?: number) {
     if (!configured) {
       setPhase('error')
       setMessage('Add your GitHub repo and token in Settings → Pull from Garmin first.')
@@ -48,7 +59,7 @@ export function useGarminPull(): GarminPull {
     setMessage('')
     setRun(null)
     try {
-      await triggerGarminPull(token, repo, days)
+      await triggerGarminPull(token, repo, days, activityDays)
       setLastPull(Date.now())
       setPhase('running')
       let tries = 0
