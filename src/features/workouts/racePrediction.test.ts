@@ -14,6 +14,8 @@ import {
   vdotTrend,
   garminFitness,
   garminVdotTrend,
+  latestVo2max,
+  vo2maxTrend,
   velocityAtVo2,
   vo2AtVelocity,
 } from './racePrediction'
@@ -521,5 +523,50 @@ describe('garminVdotTrend', () => {
 
   it('is empty when the watch never predicted anything', () => {
     expect(garminVdotTrend([{ date: '2026-07-20', metrics: { steps: 5 } }], { kind: 'all' }, '2026-07-27')).toEqual([])
+  })
+})
+
+describe('VO2 max', () => {
+  const day = (date: string, vo2max?: number): HealthDay => ({
+    date,
+    metrics: vo2max === undefined ? {} : { vo2max },
+  })
+
+  it('reads the most recent recorded value', () => {
+    const got = latestVo2max([day('2026-07-27'), day('2026-07-26', 47.2), day('2026-07-20', 46.0)])!
+    expect(got.value).toBe(47.2)
+    expect(got.date).toBe('2026-07-26')
+  })
+
+  it('treats a zero as not recorded rather than as a reading', () => {
+    expect(latestVo2max([day('2026-07-26', 0)])).toBeNull()
+    expect(latestVo2max([])).toBeNull()
+  })
+
+  it('takes the best value in each period', () => {
+    const trend = vo2maxTrend(
+      [day('2026-07-20', 46.0), day('2026-07-22', 47.5)],
+      { kind: 'all' },
+      '2026-07-27',
+    )
+    expect(trend[0].vdot).toBe(47.5)
+  })
+
+  it('offers no predicted race time, because capacity alone does not imply one', () => {
+    const trend = vo2maxTrend([day('2026-07-20', 46.0)], { kind: 'all' }, '2026-07-27')
+    expect(trend[0].predicted5k).toBeNull()
+  })
+
+  it('is empty when the watch never recorded one', () => {
+    expect(vo2maxTrend([day('2026-07-20')], { kind: 'all' }, '2026-07-27')).toEqual([])
+  })
+
+  it('respects the selected range', () => {
+    const trend = vo2maxTrend(
+      [day('2026-07-20', 47), day('2025-01-05', 40)],
+      { kind: 'days', days: 30 },
+      '2026-07-27',
+    )
+    expect(trend.every((p) => p.vdot === null || p.vdot === 47)).toBe(true)
   })
 })

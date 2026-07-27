@@ -580,3 +580,63 @@ export function garminVdotTrend(
   }
   return out
 }
+
+
+// --- VO2 max ------------------------------------------------------------------
+
+/**
+ * Garmin's VO2 max estimate, and how it differs from VDOT.
+ *
+ * VO2 max is a physiological capacity — the maximum rate at which you take up
+ * oxygen. VDOT is derived backwards from a performance, so it also carries your
+ * running economy and the fraction of your maximum you can actually hold. Two
+ * runners with the same VO2 max can have different VDOTs because one converts
+ * oxygen into speed more efficiently.
+ *
+ * Both are estimates, and both under-read for the same reason: they only learn
+ * from efforts they can see. Garmin updates VO2 max from outdoor runs with heart
+ * rate, so training it cannot measure — a sport played without the watch — simply
+ * does not count. VDOT is computed from your best logged effort, so a log
+ * containing only easy running produces an easy-running number.
+ */
+export function latestVo2max(daysDesc: HealthDay[]): { value: number; date: string } | null {
+  for (const day of daysDesc) {
+    const v = day.metrics.vo2max
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) return { value: v, date: day.date }
+  }
+  return null
+}
+
+/** Best VO2 max per period, oldest first — the same shape as the VDOT trend. */
+export function vo2maxTrend(
+  daysDesc: HealthDay[],
+  range: CardioRange = { kind: 'all' },
+  today: string = todayISO(),
+): VdotPoint[] {
+  const size: BucketSize = bucketSizeFor(range)
+  const best = new Map<string, number>()
+  for (const day of daysDesc) {
+    if (!inCardioRange(day.date, range, today)) continue
+    const v = day.metrics.vo2max
+    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) continue
+    const key = periodKey(day.date, size)
+    const cur = best.get(key)
+    if (cur === undefined || v > cur) best.set(key, v)
+  }
+  if (best.size === 0) return []
+
+  const keys = [...best.keys()].sort()
+  const out: VdotPoint[] = []
+  for (let key = keys[0]; key <= keys[keys.length - 1]; key = nextPeriodKey(key, size)) {
+    const v = best.get(key) ?? null
+    out.push({
+      key,
+      label: periodLabelFor(key, size),
+      vdot: v,
+      // A VO2 max does not imply a race time the way a VDOT does — it says nothing
+      // about economy — so no predicted 5K is offered here.
+      predicted5k: null,
+    })
+  }
+  return out
+}

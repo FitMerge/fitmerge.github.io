@@ -19,7 +19,9 @@ import {
   estimateFitness,
   garminFitness,
   garminVdotTrend,
+  latestVo2max,
   vdotTrend,
+  vo2maxTrend,
   type Confidence,
 } from './racePrediction'
 import { monthDayLabel } from '../progress/utils'
@@ -61,10 +63,19 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
     [desc, sessions, units, range, garminRecords],
   )
   const fromGarmin = estimate?.origin === 'garmin'
-  const trend = useMemo(
-    () => (fromGarmin ? garminVdotTrend(desc, range) : vdotTrend(sessions, range)),
-    [fromGarmin, desc, sessions, range],
-  )
+
+  // Two ways to name aerobic fitness, and they answer different questions.
+  // VO2 max is the engine; VDOT is what you actually do with it, because it is
+  // derived from a performance and so carries your running economy too. VO2 max
+  // leads because it is the term people already know and the one on the watch.
+  const vo2 = useMemo(() => latestVo2max(desc), [desc])
+  const [scoreKey, setScoreKey] = useState<'vo2max' | 'vdot'>('vo2max')
+  const showingVo2 = scoreKey === 'vo2max' && vo2 !== null
+
+  const trend = useMemo(() => {
+    if (showingVo2) return vo2maxTrend(desc, range)
+    return fromGarmin ? garminVdotTrend(desc, range) : vdotTrend(sessions, range)
+  }, [showingVo2, fromGarmin, desc, sessions, range])
 
   if (estimate === null) {
     return (
@@ -101,11 +112,39 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
         </div>
         <div className="shrink-0 text-right">
           <p className="text-lg font-bold leading-none text-primary-400 tabular-nums">
-            {estimate.vdot.toFixed(1)}
+            {(showingVo2 ? (vo2 as { value: number }).value : estimate.vdot).toFixed(1)}
           </p>
-          <p className="text-[10px] text-slate-500">VDOT</p>
+          <p className="text-[10px] text-slate-500">{showingVo2 ? 'VO₂ max' : 'VDOT'}</p>
         </div>
       </div>
+
+      {vo2 !== null && (
+        <div className="flex gap-1.5">
+          {(
+            [
+              ['vo2max', 'VO₂ max'],
+              ['vdot', 'VDOT'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setScoreKey(key)}
+              className={`flex-1 rounded-full py-1 text-[11px] font-medium ${
+                scoreKey === key ? 'bg-slate-700 text-slate-100' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[10px] leading-relaxed text-slate-500">
+        {showingVo2
+          ? 'VO₂ max is your oxygen-uptake capacity, straight from your watch. It only updates from runs it records with heart rate.'
+          : 'VDOT is worked back from your best effort, so it carries your running economy as well as your capacity — two runners with the same VO₂ max can have different VDOTs.'}
+      </p>
 
       <div className="space-y-1">
         {predictions.map((p) => {
@@ -194,9 +233,11 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
             </ResponsiveContainer>
           </div>
           <p className="text-[10px] text-slate-500">
-            {fromGarmin
-              ? "Best VDOT per period, from your watch's 5K prediction. Rising means you are getting fitter."
-              : 'Best VDOT per period. Rising means you are getting fitter; gaps are periods with no run long enough to judge.'}
+            {showingVo2
+              ? 'Best VO₂ max per period, as recorded by your watch. It only moves on runs it measures.'
+              : fromGarmin
+                ? "Best VDOT per period, from your watch's 5K prediction. Rising means you are getting fitter."
+                : 'Best VDOT per period. Rising means you are getting fitter; gaps are periods with no run long enough to judge.'}
           </p>
         </div>
       )}
@@ -238,8 +279,9 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
           ))}
           <p className="text-[10px] text-slate-500">
             Daniels' training intensities for VDOT {estimate.vdot.toFixed(1)}, derived from
-            {fromGarmin ? " Garmin's 5K prediction" : ' your strongest effort'} above. Most weekly
-            volume belongs in the easy band.
+            {fromGarmin ? " Garmin's 5K prediction" : ' your strongest effort'}. These always come
+            from VDOT rather than VO₂ max — the pace tables are built on it, because a pace has to
+            account for economy and not just capacity. Most weekly volume belongs in the easy band.
           </p>
         </div>
       )}
