@@ -18,9 +18,16 @@ import { estimateFitness, vdotTrend, type Confidence } from './racePrediction'
 import { monthDayLabel } from '../progress/utils'
 
 const CONFIDENCE_STYLE: Record<Confidence, { dot: string; label: string }> = {
-  high: { dot: 'bg-emerald-400', label: 'Close to a distance you have actually run' },
+  high: { dot: 'bg-emerald-400', label: 'Predicted from a effort at a similar distance' },
   moderate: { dot: 'bg-amber-400', label: 'Extrapolated — treat as a target, not a time' },
-  low: { dot: 'bg-slate-500', label: 'A long way from your reference run; low confidence' },
+  low: { dot: 'bg-slate-500', label: 'A long way from your nearest effort; low confidence' },
+}
+
+/** "from your 10K, May 4" — what a given row actually rests on. */
+function sourceNote(source: { km: number; date: string; fromRecord: boolean }): string {
+  const distance = source.km >= 1 ? `${source.km.toFixed(source.km < 10 ? 1 : 0)} km` : `${Math.round(source.km * 1000)} m`
+  const what = source.fromRecord ? `${distance} PR` : `${distance} run`
+  return source.date ? `${what} · ${monthDayLabel(source.date)}` : what
 }
 
 export default function RacePredictionSection({ range }: { range: CardioRange }) {
@@ -54,12 +61,14 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
     <Card className="space-y-3">
       <Header />
 
-      {/* The estimate's provenance, stated up front. Every number below is only as
-          good as this one run, and hiding that would be the dishonest choice. */}
+      {/* Your single strongest effort, which sets the VDOT the training paces are
+          prescribed from. It is deliberately NOT described as what the predictions
+          rest on any more — each of those names its own source, because sourcing
+          them all from one effort is what made a stale mile PR drive a marathon. */}
       <div className="flex items-baseline justify-between gap-2 rounded-xl bg-slate-800/60 p-2.5">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">
-            Based on {source.fromRecord ? 'your Garmin PR' : 'your best run'}
+            Strongest effort {source.fromRecord && '· Garmin PR'}
           </p>
           <p className="truncate text-xs text-slate-300">
             {formatDuration(source.durationMin)} over {source.km.toFixed(2)} km
@@ -89,8 +98,15 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
                 title={style.label}
                 aria-label={style.label}
               />
-              <span className="w-16 shrink-0 text-xs font-medium text-slate-300">{p.label}</span>
-              <span className="flex-1 text-right text-sm font-bold text-slate-100 tabular-nums">
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-medium text-slate-300">{p.label}</span>
+                {/* Which effort this row rests on. Without it the confidence dot is
+                    an unexplained colour, and a surprising prediction looks arbitrary. */}
+                <span className="block truncate text-[10px] text-slate-500">
+                  {sourceNote(p.source)}
+                </span>
+              </span>
+              <span className="shrink-0 text-right text-sm font-bold text-slate-100 tabular-nums">
                 {formatDuration(p.durationMin)}
               </span>
               <span className="w-16 shrink-0 text-right text-[11px] text-slate-500 tabular-nums">
@@ -137,14 +153,17 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
                     'Best',
                   ]}
                 />
-                {/* No connectNulls: a period with no hard running is a gap in the
-                    evidence, not a straight line between two months of fitness. */}
+                {/* connectNulls, because a quiet week is not a loss of fitness and
+                    breaking the line there left isolated dots that read as broken
+                    rendering. The dots still mark only the periods with real data,
+                    so the gaps stay visible without implying a collapse. */}
                 <Line
                   type="linear"
                   dataKey="vdot"
                   stroke="#38bdf8"
                   strokeWidth={2}
                   dot={{ r: 2.5, fill: '#38bdf8', strokeWidth: 0 }}
+                  connectNulls
                   isAnimationActive={false}
                 />
               </LineChart>
@@ -158,8 +177,9 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
       )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
-        Riegel's model, the same one Garmin's race predictor uses. Green is close to a distance
-        you have run; grey is a long extrapolation.
+        Riegel's model, the same one Garmin's race predictor uses. Each distance is predicted
+        from your strongest effort at a comparable distance — green where that effort was close
+        to the race, grey where it was a long way off.
       </p>
 
       {/* Training paces are the part a runner uses weekly, but they are a wall of
@@ -192,8 +212,8 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
             </div>
           ))}
           <p className="text-[10px] text-slate-500">
-            Daniels' training intensities for VDOT {estimate.vdot.toFixed(1)}. Most weekly volume
-            belongs in the easy band.
+            Daniels' training intensities for VDOT {estimate.vdot.toFixed(1)}, your strongest
+            effort above. Most weekly volume belongs in the easy band.
           </p>
         </div>
       )}

@@ -161,8 +161,11 @@ export type RacePrediction = {
   /** Pace in minutes per display unit. */
   pace: number
   confidence: Confidence
-  /** True when this distance is the performance the predictions are based on. */
+  /** True when the source effort was itself at about this distance. */
   isSource: boolean
+  /** The effort this row was predicted from. Each distance gets its own, so a
+   * 10K is predicted from your 10K efforts rather than from a mile PR. */
+  source: { km: number; date: string; name: string; fromRecord: boolean }
 }
 
 export type FitnessEstimate = {
@@ -193,8 +196,36 @@ export function bestPerformance(
   sessions: WorkoutSession[],
   range: CardioRange = { kind: 'all' },
   today: string = todayISO(),
-): { km: number; durationMin: number; date: string; name: string; vdot: number } | null {
-  let best: { km: number; durationMin: number; date: string; name: string; vdot: number } | null = null
+): Performance | null {
+  const all = allPerformances(sessions, range, today)
+  return all.length === 0 ? null : all.reduce((a, b) => (b.vdot > a.vdot ? b : a))
+}
+
+export type Performance = {
+  km: number
+  durationMin: number
+  date: string
+  name: string
+  vdot: number
+  /** True for a Garmin personal record rather than a whole session. */
+  fromRecord: boolean
+}
+
+/**
+ * Every run good enough to predict from, in the window.
+ *
+ * All of them, not just the best: a prediction at 10K should be able to draw on
+ * your actual 10-kilometre efforts rather than being extrapolated from whichever
+ * single run happens to have the highest VDOT. Runs under 1.5km are excluded —
+ * the models are unreliable at sprint distances, and a 400m stride is not a
+ * performance.
+ */
+export function allPerformances(
+  sessions: WorkoutSession[],
+  range: CardioRange = { kind: 'all' },
+  today: string = todayISO(),
+): Performance[] {
+  const out: Performance[] = []
   for (const s of sessions) {
     if (!isCardioSession(s)) continue
     if (activityCategory(s.name, s.sportType) !== 'Run') continue
@@ -204,11 +235,9 @@ export function bestPerformance(
     if (km < 1.5 || durationMin <= 0) continue
     const v = vdot(km, durationMin)
     if (v === null) continue
-    if (best === null || v > best.vdot) {
-      best = { km, durationMin, date: s.date, name: s.name, vdot: v }
-    }
+    out.push({ km, durationMin, date: s.date, name: s.name, vdot: v, fromRecord: false })
   }
-  return best
+  return out
 }
 
 /**
@@ -229,10 +258,8 @@ const RECORD_DISTANCE_KM: Record<number, number> = {
 }
 
 /** Garmin's timed records as candidate performances. */
-function recordPerformances(
-  records: GarminRecord[],
-): { km: number; durationMin: number; date: string; name: string; vdot: number }[] {
-  const out: { km: number; durationMin: number; date: string; name: string; vdot: number }[] = []
+function recordPerformances(records: GarminRecord[]): Performance[] {
+  const out: Performance[] = []
   for (const record of records) {
     const km = RECORD_DISTANCE_KM[record.typeId]
     // Only the timed records map to a distance; "longest run" is a distance record
@@ -243,7 +270,7 @@ function recordPerformances(
     const durationMin = record.value / 60
     const v = vdot(km, durationMin)
     if (v === null) continue
-    out.push({ km, durationMin, date: record.date ?? '', name: record.label, vdot: v })
+    out.push({ km, durationMin, date: record.date ?? '', name: record.label, vdot: v, fromRecord: true })
   }
   return out
 }
@@ -335,6 +362,29 @@ export function timeAtVdot(vdotValue: number, distanceKm: number): number {
   return minutes
 }
 
+/**
+ * The best effort to predict `targetKm` from.
+ *
+ * Predicting everything from one global best is what made a stale 1-mile PR drive
+ * a marathon estimate: it had the highest VDOT, so it won outright, and every
+ * other distance became a long extrapolation with low confidence while hundreds of
+ * actual runs went unused.
+ *
+ * Instead, prefer efforts near the target distance and only widen the search when
+ * there is nothing close: strongest effort within 2x, else within 4x, else the
+ * strongest there is. Riegel is reliable inside that first band, so a runner with
+ * real 5K and 10K efforts now gets both predicted from the real thing.
+ */
+export function sourceFor(targetKm: number, candidates: Performance[]): Performance | null {
+  if (candidates.length === 0) return null
+  const ratio = (km: number): number => (km > targetKm ? km / targetKm : targetKm / km)
+  for (const limit of [2, 4, Infinity]) {
+    const near = candidates.filter((c) => ratio(c.km) <= limit)
+    if (near.length > 0) return near.reduce((a, b) => (b.vdot > a.vdot ? b : a))
+  }
+  return null
+}
+
 /** Nearest standard race distance to `km`, for labelling a performance. */
 function nearestDistance(km: number): RaceDistance {
   let nearest = RACE_DISTANCES[0]
@@ -355,41 +405,46 @@ export function estimateFitness(
   units: Units = 'metric',
   range: CardioRange = { kind: 'all' },
   today: string = todayISO(),
-  /** Garmin's timed records, which beat any whole-session performance when present.
-   * All-time by nature, so they are deliberately not filtered by `range`. */
+  /** Garmin's timed records. All-time by nature, so deliberately not filtered by
+   * `range` — a PR is a PR. */
   records: GarminRecord[] = [],
 ): FitnessEstimate | null {
-  const sessionBest = bestPerformance(sessions, range, today)
-  const recordBests = recordPerformances(records)
-  const candidates = [sessionBest, ...recordBests].filter(
-    (c): c is NonNullable<typeof c> => c !== null,
-  )
+  const candidates = [...allPerformances(sessions, range, today), ...recordPerformances(records)]
   if (candidates.length === 0) return null
-  const best = candidates.reduce((a, b) => (b.vdot > a.vdot ? b : a))
 
+  // The headline number stays the strongest single effort — that is what "current
+  // fitness" means, and it is what the training paces are prescribed from.
+  const best = candidates.reduce((a, b) => (b.vdot > a.vdot ? b : a))
   const unitKm = units === 'imperial' ? KM_PER_MILE : 1
-  const sourceLabel = nearestDistance(best.km)
 
   const predictions: RacePrediction[] = RACE_DISTANCES.map((race) => {
-    const durationMin = riegel(best.km, best.durationMin, race.km)
+    // Non-null: candidates is non-empty, and the last tier accepts everything.
+    const source = sourceFor(race.km, candidates) as Performance
+    const durationMin = riegel(source.km, source.durationMin, race.km)
     return {
       label: race.label,
       km: race.km,
       durationMin,
       pace: durationMin / (race.km / unitKm),
-      confidence: confidenceFor(best.km, race.km),
-      isSource: race.label === sourceLabel.label,
+      confidence: confidenceFor(source.km, race.km),
+      isSource: nearestDistance(source.km).label === race.label,
+      source: {
+        km: source.km,
+        date: source.date,
+        name: source.name,
+        fromRecord: source.fromRecord,
+      },
     }
   })
 
   return {
     vdot: best.vdot,
     source: {
-      label: sourceLabel.label,
+      label: nearestDistance(best.km).label,
       km: best.km,
       durationMin: best.durationMin,
       date: best.date,
-      fromRecord: recordBests.includes(best),
+      fromRecord: best.fromRecord,
     },
     predictions,
     paces: trainingPaces(best.vdot, units),

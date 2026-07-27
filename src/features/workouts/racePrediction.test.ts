@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { GarminRecord, WorkoutSession } from '../../types'
 import {
+  allPerformances,
   bestPerformance,
+  sourceFor,
   confidenceFor,
   estimateFitness,
   fractionOfMax,
@@ -332,5 +334,102 @@ describe('vdotTrend', () => {
 
   it('is empty with nothing to measure', () => {
     expect(vdotTrend([], { kind: 'all' }, TODAY)).toEqual([])
+  })
+})
+
+describe('allPerformances', () => {
+  it('keeps every qualifying run, not just the best', () => {
+    const runs = [run('2026-07-01', 5, 25), run('2026-07-08', 10, 52), run('2026-07-15', 21.0975, 115)]
+    expect(allPerformances(runs, { kind: 'all' }, TODAY)).toHaveLength(3)
+  })
+
+  it('still drops sprints, non-runs and unfinished sessions', () => {
+    const s = run('2026-07-01', 5, 25)
+    delete s.finishedAt
+    const runs = [
+      run('2026-07-02', 0.4, 1.5),
+      run('2026-07-03', 40, 80, { name: 'Cycling', sportType: 'cycling' }),
+      s,
+    ]
+    expect(allPerformances(runs, { kind: 'all' }, TODAY)).toEqual([])
+  })
+})
+
+describe('sourceFor', () => {
+  const mile = { km: 1.61, durationMin: 6.05, date: '2025-09-23', name: 'Mile', vdot: 48, fromRecord: true }
+  const tenK = { km: 10, durationMin: 52, date: '2026-07-08', name: '10K', vdot: 41, fromRecord: false }
+
+  it('prefers a comparable effort over a stronger but distant one', () => {
+    // The mile has the higher VDOT, but predicting a 10K from it is a 6x stretch.
+    expect(sourceFor(10, [mile, tenK])).toBe(tenK)
+  })
+
+  it('still uses the strongest effort when both are comparable', () => {
+    const fastTenK = { ...tenK, vdot: 45, name: 'fast' }
+    expect(sourceFor(10, [tenK, fastTenK])).toBe(fastTenK)
+  })
+
+  it('picks the mile PR for the mile', () => {
+    expect(sourceFor(1.61, [mile, tenK])).toBe(mile)
+  })
+
+  it('widens the search rather than giving up when nothing is close', () => {
+    expect(sourceFor(42.195, [mile])).toBe(mile)
+  })
+
+  it('has no answer with no candidates', () => {
+    expect(sourceFor(10, [])).toBeNull()
+  })
+})
+
+describe('estimateFitness sources each distance independently', () => {
+  // The reported case: a strong, old 1-mile PR next to real 5K and 10K running.
+  const records: GarminRecord[] = [
+    { typeId: 2, label: 'Fastest 1 mile', kind: 'time', value: 363, date: '2025-09-23' },
+  ]
+  const sessions = [
+    run('2026-07-01', 5, 26),
+    run('2026-07-08', 10, 54),
+    run('2026-07-15', 21.0975, 120),
+  ]
+  const estimate = estimateFitness(sessions, 'imperial', { kind: 'all' }, TODAY, records)!
+
+  it('no longer predicts every distance from the mile PR', () => {
+    // The mile PR is the strongest effort by VDOT, so the old code used it for
+    // everything. Every distance from 5K up should now rest on real running.
+    const longer = estimate.predictions.filter((p) => p.km >= 5)
+    expect(longer.every((p) => !p.source.fromRecord)).toBe(true)
+    expect(longer.every((p) => p.source.km >= 5)).toBe(true)
+  })
+
+  it('still uses the mile PR for the mile', () => {
+    const mile = estimate.predictions.find((p) => p.label === '1 mile')!
+    expect(mile.source.fromRecord).toBe(true)
+  })
+
+  it('rates most distances confidently instead of only the mile', () => {
+    // Previously only the source distance was green and everything else grey.
+    const confident = estimate.predictions.filter((p) => p.confidence === 'high')
+    expect(confident.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('returns a performance unchanged when it is predicted at its own distance', () => {
+    const half = estimate.predictions.find((p) => p.label === 'Half')!
+    // The 21.1km run is the nearest comparable effort to a half, so it comes back
+    // as itself rather than extrapolated.
+    expect(half.source.km).toBeCloseTo(21.0975, 4)
+    expect(half.durationMin).toBeCloseTo(120, 6)
+  })
+
+  it('keeps the headline on the strongest effort overall', () => {
+    expect(estimate.source.fromRecord).toBe(true)
+    expect(estimate.vdot).toBeGreaterThan(45)
+  })
+
+  it('reports a usable source note for every row', () => {
+    for (const p of estimate.predictions) {
+      expect(p.source.km).toBeGreaterThan(0)
+      expect(typeof p.source.date).toBe('string')
+    }
   })
 })
