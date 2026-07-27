@@ -12,9 +12,16 @@ import { ChevronDown, Gauge } from 'lucide-react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
+import { healthDaysDesc, useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
 import { distanceUnitLabel, formatDuration, formatPace, type CardioRange } from './cardio'
-import { estimateFitness, vdotTrend, type Confidence } from './racePrediction'
+import {
+  estimateFitness,
+  garminFitness,
+  garminVdotTrend,
+  vdotTrend,
+  type Confidence,
+} from './racePrediction'
 import { monthDayLabel } from '../progress/utils'
 
 const CONFIDENCE_STYLE: Record<Confidence, { dot: string; label: string }> = {
@@ -24,7 +31,11 @@ const CONFIDENCE_STYLE: Record<Confidence, { dot: string; label: string }> = {
 }
 
 /** "from your 10K, May 4" — what a given row actually rests on. */
-function sourceNote(source: { km: number; date: string; fromRecord: boolean }): string {
+function sourceNote(source: { km: number; date: string; name: string; fromRecord: boolean }): string {
+  // A watch prediction is not a run you did, so it must not be described as one.
+  if (source.name === 'Garmin') {
+    return source.date ? `Garmin · ${monthDayLabel(source.date)}` : 'Garmin'
+  }
   const distance = source.km >= 1 ? `${source.km.toFixed(source.km < 10 ? 1 : 0)} km` : `${Math.round(source.km * 1000)} m`
   const what = source.fromRecord ? `${distance} PR` : `${distance} run`
   return source.date ? `${what} · ${monthDayLabel(source.date)}` : what
@@ -36,11 +47,23 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
   const distUnit = distanceUnitLabel(units)
   const [pacesOpen, setPacesOpen] = useState(false)
 
-  const trend = useMemo(() => vdotTrend(sessions, range), [sessions, range])
   const garminRecords = useWorkoutsStore((s) => s.garminRecords)
+  const days = useHealthStore((s) => s.days)
+  const desc = useMemo(() => healthDaysDesc(days), [days])
+
+  // Garmin's own predictor wins when the watch has produced one: it is calibrated
+  // against on-device heart rate and training load over a very large population,
+  // where everything below is a two-parameter curve fit over one distance and one
+  // duration per run. The computed estimate is the fallback for anyone without
+  // that data — a friend on Apple Health, or a fresh account.
   const estimate = useMemo(
-    () => estimateFitness(sessions, units, range, undefined, garminRecords),
-    [sessions, units, range, garminRecords],
+    () => garminFitness(desc, units) ?? estimateFitness(sessions, units, range, undefined, garminRecords),
+    [desc, sessions, units, range, garminRecords],
+  )
+  const fromGarmin = estimate?.origin === 'garmin'
+  const trend = useMemo(
+    () => (fromGarmin ? garminVdotTrend(desc, range) : vdotTrend(sessions, range)),
+    [fromGarmin, desc, sessions, range],
   )
 
   if (estimate === null) {
@@ -68,7 +91,8 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
       <div className="flex items-baseline justify-between gap-2 rounded-xl bg-slate-800/60 p-2.5">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">
-            Strongest effort {source.fromRecord && '· Garmin PR'}
+            {fromGarmin ? 'Garmin race predictor' : 'Strongest effort'}
+            {!fromGarmin && source.fromRecord && ' · Garmin PR'}
           </p>
           <p className="truncate text-xs text-slate-300">
             {formatDuration(source.durationMin)} over {source.km.toFixed(2)} km
@@ -170,16 +194,17 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
             </ResponsiveContainer>
           </div>
           <p className="text-[10px] text-slate-500">
-            Best VDOT per period. Rising means you are getting fitter; gaps are periods
-            with no run long enough to judge.
+            {fromGarmin
+              ? "Best VDOT per period, from your watch's 5K prediction. Rising means you are getting fitter."
+              : 'Best VDOT per period. Rising means you are getting fitter; gaps are periods with no run long enough to judge.'}
           </p>
         </div>
       )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
-        Riegel's model, the same one Garmin's race predictor uses. Each distance is predicted
-        from your strongest effort at a comparable distance — green where that effort was close
-        to the race, grey where it was a long way off.
+        {fromGarmin
+          ? 'Straight from your watch — Garmin predicts each distance directly from your heart rate and training load, so none of these are extrapolated.'
+          : "Riegel's model. Each distance is predicted from your strongest effort at a comparable distance — green where that effort was close to the race, grey where it was a long way off. Your watch's own predictions will replace these once it has produced them."}
       </p>
 
       {/* Training paces are the part a runner uses weekly, but they are a wall of
@@ -212,8 +237,9 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
             </div>
           ))}
           <p className="text-[10px] text-slate-500">
-            Daniels' training intensities for VDOT {estimate.vdot.toFixed(1)}, your strongest
-            effort above. Most weekly volume belongs in the easy band.
+            Daniels' training intensities for VDOT {estimate.vdot.toFixed(1)}, derived from
+            {fromGarmin ? " Garmin's 5K prediction" : ' your strongest effort'} above. Most weekly
+            volume belongs in the easy band.
           </p>
         </div>
       )}

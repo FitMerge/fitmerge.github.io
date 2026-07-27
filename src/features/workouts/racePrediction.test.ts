@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GarminRecord, WorkoutSession } from '../../types'
+import type { GarminRecord, HealthDay, WorkoutSession } from '../../types'
 import {
   allPerformances,
   bestPerformance,
@@ -12,6 +12,8 @@ import {
   vdot,
   timeAtVdot,
   vdotTrend,
+  garminFitness,
+  garminVdotTrend,
   velocityAtVo2,
   vo2AtVelocity,
 } from './racePrediction'
@@ -431,5 +433,93 @@ describe('estimateFitness sources each distance independently', () => {
       expect(p.source.km).toBeGreaterThan(0)
       expect(typeof p.source.date).toBe('string')
     }
+  })
+})
+
+describe("Garmin's own race predictor", () => {
+  /** Newest-first health days carrying Garmin's predicted race times, in seconds. */
+  const healthDays = (over: Record<string, number> = {}): HealthDay[] => [
+    {
+      date: '2026-07-26',
+      metrics: {
+        raceTime5k: 1272,
+        raceTime10k: 2640,
+        raceTimeHalf: 5820,
+        raceTimeMarathon: 12300,
+        ...over,
+      },
+    },
+  ]
+
+  it('reports each distance exactly as the watch gave it, not extrapolated', () => {
+    const est = garminFitness(healthDays(), 'metric')!
+    expect(est.origin).toBe('garmin')
+    const byLabel = Object.fromEntries(est.predictions.map((p) => [p.label, p.durationMin]))
+    expect(byLabel['5K']).toBeCloseTo(1272 / 60, 6)
+    expect(byLabel['Marathon']).toBeCloseTo(12300 / 60, 6)
+  })
+
+  it('is confident in all of them, because none were stretched', () => {
+    const est = garminFitness(healthDays(), 'metric')!
+    expect(est.predictions.every((p) => p.confidence === 'high')).toBe(true)
+    expect(est.predictions.every((p) => p.source.name === 'Garmin')).toBe(true)
+  })
+
+  it('derives VDOT and training paces from the 5K prediction', () => {
+    const est = garminFitness(healthDays(), 'metric')!
+    expect(est.vdot).toBeCloseTo(vdot(5, 1272 / 60) as number, 6)
+    expect(est.source.label).toBe('5K')
+    expect(est.paces).toHaveLength(5)
+  })
+
+  it('works from a partial set, anchoring on whatever exists', () => {
+    const partial: HealthDay[] = [{ date: '2026-07-26', metrics: { raceTime10k: 2640 } }]
+    const est = garminFitness(partial, 'metric')!
+    expect(est.predictions).toHaveLength(1)
+    expect(est.source.label).toBe('10K')
+  })
+
+  it('is null when the watch has produced nothing, so the fallback can run', () => {
+    expect(garminFitness([{ date: '2026-07-26', metrics: { steps: 100 } }], 'metric')).toBeNull()
+    expect(garminFitness([], 'metric')).toBeNull()
+  })
+
+  it('ignores a zero, which means "not computed" rather than an instant race', () => {
+    const zeroed: HealthDay[] = [{ date: '2026-07-26', metrics: { raceTime5k: 0, raceTime10k: 2640 } }]
+    const est = garminFitness(zeroed, 'metric')!
+    expect(est.predictions.map((p) => p.label)).toEqual(['10K'])
+  })
+
+  it('paces convert with the display unit', () => {
+    const metric = garminFitness(healthDays(), 'metric')!
+    const imperial = garminFitness(healthDays(), 'imperial')!
+    expect(imperial.predictions[0].pace / metric.predictions[0].pace).toBeCloseTo(1.60934, 3)
+  })
+})
+
+describe('garminVdotTrend', () => {
+  const day = (date: string, secs: number): HealthDay => ({ date, metrics: { raceTime5k: secs } })
+
+  it('tracks improvement as a rising VDOT', () => {
+    const trend = garminVdotTrend(
+      [day('2026-07-20', 1272), day('2026-05-10', 1400)],
+      { kind: 'all' },
+      '2026-07-27',
+    )
+    const points = trend.filter((p) => p.vdot !== null)
+    expect((points[points.length - 1].vdot as number)).toBeGreaterThan(points[0].vdot as number)
+  })
+
+  it('takes the best prediction in each period', () => {
+    const trend = garminVdotTrend(
+      [day('2026-07-20', 1400), day('2026-07-22', 1272)],
+      { kind: 'all' },
+      '2026-07-27',
+    )
+    expect(trend[0].vdot).toBeCloseTo(vdot(5, 1272 / 60) as number, 6)
+  })
+
+  it('is empty when the watch never predicted anything', () => {
+    expect(garminVdotTrend([{ date: '2026-07-20', metrics: { steps: 5 } }], { kind: 'all' }, '2026-07-27')).toEqual([])
   })
 })

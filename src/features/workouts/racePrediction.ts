@@ -19,7 +19,7 @@
 // `predictRaces` reports a confidence per prediction rather than pretending a
 // 5K time tells you much about a marathon.
 
-import type { GarminRecord, Units, WorkoutSession } from '../../types'
+import type { GarminRecord, HealthDay, Units, WorkoutSession } from '../../types'
 import {
   isCardioSession,
   activityCategory,
@@ -169,6 +169,13 @@ export type RacePrediction = {
 }
 
 export type FitnessEstimate = {
+  /**
+   * Where the numbers came from. `garmin` means the watch's own race predictor,
+   * which is calibrated against on-device heart rate and training load across a
+   * very large population — a far better estimate than a two-parameter curve fit
+   * over one distance and one duration per run. It wins whenever it is present.
+   */
+  origin: 'garmin' | 'computed'
   vdot: number
   /** The performance the estimate rests on. */
   source: {
@@ -438,6 +445,7 @@ export function estimateFitness(
   })
 
   return {
+    origin: 'computed',
     vdot: best.vdot,
     source: {
       label: nearestDistance(best.km).label,
@@ -449,4 +457,126 @@ export function estimateFitness(
     predictions,
     paces: trainingPaces(best.vdot, units),
   }
+}
+
+
+// --- Garmin's own race predictor ---------------------------------------------
+
+/** Garmin's predicted race times, as health-metric keys. Values are seconds. */
+export const GARMIN_RACE_KEYS: { key: string; label: string; km: number }[] = [
+  { key: 'raceTime5k', label: '5K', km: 5 },
+  { key: 'raceTime10k', label: '10K', km: 10 },
+  { key: 'raceTimeHalf', label: 'Half', km: 21.0975 },
+  { key: 'raceTimeMarathon', label: 'Marathon', km: 42.195 },
+]
+
+/** Most recent value for a health metric, newest-first days. */
+function latestOf(daysDesc: HealthDay[], key: string): { value: number; date: string } | null {
+  for (const day of daysDesc) {
+    const v = day.metrics[key]
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) return { value: v, date: day.date }
+  }
+  return null
+}
+
+/**
+ * Garmin's race predictor, presented the same way as the computed one.
+ *
+ * No Riegel extrapolation happens here — every distance is a number Garmin
+ * produced for that distance, so there is nothing to be uncertain about in the
+ * way a curve fit is. Confidence is reported as high throughout for that reason,
+ * and each row names Garmin as its source rather than one of your runs.
+ *
+ * Training paces still come from VDOT, derived from Garmin's own 5K prediction —
+ * a better input than the best run this app can find by scanning sessions.
+ *
+ * Returns null when the watch has not produced predictions, which is the signal
+ * to fall back to the computed estimate.
+ */
+export function garminFitness(
+  daysDesc: HealthDay[],
+  units: Units = 'metric',
+): FitnessEstimate | null {
+  const unitKm = units === 'imperial' ? KM_PER_MILE : 1
+  const rows = GARMIN_RACE_KEYS.map((r) => ({ ...r, latest: latestOf(daysDesc, r.key) })).filter(
+    (r): r is typeof r & { latest: { value: number; date: string } } => r.latest !== null,
+  )
+  if (rows.length === 0) return null
+
+  const predictions: RacePrediction[] = rows.map((r) => {
+    const durationMin = r.latest.value / 60
+    return {
+      label: r.label,
+      km: r.km,
+      durationMin,
+      pace: durationMin / (r.km / unitKm),
+      confidence: 'high',
+      // Every row is equally direct here, so highlighting them all would just be
+      // four highlighted rows. The green dot already says "not extrapolated".
+      isSource: false,
+      source: { km: r.km, date: r.latest.date, name: 'Garmin', fromRecord: false },
+    }
+  })
+
+  // Prefer the 5K for VDOT: it is the shortest prediction Garmin publishes, so it
+  // is the least affected by the endurance assumptions baked into a marathon
+  // estimate. Fall back to whatever is available.
+  const anchor = rows.find((r) => r.key === 'raceTime5k') ?? rows[0]
+  const anchorMin = anchor.latest.value / 60
+  const v = vdot(anchor.km, anchorMin)
+  if (v === null) return null
+
+  return {
+    origin: 'garmin',
+    vdot: v,
+    source: {
+      label: anchor.label,
+      km: anchor.km,
+      durationMin: anchorMin,
+      date: anchor.latest.date,
+      fromRecord: false,
+    },
+    predictions,
+    paces: trainingPaces(v, units),
+  }
+}
+
+/**
+ * Fitness over time from Garmin's own 5K prediction — its race-predictor trend.
+ *
+ * Preferred over the session-derived trend for the same reason the predictions
+ * are: it reflects Garmin's model rather than whichever run happened to be
+ * fastest. Each period takes that period's best (fastest) prediction.
+ */
+export function garminVdotTrend(
+  daysDesc: HealthDay[],
+  range: CardioRange = { kind: 'all' },
+  today: string = todayISO(),
+): VdotPoint[] {
+  const size: BucketSize = bucketSizeFor(range)
+  const best = new Map<string, number>()
+  for (const day of daysDesc) {
+    if (!inCardioRange(day.date, range, today)) continue
+    const secs = day.metrics.raceTime5k
+    if (typeof secs !== 'number' || !Number.isFinite(secs) || secs <= 0) continue
+    const v = vdot(5, secs / 60)
+    if (v === null) continue
+    const key = periodKey(day.date, size)
+    const cur = best.get(key)
+    if (cur === undefined || v > cur) best.set(key, v)
+  }
+  if (best.size === 0) return []
+
+  const keys = [...best.keys()].sort()
+  const out: VdotPoint[] = []
+  for (let key = keys[0]; key <= keys[keys.length - 1]; key = nextPeriodKey(key, size)) {
+    const v = best.get(key) ?? null
+    out.push({
+      key,
+      label: periodLabelFor(key, size),
+      vdot: v,
+      predicted5k: v === null ? null : timeAtVdot(v, 5),
+    })
+  }
+  return out
 }
