@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Area,
   CartesianGrid,
@@ -29,19 +29,28 @@ import type { HealthDay } from '../../types'
 
 type Props = {
   metricKey: string | null
+  /** Other metrics in the same family, so a consolidated tile can still reach
+   * every reading it folded in. Empty for a standalone metric. */
+  siblings?: string[]
   days: Record<string, HealthDay>
   onClose: () => void
 }
 
-export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Props) {
+export default function HealthMetricDetailSheet({ metricKey, siblings = [], days, onClose }: Props) {
   const [range, setRange] = useState<HealthRangeKey>('90d')
+  // Which member of the family is charted. Seeded from the tile's headline and
+  // reset whenever a different tile is opened, so reopening never lands on the
+  // sub-metric you last drilled into.
+  const [active, setActive] = useState<string | null>(metricKey)
+  useEffect(() => setActive(metricKey), [metricKey])
 
-  const samples = useMemo(() => (metricKey ? metricSamples(days, metricKey) : []), [days, metricKey])
+  const charted = active ?? metricKey
+  const samples = useMemo(() => (charted ? metricSamples(days, charted) : []), [days, charted])
   const series = useMemo(() => withMovingAverage(metricSeries(samples, range)), [samples, range])
   const stats = useMemo(() => metricStats(samples, range), [samples, range])
   const band = useMemo(() => typicalRange(samples, range), [samples, range])
 
-  const meta = metricKey ? metricMeta(metricKey) : null
+  const meta = charted ? metricMeta(charted) : null
   const hasPoints = series.some((p) => p.value !== null)
   // Show the smoothing line only for noisy day-by-day ranges; long ranges are
   // already bucketed averages.
@@ -58,8 +67,28 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
 
   return (
     <Sheet open={metricKey !== null} onClose={onClose} title={meta?.label ?? 'Metric'}>
-      {metricKey && (
+      {charted && (
         <div className="space-y-4">
+          {/* Every reading the tile folded in, still one tap away. Without this,
+              consolidating families would genuinely lose data rather than just
+              stop shouting it. */}
+          {siblings.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {siblings.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setActive(k)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                    charted === k ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {metricMeta(k).label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <SegmentedControl
             size="sm"
             options={HEALTH_RANGE_OPTIONS}
@@ -71,18 +100,18 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
           {hasPoints && stats ? (
             <>
               <div className="grid grid-cols-3 gap-2">
-                <Stat label="Average" value={formatMetric(metricKey, stats.avg)} />
-                <Stat label="Low" value={formatMetric(metricKey, stats.min)} />
-                <Stat label="High" value={formatMetric(metricKey, stats.max)} />
+                <Stat label="Average" value={formatMetric(charted, stats.avg)} />
+                <Stat label="Low" value={formatMetric(charted, stats.min)} />
+                <Stat label="High" value={formatMetric(charted, stats.max)} />
               </div>
 
               {band && (
                 <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
-                  Latest <span className="font-semibold text-slate-100">{formatMetric(metricKey, stats.last)}</span> ·{' '}
+                  Latest <span className="font-semibold text-slate-100">{formatMetric(charted, stats.last)}</span> ·{' '}
                   <span className={pos === 'within' ? 'text-slate-400' : 'text-sky-300'}>{posLabel}</span>
                   <span className="text-slate-500">
                     {' '}
-                    ({formatMetric(metricKey, band.low)}–{formatMetric(metricKey, band.high)})
+                    ({formatMetric(charted, band.low)}–{formatMetric(charted, band.high)})
                   </span>
                 </div>
               )}
@@ -95,7 +124,7 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
                 >
                   {delta > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                   {delta > 0 ? '+' : ''}
-                  {formatMetric(metricKey, delta)} over this range
+                  {formatMetric(charted, delta)} over this range
                   <span className="text-slate-500">· {improving ? 'improving' : 'worsening'}</span>
                 </div>
               )}
@@ -129,7 +158,7 @@ export default function HealthMetricDetailSheet({ metricKey, days, onClose }: Pr
                       contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: '#cbd5e1' }}
                       formatter={(v: number, name) => [
-                        formatMetric(metricKey, v),
+                        formatMetric(charted, v),
                         name === 'avg' ? '7-pt avg' : meta?.label ?? '',
                       ]}
                     />

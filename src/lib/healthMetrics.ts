@@ -117,8 +117,16 @@ export function metricMeta(key: string): MetricMeta {
 
 export function formatMetric(key: string, v: number): string {
   const m = metricMeta(key)
-  const val = m.format ? m.format(v) : Number.isInteger(v) ? String(v) : v.toFixed(1)
+  const val = metricValue(key, v)
   return m.unit ? `${val} ${m.unit}` : val
+}
+
+/** The formatted number WITHOUT its unit — for ranges like "10–21 brpm", where
+ * repeating the unit on both ends ("10 brpm–21 brpm") reads as two measurements
+ * rather than one span. */
+export function metricValue(key: string, v: number): string {
+  const m = metricMeta(key)
+  return m.format ? m.format(v) : Number.isInteger(v) ? String(v) : v.toFixed(1)
 }
 
 /** Order metric keys by catalog priority, then alphabetically. */
@@ -127,6 +135,224 @@ export function sortedMetricKeys(keys: string[]): string[] {
     const d = metricMeta(a).order - metricMeta(b).order
     return d !== 0 ? d : metricMeta(a).label.localeCompare(metricMeta(b).label)
   })
+}
+
+// --- families ---------------------------------------------------------------
+//
+// An import gives us 48 metrics and, until now, every one got its own tile. But
+// many of them are not separate measurements at all — they are one measurement
+// described several ways. Body Battery arrived as five tiles (value, high, low,
+// charged, drained) where Garmin itself shows one line and two numbers;
+// respiration as three where it is one reading with a spread; sleep as six where
+// it is one night.
+//
+// A family folds those back into a single tile without dropping anything: the
+// members stay reachable in the detail sheet, and no metric is ever hidden. The
+// point is not to show less data — it is to stop presenting one thing as seven,
+// which is what made the whole section easy to ignore.
+
+export type FamilyKind =
+  /** One reading plus the low/high it moved between — shown as "value (low–high)". */
+  | 'range'
+  /** A total and the parts that make it up — shown as one stacked bar. */
+  | 'composition'
+  /** Related readings with no arithmetic between them — shown as a list. */
+  | 'list'
+
+export type MetricFamily = {
+  key: string
+  label: string
+  group: MetricGroup
+  order: number
+  kind: FamilyKind
+  /** The headline reading. */
+  primary: string
+  /** `range`: the spread around the primary. */
+  low?: string
+  high?: string
+  /** `composition`: the parts that make up the primary. */
+  components?: string[]
+  /** Further members — reachable in detail, never a tile of their own. */
+  extra?: string[]
+}
+
+export const METRIC_FAMILIES: MetricFamily[] = [
+  {
+    key: 'bodyBattery',
+    label: 'Body Battery',
+    group: 'heart',
+    order: 14,
+    kind: 'range',
+    primary: 'bodyBattery',
+    low: 'bodyBatteryLow',
+    high: 'bodyBatteryHigh',
+    extra: ['bodyBatteryCharged', 'bodyBatteryDrained'],
+  },
+  {
+    key: 'stress',
+    label: 'Stress',
+    group: 'heart',
+    order: 13,
+    kind: 'range',
+    primary: 'stress',
+    high: 'maxStress',
+  },
+  {
+    key: 'spo2',
+    label: 'Pulse Ox',
+    group: 'heart',
+    order: 15,
+    kind: 'range',
+    primary: 'spo2',
+    low: 'spo2Low',
+  },
+  {
+    key: 'respiration',
+    label: 'Respiration',
+    group: 'heart',
+    order: 16,
+    kind: 'range',
+    primary: 'respiration',
+    low: 'respirationMin',
+    high: 'respirationMax',
+  },
+  {
+    // Sleep score stays its own tile: it is a verdict on the night, not a part of
+    // it, and it is the number most people actually look for.
+    key: 'sleepMinutes',
+    label: 'Sleep',
+    group: 'sleep',
+    order: 20,
+    kind: 'composition',
+    primary: 'sleepMinutes',
+    // Awake time is deliberately NOT a component: Garmin's sleep total is deep +
+    // REM + light, so charting awake as a slice of it would draw segments that do
+    // not add up to the number printed above them.
+    components: ['deepSleepMinutes', 'remSleepMinutes', 'lightSleepMinutes'],
+    extra: ['awakeMinutes'],
+  },
+  {
+    key: 'intensityMinutes',
+    label: 'Intensity minutes',
+    group: 'activity',
+    order: 4,
+    kind: 'composition',
+    primary: 'intensityMinutes',
+    components: ['moderateIntensityMinutes', 'vigorousIntensityMinutes'],
+  },
+  {
+    key: 'vo2max',
+    label: 'VO₂ Max',
+    group: 'training',
+    order: 30,
+    kind: 'list',
+    primary: 'vo2max',
+    extra: ['vo2maxCycling'],
+  },
+  {
+    key: 'raceTime5k',
+    label: 'Race predictor',
+    group: 'training',
+    order: 37,
+    kind: 'list',
+    primary: 'raceTime5k',
+    extra: ['raceTime10k', 'raceTimeHalf', 'raceTimeMarathon'],
+  },
+]
+
+/** Every metric key a family covers, headline first. */
+export function familyMembers(f: MetricFamily): string[] {
+  return [f.primary, f.low, f.high, ...(f.components ?? []), ...(f.extra ?? [])].filter(
+    (k): k is string => typeof k === 'string',
+  )
+}
+
+const FAMILY_BY_MEMBER = new Map<string, MetricFamily>()
+for (const f of METRIC_FAMILIES) {
+  for (const k of familyMembers(f)) FAMILY_BY_MEMBER.set(k, f)
+}
+
+/** The family a metric belongs to, if any. */
+export function familyFor(key: string): MetricFamily | undefined {
+  return FAMILY_BY_MEMBER.get(key)
+}
+
+/** A family as it should actually be rendered, given which metrics exist. */
+export type ResolvedFamily = {
+  family: MetricFamily
+  /** The metric the tile's headline number comes from. Usually `family.primary`,
+   * but falls back to whichever member IS present so a device that reports only
+   * the parts still gets a tile instead of nothing. */
+  headline: string
+  /** Present members, headline first — everything the detail sheet can show. */
+  members: string[]
+  low?: string
+  high?: string
+  components: string[]
+}
+
+export function resolveFamily(f: MetricFamily, present: Set<string>): ResolvedFamily | null {
+  const members = familyMembers(f).filter((k) => present.has(k))
+  if (members.length === 0) return null
+  const headline = present.has(f.primary) ? f.primary : members[0]
+  return {
+    family: f,
+    headline,
+    members: [headline, ...members.filter((k) => k !== headline)],
+    low: f.low && present.has(f.low) ? f.low : undefined,
+    high: f.high && present.has(f.high) ? f.high : undefined,
+    components: (f.components ?? []).filter((k) => present.has(k)),
+  }
+}
+
+/** One entry per tile: either a consolidated family or a lone metric. */
+export type MetricEntry =
+  | { kind: 'metric'; key: string; order: number; label: string }
+  | { kind: 'family'; key: string; order: number; label: string; resolved: ResolvedFamily }
+
+/**
+ * Group present metrics into ordered sections of TILES, folding families into one
+ * entry each. A metric belonging to a family never also appears on its own, so
+ * nothing is shown twice and nothing is lost.
+ */
+export function groupedMetricEntries(
+  keys: string[],
+): { group: MetricGroup; label: string; entries: MetricEntry[] }[] {
+  const present = new Set(keys)
+  const claimed = new Set<string>()
+  const entries: MetricEntry[] = []
+
+  for (const f of METRIC_FAMILIES) {
+    const resolved = resolveFamily(f, present)
+    if (!resolved) continue
+    for (const k of resolved.members) claimed.add(k)
+    entries.push({
+      kind: 'family',
+      key: f.key,
+      order: f.order,
+      label: f.label,
+      resolved,
+    })
+  }
+
+  for (const k of keys) {
+    if (claimed.has(k)) continue
+    entries.push({ kind: 'metric', key: k, order: metricMeta(k).order, label: metricMeta(k).label })
+  }
+
+  const byGroup = new Map<MetricGroup, MetricEntry[]>()
+  for (const e of entries) {
+    const g = e.kind === 'family' ? e.resolved.family.group : metricMeta(e.key).group
+    const arr = byGroup.get(g) ?? []
+    arr.push(e)
+    byGroup.set(g, arr)
+  }
+
+  return GROUP_ORDER.filter((g) => byGroup.has(g)).map((g) => ({
+    group: g,
+    label: METRIC_GROUP_LABELS[g],
+    entries: (byGroup.get(g) ?? []).sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)),
+  }))
 }
 
 /** Group present metric keys into ordered sections, each internally sorted. */
