@@ -11,6 +11,9 @@ import {
 import { metricMeta } from '../../lib/healthMetrics'
 import type { HealthDay } from '../../types'
 
+/** Look up a story metric by key, so tests exercise the real thresholds. */
+const M = (key: string) => STORY_METRICS.find((m) => m.key === key)!
+
 /**
  * Build a day-map ending today, newest day = index 0. `series[k]` supplies a value
  * per day-ago index; a function lets a test shape fast vs slow windows precisely.
@@ -59,32 +62,32 @@ describe('metricShift', () => {
 
   it('says nothing when the metric has not moved', () => {
     const days = buildDays(40, { restingHr: flat(54) })
-    expect(metricShift(desc(days), 'restingHr', 'recovery')).toBeNull()
+    expect(metricShift(desc(days), M('restingHr'))).toBeNull()
   })
 
   it('reports a real shift against the baseline', () => {
     const days = buildDays(40, { restingHr: shifts(54, 60) })
-    const shift = metricShift(desc(days), 'restingHr', 'recovery')!
+    const shift = metricShift(desc(days), M('restingHr'))!
     expect(shift.fast).toBeCloseTo(60, 6)
     expect(shift.slow).toBeCloseTo(54, 1)
     expect(shift.delta).toBeCloseTo(6, 1)
   })
 
   it('knows which direction is good for the metric', () => {
-    const up = metricShift(desc(buildDays(40, { restingHr: shifts(54, 60) })), 'restingHr', 'recovery')!
-    const down = metricShift(desc(buildDays(40, { restingHr: shifts(54, 48) })), 'restingHr', 'recovery')!
+    const up = metricShift(desc(buildDays(40, { restingHr: shifts(54, 60) })), M('restingHr'))!
+    const down = metricShift(desc(buildDays(40, { restingHr: shifts(54, 48) })), M('restingHr'))!
     // Resting HR is lowerIsBetter, so up is bad and down is good.
     expect(up.improving).toBe(false)
     expect(down.improving).toBe(true)
 
-    const hrvUp = metricShift(desc(buildDays(40, { hrv: shifts(60, 75) })), 'hrv', 'recovery')!
+    const hrvUp = metricShift(desc(buildDays(40, { hrv: shifts(60, 75) })), M('hrv'))!
     expect(hrvUp.improving).toBe(true)
   })
 
   it('excludes the recent window from the baseline it is compared against', () => {
     // If the last 7 days leaked into the 28-day baseline they would drag it up and
     // the reported delta would come out smaller than the true 6 bpm move.
-    const shift = metricShift(desc(buildDays(40, { restingHr: shifts(54, 60) })), 'restingHr', 'recovery')!
+    const shift = metricShift(desc(buildDays(40, { restingHr: shifts(54, 60) })), M('restingHr'))!
     expect(shift.slow).toBeLessThan(55)
     expect(shift.delta).toBeGreaterThan(5)
   })
@@ -94,22 +97,22 @@ describe('metricShift', () => {
     const noisy = buildDays(40, {
       steps: (i) => (i < 7 ? 10600 : 10000 + ((i * 3739) % 4000) - 2000),
     })
-    expect(metricShift(desc(noisy), 'steps', 'activity')).toBeNull()
+    expect(metricShift(desc(noisy), M('steps'))).toBeNull()
 
     const stable = buildDays(40, { restingHr: shifts(54, 57) })
-    expect(metricShift(desc(stable), 'restingHr', 'recovery')).not.toBeNull()
+    expect(metricShift(desc(stable), M('restingHr'))).not.toBeNull()
   })
 
   it('stays silent until there is enough history', () => {
     const thin = buildDays(8, { restingHr: shifts(54, 60) })
-    expect(metricShift(desc(thin), 'restingHr', 'recovery')).toBeNull()
+    expect(metricShift(desc(thin), M('restingHr'))).toBeNull()
   })
 
   it('ignores days where the metric is missing rather than treating them as zero', () => {
     const gappy = buildDays(60, {
       restingHr: (i) => (i % 3 === 0 ? undefined : i < 10 ? 60 : 54),
     })
-    const shift = metricShift(desc(gappy), 'restingHr', 'recovery')
+    const shift = metricShift(desc(gappy), M('restingHr'))
     expect(shift).not.toBeNull()
     expect(shift!.slow).toBeCloseTo(54, 1)
   })
@@ -203,5 +206,77 @@ describe('healthShifts', () => {
 
   it('returns nothing for an empty log', () => {
     expect(healthShifts({})).toEqual([])
+  })
+})
+
+describe('guardrails against meaningless findings', () => {
+  const desc = (days: Record<string, HealthDay>) => healthDaysDesc(days)
+  const TODAY = '2026-07-27'
+
+  it('ignores today for a metric that accumulates through the day', () => {
+    // Reported: "Steps 7,323 — 6,397 below your usual" at 9am on a day with 496
+    // steps so far, after a 17,000-step yesterday. The part-day dragged the
+    // 7-day mean down, so activity looked like it collapsed every morning.
+    const days = buildDays(40, { steps: (i) => (i === 0 ? 496 : 17000 + (i % 2 ? 200 : -200)) })
+    expect(metricShift(desc(days), M('steps'), DEFAULT_WINDOWS, TODAY)).toBeNull()
+
+    // And to be sure the case is real: including that part-day WOULD fire.
+    const withPartDay = healthDaysDesc(days)
+    const fastIncludingToday =
+      withPartDay.slice(0, 7).reduce((sum, d) => sum + (d.metrics.steps ?? 0), 0) / 7
+    expect(Math.abs(fastIncludingToday - 17000)).toBeGreaterThan(M('steps').minDelta)
+  })
+
+  it('still reports a real drop in a cumulative metric once days are complete', () => {
+    const days = buildDays(40, {
+      steps: (i) => (i === 0 ? 496 : i <= 7 ? 5000 : 12000 + ((i * 977) % 2000) - 1000),
+    })
+    const shift = metricShift(desc(days), M('steps'), DEFAULT_WINDOWS, TODAY)!
+    expect(shift.improving).toBe(false)
+    // Today's part-day is excluded, so the average reflects finished days only.
+    expect(shift.fast).toBeCloseTo(5000, 0)
+  })
+
+  it('does not treat a part-day as a collapse for any cumulative metric', () => {
+    for (const key of ['steps', 'activeCalories', 'intensityMinutes']) {
+      const metric = M(key)
+      expect(metric.cumulative, key).toBe(true)
+      const base = metric.minDelta * 20
+      const days = buildDays(40, { [key]: (i) => (i === 0 ? 1 : base + ((i * 7) % 3) - 1) })
+      expect(metricShift(desc(days), metric, DEFAULT_WINDOWS, TODAY), key).toBeNull()
+    }
+  })
+
+  it('will not call a fractional fitness-age drift a change', () => {
+    // Reported: "Fitness age 0.2 yr above usual". Garmin moves it in half-year
+    // steps, so a fractional delta is an artefact of averaging a step function.
+    const days = buildDays(40, { fitnessAge: (i) => (i < 7 ? 34.2 : 34.0) })
+    expect(metricShift(desc(days), M('fitnessAge'), DEFAULT_WINDOWS, TODAY)).toBeNull()
+  })
+
+  it('does report fitness age when it moves a real step', () => {
+    const days = buildDays(40, { fitnessAge: (i) => (i < 7 ? 33.0 : 34.0) })
+    const shift = metricShift(desc(days), M('fitnessAge'), DEFAULT_WINDOWS, TODAY)!
+    expect(shift.improving).toBe(true)
+  })
+
+  it('gives every story metric a floor big enough to matter', () => {
+    for (const m of STORY_METRICS) {
+      expect(m.minDelta, m.key).toBeGreaterThan(0)
+    }
+  })
+
+  it('drops the metrics that cannot support a verdict', () => {
+    const keys = STORY_METRICS.map((m) => m.key)
+    // Respiration moves 1-2 brpm, which is sensor variation, not news.
+    expect(keys).not.toContain('respiration')
+    // Endurance score drifts continuously, so it has no "usual" to be outside of.
+    expect(keys).not.toContain('enduranceScore')
+  })
+
+  it('keeps a near-constant metric from announcing every wobble', () => {
+    // A tight baseline gives a tight band, so the band test alone always fires.
+    const days = buildDays(40, { hrv: (i) => (i < 7 ? 61 : 60) })
+    expect(metricShift(desc(days), M('hrv'), DEFAULT_WINDOWS, TODAY)).toBeNull()
   })
 })

@@ -110,7 +110,13 @@ export default function HealthStorySection() {
 function ShiftRow({ shift }: { shift: Shift }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-slate-900/40 px-2.5 py-1.5">
-      <span className="min-w-0 flex-1 truncate text-[11px] text-slate-300">{shift.label}</span>
+      <span className="min-w-0 flex-1 truncate text-[11px] text-slate-300">
+        {shift.label}
+        {/* This number is the window's AVERAGE, not today's reading. Unlabelled it
+            read as "today", so a 7,323-step average next to a 17,000-step
+            yesterday looked like the app was simply wrong. */}
+        <span className="block text-[9px] text-slate-500">{DEFAULT_WINDOWS.fast}-day avg</span>
+      </span>
       <span className="shrink-0 text-[11px] font-semibold text-slate-100 tabular-nums">
         {formatMetric(shift.key, shift.fast)}
       </span>

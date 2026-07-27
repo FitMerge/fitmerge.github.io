@@ -21,6 +21,7 @@
 import type { HealthDay } from '../../types'
 import { familyFor, formatMetric, metricMeta } from '../../lib/healthMetrics'
 import { healthDaysDesc } from '../../store/health'
+import { todayISO } from '../../lib/date'
 import { typicalRangeOf } from './healthTrends'
 
 export type StoryTheme = 'recovery' | 'sleep' | 'activity' | 'fitness'
@@ -32,6 +33,28 @@ export const THEME_LABELS: Record<StoryTheme, string> = {
   fitness: 'Fitness',
 }
 
+export type StoryMetric = {
+  key: string
+  theme: StoryTheme
+  /**
+   * Smallest change worth reporting, in the metric's own units.
+   *
+   * The typical-range test alone is not enough. A metric that barely moves gets a
+   * very tight band, so a trivial wobble lands outside it and gets announced —
+   * that is how "Respiration 1 brpm below your usual" and "Fitness age 0.2 yr
+   * above usual" happened. Both cleared the band; neither means anything. A shift
+   * must now clear the band AND be big enough to matter.
+   */
+  minDelta: number
+  /**
+   * True for metrics that accumulate through the day (steps, calories, active
+   * minutes). Today is excluded for these: at 9am you have 496 of the 17,000
+   * steps you will finish with, and averaging that partial day in makes activity
+   * look like it collapsed every single morning.
+   */
+  cumulative?: boolean
+}
+
 /**
  * The metrics worth telling a story about, and which story they belong to.
  *
@@ -39,30 +62,43 @@ export const THEME_LABELS: Record<StoryTheme, string> = {
  * climbed is real but it is not news, and including it would bury the readings
  * that are. Whether a rise is good or bad comes from the catalog's
  * `lowerIsBetter`, so it stays defined in exactly one place.
+ *
+ * Two kinds of metric are deliberately absent:
+ *
+ *   Respiration — a breathing rate that moves 1-2 brpm tells you nothing
+ *   actionable, and at that resolution it is mostly sensor variation.
+ *
+ *   Endurance score — it drifts continuously rather than settling, so it has no
+ *   "usual" for a reading to be outside of. Comparing it to its own baseline
+ *   produces a verdict on noise.
+ *
+ * Both are still imported, still charted, still in the metric grid. They just do
+ * not get to make claims.
  */
-export const STORY_METRICS: { key: string; theme: StoryTheme }[] = [
-  { key: 'restingHr', theme: 'recovery' },
-  { key: 'hrv', theme: 'recovery' },
-  { key: 'bodyBattery', theme: 'recovery' },
-  { key: 'stress', theme: 'recovery' },
-  { key: 'respiration', theme: 'recovery' },
-  { key: 'spo2', theme: 'recovery' },
+export const STORY_METRICS: StoryMetric[] = [
+  { key: 'restingHr', theme: 'recovery', minDelta: 2 },
+  { key: 'hrv', theme: 'recovery', minDelta: 5 },
+  { key: 'bodyBattery', theme: 'recovery', minDelta: 5 },
+  { key: 'stress', theme: 'recovery', minDelta: 5 },
+  { key: 'spo2', theme: 'recovery', minDelta: 2 },
 
-  { key: 'sleepMinutes', theme: 'sleep' },
-  { key: 'sleepScore', theme: 'sleep' },
-  { key: 'deepSleepMinutes', theme: 'sleep' },
-  { key: 'remSleepMinutes', theme: 'sleep' },
-  { key: 'awakeMinutes', theme: 'sleep' },
+  { key: 'sleepMinutes', theme: 'sleep', minDelta: 20 },
+  { key: 'sleepScore', theme: 'sleep', minDelta: 5 },
+  { key: 'deepSleepMinutes', theme: 'sleep', minDelta: 15 },
+  { key: 'remSleepMinutes', theme: 'sleep', minDelta: 15 },
+  { key: 'awakeMinutes', theme: 'sleep', minDelta: 15 },
 
-  { key: 'steps', theme: 'activity' },
-  { key: 'intensityMinutes', theme: 'activity' },
-  { key: 'activeCalories', theme: 'activity' },
+  { key: 'steps', theme: 'activity', minDelta: 1500, cumulative: true },
+  { key: 'intensityMinutes', theme: 'activity', minDelta: 10, cumulative: true },
+  { key: 'activeCalories', theme: 'activity', minDelta: 150, cumulative: true },
 
-  { key: 'vo2max', theme: 'fitness' },
-  { key: 'trainingReadiness', theme: 'fitness' },
-  { key: 'enduranceScore', theme: 'fitness' },
-  { key: 'fitnessAge', theme: 'fitness' },
-  { key: 'raceTime5k', theme: 'fitness' },
+  { key: 'vo2max', theme: 'fitness', minDelta: 1 },
+  { key: 'trainingReadiness', theme: 'fitness', minDelta: 8 },
+  // Garmin moves fitness age in half- and whole-year steps. Averaging a step
+  // function produces fractional drift, so anything under half a year is an
+  // artefact of the averaging rather than a change in fitness.
+  { key: 'fitnessAge', theme: 'fitness', minDelta: 0.5 },
+  { key: 'raceTime5k', theme: 'fitness', minDelta: 30 },
 ]
 
 export type StoryWindows = {
@@ -110,15 +146,20 @@ export type Shift = {
  */
 export function metricShift(
   daysDesc: HealthDay[],
-  key: string,
-  theme: StoryTheme,
+  metric: StoryMetric,
   windows: StoryWindows = DEFAULT_WINDOWS,
+  today: string = todayISO(),
 ): Shift | null {
+  const { key, theme } = metric
   const fastVals: number[] = []
   const slowVals: number[] = []
   let seen = 0
 
   for (const day of daysDesc) {
+    // A cumulative metric's today is a part-day: at 9am it holds 496 of the
+    // 17,000 steps that day will end on. Averaging that in makes every morning
+    // look like a collapse in activity, so the day is skipped until it is over.
+    if (metric.cumulative && day.date >= today) continue
     const v = day.metrics[key]
     if (typeof v !== 'number' || !Number.isFinite(v)) continue
     seen += 1
@@ -134,9 +175,14 @@ export function metricShift(
 
   const fast = mean(fastVals)
   const slow = mean(slowVals)
+  // Outside the metric's own normal range...
   if (fast >= band.low && fast <= band.high) return null
 
   const delta = fast - slow
+  // ...and moved far enough to be worth a sentence. A near-constant metric has a
+  // near-zero band, so the first test alone would announce every wobble.
+  if (Math.abs(delta) < metric.minDelta) return null
+
   const meta = metricMeta(key)
   return {
     key,
@@ -169,11 +215,12 @@ function storyLabel(key: string): string {
 export function healthShifts(
   days: Record<string, HealthDay>,
   windows: StoryWindows = DEFAULT_WINDOWS,
+  today: string = todayISO(),
 ): Shift[] {
   const desc = healthDaysDesc(days)
   const out: Shift[] = []
-  for (const { key, theme } of STORY_METRICS) {
-    const shift = metricShift(desc, key, theme, windows)
+  for (const metric of STORY_METRICS) {
+    const shift = metricShift(desc, metric, windows, today)
     if (shift) out.push(shift)
   }
   // Rank by relative size so a 4bpm resting-HR move outranks a 300-step one.
@@ -216,8 +263,9 @@ export const MIN_AGREEING = 2
 export function healthStory(
   days: Record<string, HealthDay>,
   windows: StoryWindows = DEFAULT_WINDOWS,
+  today: string = todayISO(),
 ): HealthStory {
-  const shifts = healthShifts(days, windows)
+  const shifts = healthShifts(days, windows, today)
   const byTheme = new Map<StoryTheme, Shift[]>()
   for (const s of shifts) {
     const arr = byTheme.get(s.theme) ?? []
