@@ -3,7 +3,8 @@
 // convention used by Garmin Connect / Whoop status cards.
 
 import type { HealthDay } from '../../types'
-import { formatMetric } from '../../lib/healthMetrics'
+import { formatMetric, metricMeta } from '../../lib/healthMetrics'
+import { bandPosition, typicalRangeOf } from '../progress/healthTrends'
 
 /** Daily activity goals used for the ring gauges (sensible defaults). */
 export const ACTIVITY_GOALS = { steps: 10_000, floors: 10, intensityMinutes: 30 }
@@ -86,22 +87,18 @@ export type Highlight = {
  * baseline pattern) so a value reads as better/worse than normal — not in the abstract.
  */
 export function todayHighlights(daysDesc: HealthDay[]): Highlight[] {
-  const specs: { key: string; label: string; lowerIsBetter?: boolean }[] = [
-    { key: 'sleepMinutes', label: 'Sleep' },
-    { key: 'restingHr', label: 'Resting HR', lowerIsBetter: true },
-    { key: 'hrv', label: 'HRV' },
-    { key: 'stress', label: 'Stress', lowerIsBetter: true },
-  ]
+  const keys = ['sleepMinutes', 'restingHr', 'hrv', 'stress']
   const out: Highlight[] = []
-  for (const spec of specs) {
-    const latest = latestMetric(daysDesc, spec.key)
+  for (const key of keys) {
+    const latest = latestMetric(daysDesc, key)
     if (!latest) continue
 
-    // Baseline = mean of up to 28 prior samples, skipping the latest reading itself.
+    // Baseline = up to 28 prior readings, skipping today's own so a value is never
+    // compared against a baseline it is part of.
     const prior: number[] = []
     let skippedLatest = false
     for (const day of daysDesc) {
-      const v = day.metrics[spec.key]
+      const v = day.metrics[key]
       if (typeof v !== 'number' || !Number.isFinite(v)) continue
       if (!skippedLatest) {
         skippedLatest = true
@@ -113,19 +110,32 @@ export function todayHighlights(daysDesc: HealthDay[]): Highlight[] {
 
     let note = 'logged today'
     let tone: Highlight['tone'] = 'neutral'
-    if (prior.length >= 3) {
-      const base = prior.reduce((a, b) => a + b, 0) / prior.length
-      const delta = latest.value - base
-      const rel = base !== 0 ? Math.abs(delta) / Math.abs(base) : 0
-      if (rel < 0.05 || Math.abs(delta) < 0.5) {
+    // Significance is the metric's own spread, matching healthStory: a reading is
+    // only remarkable once it leaves the middle 70% of that metric's own recent
+    // history. The previous fixed 5% threshold fired constantly on naturally noisy
+    // metrics — HRV swings 20% night to night — so "below normal" appeared most
+    // days and stopped meaning anything.
+    const band = typicalRangeOf(prior)
+    if (band) {
+      const pos = bandPosition(latest.value, band)
+      if (pos === 'within') {
         note = 'in your normal range'
       } else {
-        const improving = spec.lowerIsBetter ? delta < 0 : delta > 0
+        const delta = latest.value - band.mid
+        const improving = metricMeta(key).lowerIsBetter ? delta < 0 : delta > 0
         tone = improving ? 'good' : 'bad'
-        note = `${formatMetric(spec.key, Math.abs(delta))} ${delta > 0 ? 'above' : 'below'} normal`
+        note = `${formatMetric(key, Math.abs(delta))} ${pos} normal`
       }
     }
-    out.push({ key: spec.key, label: spec.label, value: formatMetric(spec.key, latest.value), note, tone })
+    out.push({ key, label: LABELS[key] ?? metricMeta(key).label, value: formatMetric(key, latest.value), note, tone })
   }
   return out
+}
+
+/** Short names for the home tiles, where "Resting heart rate" does not fit. */
+const LABELS: Record<string, string> = {
+  sleepMinutes: 'Sleep',
+  restingHr: 'Resting HR',
+  hrv: 'HRV',
+  stress: 'Stress',
 }

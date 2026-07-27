@@ -18,7 +18,6 @@ import {
   metricSpark,
   scoreColor,
   scoreWord,
-  todayHighlights,
 } from './healthToday'
 import FormFitnessSection from '../progress/FormFitnessSection'
 import RecoveryRiskSection from '../progress/RecoveryRiskSection'
@@ -120,7 +119,6 @@ export default function Health() {
 function TodayTab({ desc }: { desc: ReturnType<typeof healthDaysDesc> }) {
   const hero = useMemo(() => heroScore(desc), [desc])
   const heroSpark = useMemo(() => (hero ? metricSpark(desc, hero.key, 14) : []), [desc, hero])
-  const highlights = useMemo(() => todayHighlights(desc), [desc])
 
   const gauges = useMemo(() => {
     return (['steps', 'intensityMinutes', 'floors'] as const)
@@ -155,28 +153,6 @@ function TodayTab({ desc }: { desc: ReturnType<typeof healthDaysDesc> }) {
           {heroSpark.length >= 2 && (
             <Sparkline values={heroSpark} width={220} height={34} stroke={scoreColor(hero.value)} />
           )}
-        </Card>
-      )}
-
-      {/* This-morning highlights, each read against your personal baseline. */}
-      {highlights.length > 0 && (
-        <Card className="space-y-2.5">
-          <h2 className="text-sm font-semibold text-slate-200">This morning</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {highlights.map((h) => (
-              <div key={h.key} className="rounded-xl bg-slate-800/60 p-3">
-                <p className="text-[11px] text-slate-400">{h.label}</p>
-                <p className="text-lg font-bold text-slate-100">{h.value}</p>
-                <p
-                  className={`text-[11px] ${
-                    h.tone === 'good' ? 'text-emerald-400' : h.tone === 'bad' ? 'text-rose-400' : 'text-slate-500'
-                  }`}
-                >
-                  {h.note}
-                </p>
-              </div>
-            ))}
-          </div>
         </Card>
       )}
 
