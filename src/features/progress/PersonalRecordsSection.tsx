@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight, Trophy } from 'lucide-react'
 import Card from '../../components/Card'
-import ExerciseProgressSheet from '../workouts/ExerciseProgressSheet'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { getExerciseById } from '../../data/exercises'
@@ -13,12 +12,17 @@ import { monthDayLabel, personalRecords } from './utils'
 const FRESH_DAYS = 14
 const COLLAPSED = 5
 
-export default function PersonalRecordsSection() {
+type Props = {
+  /** Tapping a record charts that lift at the top of the page, rather than
+   * opening a second chart in a sheet on top of the one already on screen. */
+  onSelectExercise: (id: string) => void
+}
+
+export default function PersonalRecordsSection({ onSelectExercise }: Props) {
   const sessions = useWorkoutsStore((s) => s.sessions)
   const units = useSettingsStore((s) => s.units)
   const unitLabel = weightUnitLabel(units)
   const [expanded, setExpanded] = useState(false)
-  const [openExerciseId, setOpenExerciseId] = useState<string | null>(null)
 
   const records = useMemo(() => personalRecords(sessions), [sessions])
   const freshFrom = addDays(todayISO(), -(FRESH_DAYS - 1))
@@ -33,8 +37,9 @@ export default function PersonalRecordsSection() {
       {/* Ordering by date, not by weight, is what makes this card worth opening:
           ranked by weight it was a permanent list of your five biggest lifts. */}
       <p className="mb-2.5 text-[11px] text-slate-500">
-        Your best estimated 1RM for each exercise, most recently set first. Tap one to see how it
-        has moved.
+        Your best estimated 1RM for each exercise, most recently set first — the one place a
+        formula is used, because it is the only fair way to compare a heavy triple with a set of
+        ten. Tap one to chart that lift above.
       </p>
 
       {records.length === 0 ? (
@@ -56,7 +61,7 @@ export default function PersonalRecordsSection() {
               <button
                 key={pr.exerciseId}
                 type="button"
-                onClick={() => setOpenExerciseId(pr.exerciseId)}
+                onClick={() => onSelectExercise(pr.exerciseId)}
                 className="flex w-full items-center gap-3 rounded-lg px-1.5 py-1.5 text-left active:bg-slate-800"
               >
                 <span
@@ -104,7 +109,6 @@ export default function PersonalRecordsSection() {
         </div>
       )}
 
-      <ExerciseProgressSheet exerciseId={openExerciseId} onClose={() => setOpenExerciseId(null)} />
     </Card>
   )
 }

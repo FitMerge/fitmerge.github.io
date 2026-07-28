@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, todayISO } from '../../lib/date'
-import { epley1RM, exerciseTrends, personalRecords } from './utils'
+import { epley1RM, personalRecords } from './utils'
 import type { WorkoutSession } from '../../types'
 
 /** `n` days before today. Dates are relative so these tests do not rot. */
@@ -97,41 +97,5 @@ describe('personalRecords', () => {
       session(ago(18), { bench: [[200, 5]] }),
     ]
     expect(personalRecords(sessions)[0].date).toBe(ago(18))
-  })
-})
-
-describe('exerciseTrends', () => {
-  it('takes the best set of each session, so a back-off set is not a bad day', () => {
-    const sessions = [session(ago(1), { bench: [[225, 5], [135, 12]] })]
-    const t = exerciseTrends(sessions, '30d')[0]
-    expect(t.points).toHaveLength(1)
-    expect(t.points[0].weight).toBe(225)
-  })
-
-  it('orders by most recently trained', () => {
-    const sessions = [
-      session(ago(26), { squat: [[300, 5]] }),
-      session(ago(1), { curl: [[40, 10]] }),
-    ]
-    expect(exerciseTrends(sessions, '30d').map((t) => t.exerciseId)).toEqual(['curl', 'squat'])
-  })
-
-  it('reports first and last inside the range so a change can be shown', () => {
-    const sessions = [
-      session(ago(8), { bench: [[180, 5]] }),
-      session(ago(1), { bench: [[200, 5]] }),
-    ]
-    const t = exerciseTrends(sessions, '30d')[0]
-    expect(t.first).toBeCloseTo(epley1RM(180, 5), 5)
-    expect(t.last).toBeCloseTo(epley1RM(200, 5), 5)
-    expect(t.best).toBeCloseTo(epley1RM(200, 5), 5)
-  })
-
-  it('excludes sessions outside the range', () => {
-    const sessions = [
-      session(ago(200), { bench: [[180, 5]] }),
-      session(ago(1), { bench: [[200, 5]] }),
-    ]
-    expect(exerciseTrends(sessions, '7d')[0].points).toHaveLength(1)
   })
 })

@@ -8,7 +8,9 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { formatDurationMin, sessionDurationMs, totalSetsDone, totalVolume, weightUnitLabel } from '../workouts/utils'
 import { isCardioSession } from '../workouts/cardio'
+import SegmentedControl from '../../components/SegmentedControl'
 import {
+  RANGE_OPTIONS,
   finishedSessionsInRange,
   monthDayLabel,
   totalSetsInRange,
@@ -18,11 +20,10 @@ import {
 } from './utils'
 import type { WorkoutSession } from '../../types'
 
-type VolumeSectionProps = {
-  range: RangeKey
-}
-
-export default function VolumeSection({ range }: VolumeSectionProps) {
+export default function VolumeSection() {
+  // Its own range: this card is the only thing that uses one, and a picker at
+  // page level read as though it governed the exercise chart too.
+  const [range, setRange] = useState<RangeKey>('30d')
   const sessions = useWorkoutsStore((s) => s.sessions)
   const units = useSettingsStore((s) => s.units)
   const unitLabel = weightUnitLabel(units)
@@ -61,10 +62,18 @@ export default function VolumeSection({ range }: VolumeSectionProps) {
       <p className="mb-3 text-[11px] text-slate-500">
         Total weight moved per {periodNoun} — every working set&apos;s weight × reps, added up, in{' '}
         {unitLabel}. It measures how much work you did, not how strong you are: it climbs when you
-        add sets and drops on a deload. For strength, see the section below.
+        add sets and drops on a deload. For a single lift over time, use the chart above.
       </p>
 
-      <div className="mb-3 grid grid-cols-2 gap-3">
+      <SegmentedControl
+        size="sm"
+        options={RANGE_OPTIONS}
+        value={range}
+        onChange={setRange}
+        ariaLabel="Volume range"
+      />
+
+      <div className="mb-3 mt-3 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-slate-800/60 p-3">
           <p className="text-xs text-slate-500">Sessions</p>
           <p className="text-xl font-bold text-slate-100">{sessionsInRange.length}</p>

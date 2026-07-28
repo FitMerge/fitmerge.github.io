@@ -105,67 +105,6 @@ export function totalSetsInRange(sessions: WorkoutSession[]): number {
   return sessions.reduce((sum, s) => sum + totalSetsDone(s), 0)
 }
 
-export type StrengthPoint = { date: string; est1RM: number; weight: number; reps: number }
-
-export type ExerciseTrend = {
-  exerciseId: string
-  /** Best working set per session, oldest → newest, within the range. */
-  points: StrengthPoint[]
-  /** Est-1RM at the start and end of the range, and the best inside it. */
-  first: number
-  last: number
-  best: number
-  /** Last day this exercise was trained — what the list is ordered by. */
-  lastDate: string
-}
-
-/**
- * Per-exercise strength over time: one point per session, taken from the best
- * working set in it.
- *
- * Volume answers "how much work did I do"; this answers "am I getting stronger",
- * which is the question a lifter is actually asking. The best set is the right
- * summary of a session because it is the ceiling you reached — an extra back-off
- * set should not read as a worse day.
- */
-export function exerciseTrends(sessions: WorkoutSession[], range: RangeKey): ExerciseTrend[] {
-  const start = rangeStartDate(range)
-  const byExercise = new Map<string, StrengthPoint[]>()
-
-  const ordered = [...sessions].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  for (const session of ordered) {
-    if (!session.finishedAt || session.date < start || session.date > todayISO()) continue
-    for (const entry of session.entries) {
-      let best: StrengthPoint | null = null
-      for (const set of entry.sets) {
-        if (!set.done || set.type === 'warmup' || set.reps <= 0 || set.weight <= 0) continue
-        const est1RM = epley1RM(set.weight, set.reps)
-        if (!best || est1RM > best.est1RM) {
-          best = { date: session.date, est1RM, weight: set.weight, reps: set.reps }
-        }
-      }
-      if (!best) continue
-      const list = byExercise.get(entry.exerciseId) ?? []
-      list.push(best)
-      byExercise.set(entry.exerciseId, list)
-    }
-  }
-
-  const out: ExerciseTrend[] = []
-  for (const [exerciseId, points] of byExercise) {
-    out.push({
-      exerciseId,
-      points,
-      first: points[0].est1RM,
-      last: points[points.length - 1].est1RM,
-      best: points.reduce((m, p) => Math.max(m, p.est1RM), 0),
-      lastDate: points[points.length - 1].date,
-    })
-  }
-  // Most recently trained first: what you did yesterday is what you want to see.
-  return out.sort((a, b) => (a.lastDate !== b.lastDate ? (a.lastDate < b.lastDate ? 1 : -1) : b.last - a.last))
-}
-
 export type PersonalRecord = {
   exerciseId: string
   est1RM: number
