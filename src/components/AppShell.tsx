@@ -2,6 +2,7 @@ import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Home, UtensilsCrossed, Dumbbell, HeartPulse, TrendingUp, Plus, Loader2 } from 'lucide-react'
 import ActionHub from '../features/assistant/ActionHub'
+import ActiveWorkoutBar from '../features/workouts/ActiveWorkoutBar'
 import { useGoalAutoCheck } from '../features/assistant/goalAutoCheck'
 import { useGarminSourceDetect } from '../features/settings/useGarminLink'
 
@@ -36,6 +37,9 @@ export default function AppShell() {
           </Suspense>
         </div>
       </main>
+      {/* Sits directly above the tab bar, so a workout in progress is never more
+          than one tap away and its clocks stay on screen wherever you are. */}
+      <ActiveWorkoutBar />
       <nav className="border-t border-slate-800 bg-slate-950/90 backdrop-blur safe-bottom">
         <div className="max-w-md mx-auto w-full flex items-stretch justify-between px-2">
           {tabs.slice(0, 2).map(({ to, label, icon: Icon, end }) => (
