@@ -10,6 +10,7 @@ import ExerciseLibrary from './ExerciseLibrary'
 import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
 import SessionHistory from './SessionHistory'
+import RecentWorkoutsCard from './RecentWorkoutsCard'
 import ProgramBuilder from './ProgramBuilder'
 import ProgramLibrary from './ProgramLibrary'
 import ProgramDetail from './ProgramDetail'
@@ -362,12 +363,18 @@ export default function Workouts() {
         </div>
       </Card>
 
+      {/* The last few sessions, with their top sets, rather than only a count. */}
+      <RecentWorkoutsCard
+        onSeeAll={() => setView({ kind: 'history' })}
+        onRepeated={() => setView({ kind: 'session' })}
+      />
+
       <Card className="active:bg-slate-800/60 flex items-center gap-3" onClick={() => setView({ kind: 'history' })}>
         <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-primary-400 shrink-0">
           <History size={18} />
         </div>
         <div>
-          <p className="text-sm font-medium text-slate-100">History</p>
+          <p className="text-sm font-medium text-slate-100">All history</p>
           <p className="text-xs text-slate-500">
             {finishedCount} finished workout{finishedCount === 1 ? '' : 's'}
           </p>

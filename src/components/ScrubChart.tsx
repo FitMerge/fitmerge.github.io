@@ -56,6 +56,9 @@ type Props<T> = {
   /** Which point to read out before the user touches anything. Defaults to the
    * last, which is wrong for a series that ends in a forecast. */
   defaultIndex?: number
+  /** Fired when the selection changes, for charts that drill down into the
+   * selected point. Not called for hover-only movement on a mouse. */
+  onPick?: (point: T, index: number) => void
   /** The recharts chart. Its own <Tooltip> should be removed; this replaces it. */
   children: ReactElement
 }
@@ -67,6 +70,7 @@ export default function ScrubChart<T>({
   values,
   empty = 'no reading',
   defaultIndex,
+  onPick,
   children,
 }: Props<T>) {
   const [picked, setPicked] = useState<{ index: number; x: number } | null>(null)
@@ -74,11 +78,19 @@ export default function ScrubChart<T>({
   const pick = useCallback(
     (state: ChartMouseState | null) => {
       const i = state?.activeTooltipIndex
-      if (typeof i !== 'number' || i < 0) return
-      setPicked({ index: i, x: state?.activeCoordinate?.x ?? 0 })
+      if (typeof i !== 'number' || i < 0 || i >= data.length) return
+      setPicked((prev) => {
+        // Only announce a genuine change of point: a drag fires this many times a
+        // second, and re-running a drill-down per frame is wasted work.
+        if (prev?.index !== i) onPick?.(data[i], i)
+        return { index: i, x: state?.activeCoordinate?.x ?? 0 }
+      })
     },
-    [],
+    [data, onPick],
   )
+  // Leaving with a mouse only ends the hover readout. It deliberately does NOT
+  // retract an onPick: a drill-down you opened should survive the pointer moving
+  // away from the chart to go and read it.
   const clear = useCallback(() => setPicked(null), [])
 
   // Nothing selected → read out the newest point. A chart that shows a number

@@ -5,6 +5,7 @@ import MeasurementsSection from './MeasurementsSection'
 import CaloriesSection from './CaloriesSection'
 import MacroAveragesSection from './MacroAveragesSection'
 import VolumeSection from './VolumeSection'
+import StrengthProgressSection from './StrengthProgressSection'
 import PersonalRecordsSection from './PersonalRecordsSection'
 import ActiveTimeSection from './ActiveTimeSection'
 import CardioDashboard from '../workouts/CardioDashboard'
@@ -22,7 +23,7 @@ const DOMAIN_OPTIONS = [
 const DOMAIN_BLURB: Record<DomainKey, string> = {
   body: 'Weight trend and measurements.',
   nutrition: 'Calories and macros over time.',
-  lifting: 'Volume and personal records.',
+  lifting: 'Strength per exercise, volume and personal records.',
   cardio: 'Every activity — runs, walks, rides, soccer, hikes.',
 }
 
@@ -77,6 +78,9 @@ export default function Progress() {
             onChange={setLiftingRange}
             ariaLabel="Lifting range"
           />
+          {/* Strength first: "is the bar going up" is the question, and volume is
+              context for it rather than an answer to it. */}
+          <StrengthProgressSection range={liftingRange} />
           <VolumeSection range={liftingRange} />
           <PersonalRecordsSection />
         </div>

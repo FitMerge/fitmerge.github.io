@@ -7,7 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { ArrowDown, ArrowUp, Flag, Plus, Scale, Target, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Flag, Plus, Scale, Target, Trash2 } from 'lucide-react'
 import Card from '../../components/Card'
 import ScrubChart from '../../components/ScrubChart'
 import Button from '../../components/Button'
@@ -22,6 +22,9 @@ import { isoToLabel } from '../../lib/date'
 import { convertWeight, lbToKg, weightUnit } from '../../lib/units'
 import { lastNEntries } from './utils'
 import { WEIGHT_RANGE_OPTIONS, weightStats, weightTrendData, type WeightRangeKey } from './weightTrends'
+
+/** Weigh-ins shown before the list is expanded. */
+const WEIGH_INS_COLLAPSED = 5
 
 function longDateLabel(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
@@ -41,7 +44,11 @@ export default function WeightSection() {
   const goalDisplay = goalWeightKg !== undefined ? convertWeight(goalWeightKg, units) : undefined
   const chartData = useMemo(() => weightTrendData(entries, range, units), [entries, range, units])
   const stats = useMemo(() => weightStats(entries, range, units, goalDisplay), [entries, range, units, goalDisplay])
-  const recentEntries = useMemo(() => lastNEntries(entries, 5), [entries])
+  // Five was a hard ceiling with nothing behind it: on a scale you step on most
+  // mornings that is under a week of history, and the rest was unreachable.
+  const [showAllEntries, setShowAllEntries] = useState(false)
+  const sortedEntries = useMemo(() => lastNEntries(entries, entries.length), [entries])
+  const recentEntries = showAllEntries ? sortedEntries : sortedEntries.slice(0, WEIGH_INS_COLLAPSED)
 
   // Y domain spans the data and — when set — the goal, so the goal reference line is
   // always visible even when it's well below the current weight.
@@ -214,7 +221,16 @@ export default function WeightSection() {
         Bold line = smoothed trend · dots = actual weigh-ins
       </p>
 
-      <div className="mt-3 space-y-1">
+      <div className="mt-3 flex items-baseline justify-between">
+        <h3 className="text-xs font-semibold text-slate-300">Weigh-ins</h3>
+        <span className="text-[10px] text-slate-500">
+          {showAllEntries
+            ? `all ${sortedEntries.length}`
+            : `${Math.min(WEIGH_INS_COLLAPSED, sortedEntries.length)} of ${sortedEntries.length}`}
+        </span>
+      </div>
+
+      <div className="mt-1 space-y-1">
         {recentEntries.map((entry) => (
           <div key={entry.date} className="flex items-center justify-between border-t border-slate-800/60 py-1.5">
             <div>
@@ -235,6 +251,18 @@ export default function WeightSection() {
           </div>
         ))}
       </div>
+
+      {sortedEntries.length > WEIGH_INS_COLLAPSED && (
+        <button
+          type="button"
+          onClick={() => setShowAllEntries((v) => !v)}
+          className="mt-2 flex w-full items-center justify-center gap-1 border-t border-slate-800/60 pt-2 text-[11px] font-medium text-slate-400 active:text-slate-200"
+          aria-expanded={showAllEntries}
+        >
+          {showAllEntries ? 'Show less' : `Show all ${sortedEntries.length} weigh-ins`}
+          <ChevronDown size={13} className={showAllEntries ? 'rotate-180' : ''} />
+        </button>
+      )}
 
       <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Log weight">
         <LogWeightSheet onClose={() => setSheetOpen(false)} />
