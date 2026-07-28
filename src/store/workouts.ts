@@ -12,6 +12,24 @@ type WorkoutsState = {
   garminRecords: GarminRecord[]
   activeProgramId?: string
   activeSessionId?: string
+  /**
+   * The rest countdown for the in-progress session, held as an absolute DEADLINE
+   * rather than a remaining count.
+   *
+   * It lives in the store, not in ActiveSession, because leaving the workout page
+   * unmounted the component and took the timer with it — the rest between sets is
+   * exactly when you go and look at something else. And it is a deadline because a
+   * counter that decrements once a second is only correct while something is
+   * decrementing it: a backgrounded tab (or a locked phone) suspends timers, so a
+   * count would resume where it left off while the clock had moved on.
+   *
+   * Local to the device, like activeSessionId — never synced.
+   */
+  restTimer?: { endsAt: number; totalSeconds: number }
+  startRestTimer: (seconds: number) => void
+  /** Extend a running timer, keeping the bar's proportions honest. */
+  addRestTime: (seconds: number) => void
+  clearRestTimer: () => void
   addRoutine: (routine: Omit<Routine, 'id'>) => void
   updateRoutine: (id: string, patch: Partial<Routine>) => void
   removeRoutine: (id: string) => void
@@ -45,6 +63,21 @@ export const useWorkoutsStore = create<WorkoutsState>()(
       garminRecords: [],
       activeProgramId: undefined,
       activeSessionId: undefined,
+      restTimer: undefined,
+      startRestTimer: (seconds) => {
+        set({ restTimer: { endsAt: Date.now() + seconds * 1000, totalSeconds: seconds } })
+      },
+      addRestTime: (seconds) => {
+        const cur = get().restTimer
+        if (!cur) return
+        // From NOW when the timer has already run out, so "+15s" on a finished rest
+        // gives you fifteen seconds rather than a deadline that is still in the past.
+        const from = Math.max(cur.endsAt, Date.now())
+        set({ restTimer: { endsAt: from + seconds * 1000, totalSeconds: cur.totalSeconds + seconds } })
+      },
+      clearRestTimer: () => {
+        set({ restTimer: undefined })
+      },
       addRoutine: (routine) => {
         set({ routines: [...get().routines, { ...routine, id: uid() }] })
       },
@@ -101,11 +134,13 @@ export const useWorkoutsStore = create<WorkoutsState>()(
         set({ sessions: get().sessions.filter((s) => s.id !== id) })
       },
       setActiveSessionId: (id) => {
-        set({ activeSessionId: id })
+        // A rest timer belongs to the workout that started it; finishing or
+        // discarding one must not leave its countdown running over the next.
+        set({ activeSessionId: id, restTimer: undefined })
       },
       startSession: (session) => {
         const id = uid()
-        set({ sessions: [...get().sessions, { ...session, id }], activeSessionId: id })
+        set({ sessions: [...get().sessions, { ...session, id }], activeSessionId: id, restTimer: undefined })
         return id
       },
       addProgram: (program) => {

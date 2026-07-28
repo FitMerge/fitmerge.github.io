@@ -31,7 +31,13 @@ type ViewState =
   | { kind: 'programs' }
 
 export default function Workouts() {
-  const [view, setView] = useState<ViewState>({ kind: 'home' })
+  // Land back IN the workout when one is running. This state is local, so leaving
+  // the tab used to drop you on the workouts home with a Resume card — an extra
+  // tap to get back to a session you never left, and no clock in the meantime.
+  // Lazy init only, so exiting the session later still goes home as it should.
+  const [view, setView] = useState<ViewState>(() =>
+    useWorkoutsStore.getState().activeSessionId ? { kind: 'session' } : { kind: 'home' },
+  )
   const [previewRoutine, setPreviewRoutine] = useState<Routine | null>(null)
 
   const location = useLocation()

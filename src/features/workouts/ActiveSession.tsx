@@ -38,8 +38,6 @@ type ActiveSessionProps = {
   onExit: () => void
 }
 
-type RestTimerState = { total: number; secondsLeft: number }
-
 export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps) {
   const sessions = useWorkoutsStore((s) => s.sessions)
   const routines = useWorkoutsStore((s) => s.routines)
@@ -47,6 +45,10 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const removeSession = useWorkoutsStore((s) => s.removeSession)
   const setActiveSessionId = useWorkoutsStore((s) => s.setActiveSessionId)
   const completeProgramDay = useWorkoutsStore((s) => s.completeProgramDay)
+  const rest = useWorkoutsStore((s) => s.restTimer)
+  const startRestTimer = useWorkoutsStore((s) => s.startRestTimer)
+  const addRestTime = useWorkoutsStore((s) => s.addRestTime)
+  const clearRestTimer = useWorkoutsStore((s) => s.clearRestTimer)
   const units = useSettingsStore((s) => s.units)
   const restTimerSound = useSettingsStore((s) => s.restTimerSound)
   const setRestTimerSound = useSettingsStore((s) => s.setRestTimerSound)
@@ -58,7 +60,6 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   )
 
   const [now, setNow] = useState(() => Date.now())
-  const [restTimer, setRestTimer] = useState<RestTimerState | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [finishOpen, setFinishOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -70,27 +71,39 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
   const [prCelebration, setPrCelebration] = useState<PRCelebration | null>(null)
   // Guards the rest-timer alert so it dings exactly once per timer, and gives each
   // PR celebration a unique id. lastCountdownSecond stops a 3/2/1 blip repeating.
-  const restAlerted = useRef(false)
+  // Both are seeded from the timer's actual state so that coming back to a rest
+  // that already finished while you were on another page does not re-ring it.
+  const restAlerted = useRef(rest !== undefined && rest.endsAt <= Date.now())
   const lastCountdownSecond = useRef<number | null>(null)
   const prSeq = useRef(0)
 
+  // One clock for the page: the elapsed header and the rest countdown are both
+  // read off it, and both are differences against a stored timestamp, so a tick
+  // that is late (or missing entirely, while the app is backgrounded) costs
+  // nothing but a stale pixel until the next one lands.
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [])
 
+  const restSecondsLeft = rest ? Math.ceil((rest.endsAt - now) / 1000) : null
+
+  // Waking from a backgrounded tab: catch the display up immediately instead of
+  // showing the pre-suspend value until the next interval tick.
   useEffect(() => {
-    if (!restTimer || restTimer.secondsLeft <= 0) return
-    const t = setTimeout(() => {
-      setRestTimer((r) => (r ? { ...r, secondsLeft: r.secondsLeft - 1 } : r))
-    }, 1000)
-    return () => clearTimeout(t)
-  }, [restTimer])
+    const wake = () => setNow(Date.now())
+    document.addEventListener('visibilitychange', wake)
+    window.addEventListener('focus', wake)
+    return () => {
+      document.removeEventListener('visibilitychange', wake)
+      window.removeEventListener('focus', wake)
+    }
+  }, [])
 
   // 3-2-1 countdown blips, then the higher "go" tone + buzz at zero (if sound on).
   useEffect(() => {
-    if (!restTimer) return
-    const s = restTimer.secondsLeft
+    if (restSecondsLeft === null) return
+    const s = restSecondsLeft
     if (s > 3) lastCountdownSecond.current = null // reset so +15s re-arms the countdown
     if (restTimerSound && (s === 3 || s === 2 || s === 1) && lastCountdownSecond.current !== s) {
       lastCountdownSecond.current = s
@@ -103,7 +116,7 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         vibrate([120, 60, 120])
       }
     }
-  }, [restTimer, restTimerSound])
+  }, [restSecondsLeft, restTimerSound])
 
   // Per-exercise reference data: previous session's sets (ghost hints) and the
   // est-1RM bar a new set must clear to count as a personal record.
@@ -286,7 +299,7 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
     restAlerted.current = false
     lastCountdownSecond.current = null
     primeAudio()
-    setRestTimer({ total, secondsLeft: total })
+    startRestTimer(total)
     checkForPRs(exerciseId, setIdx)
   }
 
@@ -473,17 +486,20 @@ export default function ActiveSession({ sessionId, onExit }: ActiveSessionProps)
         )}
       </div>
 
-      {restTimer && (
+      {rest && restSecondsLeft !== null && (
         <RestTimerBar
-          secondsLeft={restTimer.secondsLeft}
-          totalSeconds={restTimer.total}
+          secondsLeft={restSecondsLeft}
+          totalSeconds={rest.totalSeconds}
           soundOn={restTimerSound}
           onToggleSound={() => {
             primeAudio()
             setRestTimerSound(!restTimerSound)
           }}
-          onAddTime={() => setRestTimer((r) => (r ? { total: r.total + 15, secondsLeft: r.secondsLeft + 15 } : r))}
-          onSkip={() => setRestTimer(null)}
+          onAddTime={() => {
+            restAlerted.current = false
+            addRestTime(15)
+          }}
+          onSkip={() => clearRestTimer()}
         />
       )}
 
