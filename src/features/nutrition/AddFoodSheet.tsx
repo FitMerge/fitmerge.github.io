@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Camera, ChevronLeft, Wand2, X, Zap } from 'lucide-react'
+import { Camera, ChevronLeft, History, Wand2, X, Zap } from 'lucide-react'
 import AddDescribeTab from './AddDescribeTab'
 import AddManualTab from './AddManualTab'
 import AddPhotoTab from './AddPhotoTab'
 import AddSearchTab from './AddSearchTab'
+import PreviousMealsTab from './PreviousMealsTab'
 import QuickAddTab from './QuickAddTab'
 import type { MealType } from '../../types'
 
@@ -14,7 +15,7 @@ const MEALS: { type: MealType; label: string }[] = [
   { type: 'snack', label: 'Snacks' },
 ]
 
-type View = 'browse' | 'manual' | 'photo' | 'quickadd' | 'describe'
+type View = 'browse' | 'manual' | 'photo' | 'quickadd' | 'describe' | 'previous'
 
 type AddFoodSheetProps = {
   open: boolean
@@ -136,6 +137,26 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
               </span>
             </button>
 
+            {/* Next to Describe because they answer the same question — "this plate
+                has ten things on it" — from the two directions that actually work:
+                say it in a sentence, or reuse the morning you already logged. */}
+            <button
+              type="button"
+              onClick={() => setView('previous')}
+              className="flex w-full items-center gap-3 rounded-xl bg-slate-900 p-3 text-left active:bg-slate-800"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-800">
+                <History size={17} className="text-slate-300" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-slate-100">Add a previous meal</span>
+                <span className="mt-0.5 block text-xs text-slate-400">
+                  Re-add a past {MEALS.find((m) => m.type === mealType)?.label.toLowerCase()} — keep,
+                  drop or resize each item
+                </span>
+              </span>
+            </button>
+
             <AddSearchTab
               date={date}
               mealType={mealType}
@@ -181,6 +202,19 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
               onClose={onClose}
               initialText={describeSeed}
             />
+          </div>
+        )}
+
+        {view === 'previous' && (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setView('browse')}
+              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
+            >
+              <ChevronLeft size={16} /> Back to search
+            </button>
+            <PreviousMealsTab key={mealType} date={date} mealType={mealType} onClose={onClose} />
           </div>
         )}
 
