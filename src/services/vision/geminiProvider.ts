@@ -94,7 +94,14 @@ export async function analyzeGemini(imageDataUrl: string, apiKey: string): Promi
     ],
     generationConfig: {
       response_mime_type: 'application/json',
-      temperature: 0.2,
+      // Determinism, not creativity. This estimates a number that goes into a
+      // food diary, so the same question must give the same answer: temperature
+      // 0 with topK/topP pinned removes the sampling that had "1 tbsp olive oil"
+      // landing on 119 kcal one day and 124 the next. The APIs still promise no
+      // guarantee, which is why the result is also cached.
+      temperature: 0,
+      topP: 1,
+      topK: 1,
     },
   }
 

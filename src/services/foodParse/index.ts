@@ -12,6 +12,7 @@
 import { generateContent } from '../gemini/model'
 import { VisionError, type FoodAnalysisItem } from '../vision/types'
 import { ALTERNATIVES_PROMPT, parseAlternatives } from '../vision/alternatives'
+import { forgetCached, getCached, setCached } from './cache'
 
 export type { FoodAnalysisItem } from '../vision/types'
 export { VisionError } from '../vision/types'
@@ -96,9 +97,20 @@ export function parseFoodItems(raw: unknown): FoodAnalysisItem[] {
 export async function parseFoodDescription(
   description: string,
   apiKey: string | undefined,
+  /** Skip the remembered answer and ask again — the explicit redo action. */
+  options: { refresh?: boolean } = {},
 ): Promise<FoodParseResult> {
   const query = description.trim()
   if (!query) throw new VisionError('Describe what you ate first')
+
+  // Consistency before anything else: an identical description returns the
+  // identical breakdown rather than a fresh estimate that differs by a few kcal.
+  if (options.refresh) {
+    forgetCached(query)
+  } else {
+    const hit = getCached<FoodAnalysisItem[]>(query)
+    if (hit && hit.length > 0) return { items: hit, query }
+  }
 
   const key = apiKey?.trim()
   if (!key) {
@@ -109,9 +121,14 @@ export async function parseFoodDescription(
     contents: [{ parts: [{ text: `${PROMPT}${query}` }] }],
     generationConfig: {
       response_mime_type: 'application/json',
-      // Low, not zero: macro estimation benefits from a little flexibility, but
-      // the same meal typed twice should land in the same place.
-      temperature: 0.2,
+      // Determinism, not creativity. This estimates a number that goes into a
+      // food diary, so the same question must give the same answer: temperature
+      // 0 with topK/topP pinned removes the sampling that had "1 tbsp olive oil"
+      // landing on 119 kcal one day and 124 the next. The APIs still promise no
+      // guarantee, which is why the result is also cached.
+      temperature: 0,
+      topP: 1,
+      topK: 1,
     },
   }
 
@@ -135,5 +152,6 @@ export async function parseFoodDescription(
   if (items.length === 0) {
     throw new VisionError("That didn't look like food — try naming the dish and roughly how much")
   }
+  setCached(query, items)
   return { items, query }
 }

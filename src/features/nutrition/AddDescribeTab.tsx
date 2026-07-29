@@ -67,12 +67,16 @@ export default function AddDescribeTab({ date, mealType, onClose, initialText }:
     { calories: 0, protein: 0, carbs: 0, fat: 0 },
   )
 
-  async function run() {
+  // `refresh` is the explicit "ask again" path. Normally an identical
+  // description returns the identical breakdown from cache — that consistency is
+  // the point — but pressing redo is a request for a second opinion, so it must
+  // not silently hand back the answer you just rejected.
+  async function run(refresh = false) {
     if (!text.trim()) return
     setStage('parsing')
     setRefiningId(null)
     try {
-      const result = await parseFoodDescription(text, geminiApiKey)
+      const result = await parseFoodDescription(text, geminiApiKey, { refresh })
       setItems(result.items.map((it, i) => ({ ...it, id: `${i}-${it.name}`, included: true })))
       setStage('review')
     } catch (err) {
@@ -117,7 +121,7 @@ export default function AddDescribeTab({ date, mealType, onClose, initialText }:
             rows={2}
             className="w-full resize-none rounded-lg bg-slate-900 px-2.5 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-primary-500"
           />
-          <Button variant="ghost" full onClick={() => void run()} disabled={!text.trim()}>
+          <Button variant="ghost" full onClick={() => void run(true)} disabled={!text.trim()}>
             <span className="flex items-center justify-center gap-1.5">
               <RefreshCw size={14} /> Add detail &amp; redo
             </span>
