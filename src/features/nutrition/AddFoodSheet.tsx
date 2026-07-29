@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Camera, ChevronLeft, History, Wand2, X, Zap } from 'lucide-react'
-import AddDescribeTab from './AddDescribeTab'
+import { ChevronLeft, X } from 'lucide-react'
 import AddManualTab from './AddManualTab'
 import AddPhotoTab from './AddPhotoTab'
-import AddSearchTab from './AddSearchTab'
-import PreviousMealsTab from './PreviousMealsTab'
+import LogFoodHub from './LogFoodHub'
 import QuickAddTab from './QuickAddTab'
 import type { MealType } from '../../types'
 
@@ -15,7 +13,11 @@ const MEALS: { type: MealType; label: string }[] = [
   { type: 'snack', label: 'Snacks' },
 ]
 
-type View = 'browse' | 'manual' | 'photo' | 'quickadd' | 'describe' | 'previous'
+// Search, the AI breakdown and previous meals all live in the hub now — they are
+// one input, not three destinations. What is left here are the flows that take a
+// genuinely different kind of input: a camera, a bare calorie count, a food you
+// are defining yourself.
+type View = 'hub' | 'manual' | 'photo' | 'quickadd'
 
 type AddFoodSheetProps = {
   open: boolean
@@ -26,10 +28,7 @@ type AddFoodSheetProps = {
 
 export default function AddFoodSheet({ open, onClose, date, defaultMealType }: AddFoodSheetProps) {
   const [mealType, setMealType] = useState<MealType>(defaultMealType)
-  const [view, setView] = useState<View>('browse')
-  // What the search box was holding when it handed over, so the describe screen
-  // opens already working on it rather than asking for it again.
-  const [describeSeed, setDescribeSeed] = useState('')
+  const [view, setView] = useState<View>('hub')
   // `mounted` keeps the page in the DOM through its exit slide; `shown` drives the
   // transform so it slides UP from the bottom (MFP's full-screen add flow) instead
   // of hard-popping into place.
@@ -40,8 +39,7 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
   useEffect(() => {
     if (open) {
       setMealType(defaultMealType)
-      setView('browse')
-      setDescribeSeed('')
+      setView('hub')
     }
   }, [open, defaultMealType])
 
@@ -67,6 +65,16 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
   }, [mounted])
 
   if (!mounted) return null
+
+  const back = (
+    <button
+      type="button"
+      onClick={() => setView('hub')}
+      className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
+    >
+      <ChevronLeft size={16} /> Back
+    </button>
+  )
 
   return (
     <div
@@ -117,142 +125,35 @@ export default function AddFoodSheet({ open, onClose, date, defaultMealType }: A
         className="flex-1 overflow-y-auto overscroll-contain p-4"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
       >
-        {view === 'browse' && (
-          <div className="space-y-4">
-            {/* Above search on purpose: a plate of real food is one sentence here,
-                but several separate lookups through the database. */}
-            <button
-              type="button"
-              onClick={() => setView('describe')}
-              className="flex w-full items-center gap-3 rounded-xl bg-gradient-to-br from-primary-500/20 to-slate-900 p-3 text-left active:opacity-80"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500/20">
-                <Wand2 size={17} className="text-primary-300" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-bold text-primary-200">Describe your meal</span>
-                <span className="mt-0.5 block text-xs text-slate-300">
-                  Type it how you'd say it — we&apos;ll break it into items and macros
-                </span>
-              </span>
-            </button>
-
-            {/* Next to Describe because they answer the same question — "this plate
-                has ten things on it" — from the two directions that actually work:
-                say it in a sentence, or reuse the morning you already logged. */}
-            <button
-              type="button"
-              onClick={() => setView('previous')}
-              className="flex w-full items-center gap-3 rounded-xl bg-slate-900 p-3 text-left active:bg-slate-800"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-800">
-                <History size={17} className="text-slate-300" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-bold text-slate-100">Add a previous meal</span>
-                <span className="mt-0.5 block text-xs text-slate-400">
-                  Re-add a past {MEALS.find((m) => m.type === mealType)?.label.toLowerCase()} — keep,
-                  drop or resize each item
-                </span>
-              </span>
-            </button>
-
-            <AddSearchTab
-              date={date}
-              mealType={mealType}
-              onClose={onClose}
-              onManual={() => setView('manual')}
-              onDescribe={(q) => {
-                setDescribeSeed(q)
-                setView('describe')
-              }}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setView('quickadd')}
-                className="flex items-center justify-center gap-2 rounded-lg bg-slate-800 py-3 text-sm text-slate-200 active:bg-slate-700"
-              >
-                <Zap size={16} /> Quick add
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('photo')}
-                className="flex items-center justify-center gap-2 rounded-lg bg-slate-800 py-3 text-sm text-slate-200 active:bg-slate-700"
-              >
-                <Camera size={16} /> Photo
-              </button>
-            </div>
-          </div>
-        )}
-
-        {view === 'describe' && (
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setView('browse')}
-              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
-            >
-              <ChevronLeft size={16} /> Back to search
-            </button>
-            <AddDescribeTab
-              key={describeSeed}
-              date={date}
-              mealType={mealType}
-              onClose={onClose}
-              initialText={describeSeed}
-            />
-          </div>
-        )}
-
-        {view === 'previous' && (
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setView('browse')}
-              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
-            >
-              <ChevronLeft size={16} /> Back to search
-            </button>
-            <PreviousMealsTab key={mealType} date={date} mealType={mealType} onClose={onClose} />
-          </div>
+        {view === 'hub' && (
+          <LogFoodHub
+            key={mealType}
+            date={date}
+            mealType={mealType}
+            onClose={onClose}
+            onManual={() => setView('manual')}
+            onPhoto={() => setView('photo')}
+            onQuickAdd={() => setView('quickadd')}
+          />
         )}
 
         {view === 'quickadd' && (
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setView('browse')}
-              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
-            >
-              <ChevronLeft size={16} /> Back to search
-            </button>
+            {back}
             <QuickAddTab date={date} mealType={mealType} onClose={onClose} />
           </div>
         )}
 
         {view === 'manual' && (
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setView('browse')}
-              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
-            >
-              <ChevronLeft size={16} /> Back to search
-            </button>
+            {back}
             <AddManualTab date={date} defaultMealType={mealType} onClose={onClose} />
           </div>
         )}
 
         {view === 'photo' && (
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setView('browse')}
-              className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
-            >
-              <ChevronLeft size={16} /> Back to search
-            </button>
+            {back}
             <AddPhotoTab date={date} defaultMealType={mealType} onClose={onClose} />
           </div>
         )}

@@ -1,13 +1,11 @@
-// "Add a previous meal" — the MyFitnessPal move, for plates with ten things on them.
+// One past meal, ready to be re-logged: every item checked, each one adjustable.
 //
-// Two screens on purpose. First: which day. A breakfast is recognisable by what
-// was on it, so the day cards lead with the food names rather than a total. Second:
-// that day's plate, every item checked, each one adjustable. Re-logging an
-// identical morning is two taps; a morning that differed by one egg and no salsa
-// is four.
+// Re-logging an identical morning is two taps. A morning that differed by one egg
+// and no salsa is four. That is the whole feature — the plate is kept intact and
+// everything after it is subtraction.
 
-import { useMemo, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react'
+import { useState } from 'react'
+import { Check, ChevronLeft, SlidersHorizontal } from 'lucide-react'
 import Button from '../../components/Button'
 import NumberField from '../../components/NumberField'
 import { isoToLabel } from '../../lib/date'
@@ -22,14 +20,8 @@ import {
   UNIT_LABEL,
 } from '../../lib/portion'
 import { useNutritionStore } from '../../store/nutrition'
-import { mealSummary, pastMeals, type PastMeal, type PastMealItem } from './pastMeals'
+import type { PastMeal, PastMealItem } from './pastMeals'
 import type { Macros, MealType } from '../../types'
-
-type Props = {
-  date: string
-  mealType: MealType
-  onClose: () => void
-}
 
 /** Per-item edits layered over the meal as it was originally logged. */
 type ItemState = { checked: boolean; qty: number; unit: string }
@@ -43,50 +35,43 @@ function round(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-const MEAL_LABEL: Record<MealType, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snacks',
+/** Macros for one row at its currently chosen amount. */
+function scaled(item: PastMealItem, state: ItemState): Macros {
+  const base = parseServing(`${item.qty} ${item.unit}`)
+  return scaleMacros(item, conversionFactor(base, state.qty, state.unit) ?? 1)
 }
 
-export default function PreviousMealsTab({ date, mealType, onClose }: Props) {
-  const entries = useNutritionStore((s) => s.entries)
+type Props = {
+  meal: PastMeal
+  date: string
+  mealType: MealType
+  mealLabel: string
+  onBack: () => void
+  onDone: () => void
+}
+
+export default function PreviousMealDetail({
+  meal,
+  date,
+  mealType,
+  mealLabel,
+  onBack,
+  onDone,
+}: Props) {
   const addEntry = useNutritionStore((s) => s.addEntry)
 
-  const meals = useMemo(
-    () => pastMeals(entries, mealType, { excludeDate: date }),
-    [entries, mealType, date],
-  )
-
-  const [openDate, setOpenDate] = useState<string | null>(null)
-  const [items, setItems] = useState<ItemState[]>([])
+  const [items, setItems] = useState<ItemState[]>(() => meal.items.map(initialState))
   // Which row has its portion controls open. One at a time, so the list stays
   // scannable while you fix the one amount that was different.
   const [editing, setEditing] = useState<number | null>(null)
-
-  const open = openDate === null ? null : (meals.find((m) => m.date === openDate) ?? null)
-
-  function openMeal(meal: PastMeal) {
-    setOpenDate(meal.date)
-    setItems(meal.items.map(initialState))
-    setEditing(null)
-  }
 
   function patch(index: number, next: Partial<ItemState>) {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...next } : it)))
   }
 
-  /** Macros for one row at its currently chosen amount. */
-  function scaled(item: PastMealItem, state: ItemState): Macros {
-    const base = parseServing(`${item.qty} ${item.unit}`)
-    const factor = conversionFactor(base, state.qty, state.unit) ?? 1
-    return scaleMacros(item, factor)
-  }
-
-  const selected = open
-    ? open.items.map((item, i) => ({ item, state: items[i] })).filter((x) => x.state?.checked)
-    : []
+  const selected = meal.items
+    .map((item, i) => ({ item, state: items[i] }))
+    .filter((x) => x.state?.checked)
 
   const total = selected.reduce<Macros>(
     (sum, { item, state }) => {
@@ -116,82 +101,34 @@ export default function PreviousMealsTab({ date, mealType, onClose }: Props) {
         fat: round(m.fat),
       })
     }
-    onClose()
+    onDone()
   }
 
-  if (meals.length === 0) {
-    return (
-      <div className="rounded-xl bg-slate-900 p-6 text-center">
-        <p className="text-sm text-slate-300">No previous {MEAL_LABEL[mealType].toLowerCase()} yet</p>
-        <p className="mt-1 text-xs text-slate-500">
-          Log one and it&apos;ll be here to re-add with a tap.
-        </p>
-      </div>
-    )
-  }
+  const allChecked = items.every((i) => i.checked)
 
-  // Day picker.
-  if (!open) {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-slate-500">
-          Pick a day, then keep, drop or resize whatever was on it.
-        </p>
-        {meals.map((meal) => (
-          <button
-            key={meal.date}
-            type="button"
-            onClick={() => openMeal(meal)}
-            className="flex w-full items-center gap-3 rounded-xl bg-slate-900 p-3 text-left active:bg-slate-800"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
-                <span className="text-sm font-semibold text-slate-100">{isoToLabel(meal.date)}</span>
-                <span className="text-xs tabular-nums text-slate-400">
-                  {Math.round(meal.calories)} kcal
-                </span>
-                <span className="text-xs text-slate-500">
-                  · {meal.items.length} item{meal.items.length === 1 ? '' : 's'}
-                </span>
-              </span>
-              <span className="mt-0.5 block truncate text-xs text-slate-400">
-                {mealSummary(meal.items)}
-              </span>
-            </span>
-            <ChevronRight size={16} className="shrink-0 text-slate-500" />
-          </button>
-        ))}
-      </div>
-    )
-  }
-
-  // The chosen day's plate.
   return (
     <div className="space-y-3">
       <button
         type="button"
-        onClick={() => setOpenDate(null)}
+        onClick={onBack}
         className="flex items-center gap-1 text-sm text-slate-400 active:text-slate-200"
       >
-        <ChevronLeft size={16} /> All previous {MEAL_LABEL[mealType].toLowerCase()}
+        <ChevronLeft size={16} /> Back
       </button>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-100">{isoToLabel(open.date)}</p>
+        <p className="text-sm font-semibold text-slate-100">{isoToLabel(meal.date)}</p>
         <button
           type="button"
-          onClick={() => {
-            const allOn = items.every((i) => i.checked)
-            setItems((prev) => prev.map((i) => ({ ...i, checked: !allOn })))
-          }}
+          onClick={() => setItems((prev) => prev.map((i) => ({ ...i, checked: !allChecked })))}
           className="text-xs font-medium text-primary-400 active:text-primary-300"
         >
-          {items.every((i) => i.checked) ? 'Uncheck all' : 'Check all'}
+          {allChecked ? 'Uncheck all' : 'Check all'}
         </button>
       </div>
 
       <div className="space-y-1.5">
-        {open.items.map((item, i) => {
+        {meal.items.map((item, i) => {
           const state = items[i]
           if (!state) return null
           const m = scaled(item, state)
@@ -307,8 +244,7 @@ export default function PreviousMealsTab({ date, mealType, onClose }: Props) {
       </div>
 
       <Button variant="primary" full onClick={addSelected} disabled={selected.length === 0}>
-        Add {selected.length} item{selected.length === 1 ? '' : 's'} to{' '}
-        {MEAL_LABEL[mealType].toLowerCase()}
+        Add {selected.length} item{selected.length === 1 ? '' : 's'} to {mealLabel.toLowerCase()}
       </Button>
     </div>
   )

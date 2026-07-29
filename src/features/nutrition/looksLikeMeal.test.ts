@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { looksLikeMeal } from './AddSearchTab'
+import { looksLikeMeal } from './looksLikeMeal'
 
 // This decides whether the "log this as a meal" offer appears above the search
 // results. A false negative is the costly one — it leaves someone scrolling rows
