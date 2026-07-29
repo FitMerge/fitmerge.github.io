@@ -160,6 +160,11 @@ export async function searchUsdaFoods(
     query: trimmed,
     dataType: DATA_TYPES,
     pageSize: '40',
+    // Without this, USDA ORs the words: "Reese's peanut butter filled pretzels"
+    // matched 101,178 foods and buried the one that was actually wanted under
+    // everything containing "butter". Requiring all words is what makes the
+    // result list mean something.
+    requireAllWords: 'true',
     api_key: key,
   })
 

@@ -11,10 +11,17 @@ import type { SearchFood } from '../../services/foodSearch/openFoodFacts'
 import { searchCommonFoods, loadCommonFoods, commonFoodsReady } from '../../services/foodSearch/commonFoods'
 import { searchUsdaFoods, UsdaRateLimitError } from '../../services/foodSearch/usda'
 import { frequentFoods, recentFoods, useNutritionStore } from '../../store/nutrition'
+import { searchHistory } from '../../services/foodSearch/history'
 import { useSettingsStore } from '../../store/settings'
 import type { CustomFood, Macros, MealType, SavedMeal, SavedMealItem } from '../../types'
 
 const DEBOUNCE_MS = 400
+
+/** "40 g" rather than "1 40 g" — the quantity is only worth printing when it is
+ * not one, because the unit already carries the portion for a logged food. */
+function portionLabel(item: { qty: number; unit: string }): string {
+  return item.qty === 1 ? item.unit : `${item.qty} × ${item.unit}`
+}
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10
@@ -133,6 +140,14 @@ export default function AddSearchTab({ date, mealType, onClose, onManual, onDesc
   }, [query, retryCount, usdaApiKey])
 
   const commonResults = useMemo(() => searchCommonFoods(query), [query, foodsReady])
+
+  // Your own log, matched against what you are typing. This is the only source
+  // that cannot fail: no network, no rate limit. It is also the best one — a food
+  // you logged before is one you already checked, at a portion you already chose.
+  const historyResults = useMemo(
+    () => searchHistory(query, { entries, savedMeals, customFoods }),
+    [query, entries, savedMeals, customFoods],
+  )
 
   // USDA returns both generic and branded foods; branded ones join the online
   // "Branded" list (with OpenFoodFacts) while generic ones stay separate.
@@ -470,6 +485,32 @@ export default function AddSearchTab({ date, mealType, onClose, onManual, onDesc
         </button>
       )}
 
+      {/* Above every database: things you have actually eaten. */}
+      {trimmedQuery && historyResults.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-300">You've logged this</h3>
+          <div className="space-y-2">
+            {historyResults.map((hit) => (
+              <SearchResultRow
+                key={`history-${hit.item.name}`}
+                name={hit.item.name}
+                subtitle={
+                  hit.reason === 'custom'
+                    ? `My foods · ${hit.item.unit}`
+                    : hit.reason === 'saved'
+                      ? `Saved meal · ${hit.item.unit}`
+                      : `${portionLabel(hit.item)}${hit.timesLogged > 1 ? ` · logged ${hit.timesLogged}×` : ''}`
+                }
+                calorieLabel={`${Math.round(hit.item.calories)} kcal`}
+                onClick={() => selectRecentItem(hit.item)}
+                onQuickAdd={() => quickAddItem(hit.item, `history-${hit.item.name}`)}
+                added={justAdded.has(`history-${hit.item.name}`)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {trimmedQuery && commonResults.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-300">Common foods</h3>
@@ -509,10 +550,14 @@ export default function AddSearchTab({ date, mealType, onClose, onManual, onDesc
         </div>
       )}
 
+      {/* The shared demo key allows about 30 searches an HOUR across everyone
+          using it, so this is not a rare edge case — it is most of a normal
+          session. Say plainly that a personal key fixes it. */}
       {trimmedQuery && usdaRateLimited && usdaResults.length === 0 && (
-        <p className="text-xs text-slate-500">
-          USDA search is temporarily rate-limited. Add a free USDA key in Settings for unlimited
-          generic-food search.
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300/90">
+          Generic-food search is out of quota — the shared key allows only ~30 searches an hour for
+          all users. A free personal key from USDA raises that to 1,000/hour; add one in Settings →
+          Food data.
         </p>
       )}
 
@@ -532,9 +577,9 @@ export default function AddSearchTab({ date, mealType, onClose, onManual, onDesc
           {!loading &&
             error &&
             brandedCombined.length === 0 &&
-            (commonResults.length > 0 || usdaGeneric.length > 0 ? (
+            (commonResults.length > 0 || usdaGeneric.length > 0 || historyResults.length > 0 ? (
               <p className="text-sm text-slate-500">
-                Online food database unavailable.{' '}
+                Branded database unavailable — showing what we have.{' '}
                 <button
                   type="button"
                   onClick={() => setRetryCount((n) => n + 1)}
@@ -552,7 +597,7 @@ export default function AddSearchTab({ date, mealType, onClose, onManual, onDesc
               </div>
             ))}
 
-          {!loading && brandedCombined.length === 0 && (commonResults.length > 0 || usdaGeneric.length > 0) && !error && (
+          {!loading && brandedCombined.length === 0 && (commonResults.length > 0 || usdaGeneric.length > 0 || historyResults.length > 0) && !error && (
             <p className="text-sm text-slate-500">No branded results for "{trimmedQuery}"</p>
           )}
 

@@ -121,19 +121,43 @@ export function parseProduct(raw: unknown): SearchFood | undefined {
   }
 }
 
+/** Attempts for a 5xx. Measured live, OpenFoodFacts returned 503 on roughly half
+ * of a burst of requests and succeeded on the very next try — so one shot at it
+ * was throwing away results that were there. */
+const ATTEMPTS = 3
+const BACKOFF_MS = [250, 750]
+
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t)
+      reject(new DOMException('Aborted', 'AbortError'))
+    })
+  })
+
 export async function searchFoods(query: string, signal?: AbortSignal): Promise<SearchFood[]> {
   const trimmed = query.trim()
   if (!trimmed) return []
 
-  let res: Response
-  try {
-    res = await fetch(buildUrl(trimmed), { signal })
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') throw err
-    throw new Error('Network error — check your connection')
+  let res: Response | undefined
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    try {
+      res = await fetch(buildUrl(trimmed), { signal })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err
+      // A dropped connection is worth one more go for the same reason a 503 is.
+      if (attempt === ATTEMPTS - 1) throw new Error('Network error — check your connection')
+      await sleep(BACKOFF_MS[attempt], signal)
+      continue
+    }
+    // Only server-side wobble is worth retrying; a 400 will fail identically.
+    if (res.status < 500) break
+    if (attempt === ATTEMPTS - 1) break
+    await sleep(BACKOFF_MS[attempt], signal)
   }
 
-  if (!res.ok) {
+  if (!res || !res.ok) {
     throw new Error('Food search failed — please try again')
   }
 
