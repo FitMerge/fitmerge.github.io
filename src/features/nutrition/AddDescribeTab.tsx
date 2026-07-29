@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Loader2, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
+import { ChevronRight, Loader2, RefreshCw, Repeat2, Sparkles, Wand2 } from 'lucide-react'
 import Button from '../../components/Button'
+import RefineFoodItemSheet, { type RefinedItem } from './RefineFoodItemSheet'
 import { parseFoodDescription, VisionError, type FoodAnalysisItem } from '../../services/foodParse'
 import { useNutritionStore } from '../../store/nutrition'
 import { useSettingsStore } from '../../store/settings'
@@ -25,12 +26,6 @@ const EXAMPLES = [
   '8oz sirloin, baked potato, side salad',
 ]
 
-function confidenceClasses(c: number): string {
-  if (c >= 0.75) return 'bg-emerald-500/15 text-emerald-400'
-  if (c >= 0.5) return 'bg-amber-500/15 text-amber-400'
-  return 'bg-red-500/15 text-red-400'
-}
-
 /**
  * Log a meal by describing it. The search path needs one lookup per component
  * with a serving size each — fine for a labelled packet, miserable for a plate of
@@ -45,9 +40,10 @@ export default function AddDescribeTab({ date, mealType, onClose, initialText }:
   const [stage, setStage] = useState<Stage>('input')
   const [items, setItems] = useState<ReviewItem[]>([])
   const [message, setMessage] = useState('')
-  // One item open at a time — the point of collapsing was to stop the screen
-  // being a wall of inputs, which several open rows would recreate.
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  // The item being adjusted, if any. A sheet rather than an inline expander:
+  // correcting a portion or swapping the food needs room, and an accordion put
+  // that work in a 40px slot between two other rows.
+  const [refiningId, setRefiningId] = useState<string | null>(null)
 
   // Coming from search, the intent is already stated — break it down without
   // making the user press the button again. Guarded so a re-render can't re-ask.
@@ -74,7 +70,7 @@ export default function AddDescribeTab({ date, mealType, onClose, initialText }:
   async function run() {
     if (!text.trim()) return
     setStage('parsing')
-    setExpandedId(null)
+    setRefiningId(null)
     try {
       const result = await parseFoodDescription(text, geminiApiKey)
       setItems(result.items.map((it, i) => ({ ...it, id: `${i}-${it.name}`, included: true })))
@@ -132,106 +128,53 @@ export default function AddDescribeTab({ date, mealType, onClose, initialText }:
           <p className="text-sm font-semibold text-slate-100">
             {items.length} item{items.length === 1 ? '' : 's'}
           </p>
-          <p className="text-xs text-slate-400">Tap one to edit</p>
+          <p className="text-xs text-slate-400">Tap to fix portion or swap</p>
         </div>
 
         {items.map((item) => {
-          const open = expandedId === item.id
+          const alts = item.alternatives?.length ?? 0
           return (
             <div
               key={item.id}
-              className={`rounded-xl border ${
+              className={`flex items-center gap-2 rounded-xl border p-3 ${
                 item.included ? 'border-slate-700 bg-slate-800/60' : 'border-slate-800 bg-slate-900/60 opacity-50'
               }`}
             >
-              {/* Collapsed row: everything needed to sanity-check at a glance, and
-                  nothing else. Sixteen open inputs was a wall, not a review. */}
-              <div className="flex items-center gap-2 p-3">
-                <input
-                  type="checkbox"
-                  checked={item.included}
-                  onChange={(e) => patch(item.id, { included: e.target.checked })}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={`Include ${item.name}`}
-                  className="h-4 w-4 shrink-0 rounded accent-primary-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(open ? null : item.id)}
-                  aria-expanded={open}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-slate-100">{item.name}</span>
-                    <span className="block truncate text-[11px] text-slate-500">
+              <input
+                type="checkbox"
+                checked={item.included}
+                onChange={(e) => patch(item.id, { included: e.target.checked })}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Include ${item.name}`}
+                className="h-4 w-4 shrink-0 rounded accent-primary-500"
+              />
+              <button
+                type="button"
+                onClick={() => setRefiningId(item.id)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-slate-100">{item.name}</span>
+                  <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span className="truncate">
                       {item.servingText} · {Math.round(item.protein)}P {Math.round(item.carbs)}C{' '}
                       {Math.round(item.fat)}F
                     </span>
+                    {/* Advertise the swaps: an affordance nobody knows about is
+                        the same as one that does not exist. */}
+                    {alts > 0 && (
+                      <span className="flex shrink-0 items-center gap-0.5 text-slate-600">
+                        <Repeat2 size={10} />
+                        {alts}
+                      </span>
+                    )}
                   </span>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-200">
-                    {Math.round(item.calories)}
-                  </span>
-                  <ChevronDown
-                    size={15}
-                    className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
-                  />
-                </button>
-              </div>
-
-              {open && (
-                <div className="space-y-2 border-t border-slate-700/60 p-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={item.name}
-                      onChange={(e) => patch(item.id, { name: e.target.value })}
-                      aria-label="Food name"
-                      className="min-w-0 flex-1 rounded-lg bg-slate-900 px-2.5 py-1.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${confidenceClasses(item.confidence)}`}
-                    >
-                      {Math.round(item.confidence * 100)}%
-                    </span>
-                  </div>
-
-                  <input
-                    value={item.servingText}
-                    onChange={(e) => patch(item.id, { servingText: e.target.value })}
-                    aria-label="Serving"
-                    placeholder="Serving, e.g. 1 cup"
-                    className="w-full rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs text-slate-300 outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {(
-                      [
-                        ['calories', 'kcal'],
-                        ['protein', 'P'],
-                        ['carbs', 'C'],
-                        ['fat', 'F'],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <label key={key} className="rounded-lg bg-slate-900 px-2 py-1 text-center">
-                        <span className="block text-[10px] uppercase tracking-wide text-slate-500">{label}</span>
-                        <input
-                          value={item[key]}
-                          onChange={(e) => patch(item.id, { [key]: Math.max(0, Number(e.target.value) || 0) })}
-                          inputMode="numeric"
-                          className="w-full bg-transparent text-center text-sm tabular-nums text-slate-100 outline-none"
-                        />
-                      </label>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(null)}
-                    className="w-full pt-0.5 text-center text-xs text-slate-400 active:text-slate-200"
-                  >
-                    Done
-                  </button>
-                </div>
-              )}
+                </span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-200">
+                  {Math.round(item.calories)}
+                </span>
+                <ChevronRight size={15} className="shrink-0 text-slate-500" />
+              </button>
             </div>
           )
         })}
@@ -252,6 +195,12 @@ export default function AddDescribeTab({ date, mealType, onClose, initialText }:
         <p className="text-[11px] text-slate-500">
           These are estimates. Correct anything that looks off before adding — what you save is what gets logged.
         </p>
+
+        <RefineFoodItemSheet
+          item={items.find((i) => i.id === refiningId) ?? null}
+          onClose={() => setRefiningId(null)}
+          onApply={(next: RefinedItem) => refiningId && patch(refiningId, next)}
+        />
       </div>
     )
   }

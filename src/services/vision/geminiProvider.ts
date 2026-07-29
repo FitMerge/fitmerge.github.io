@@ -3,15 +3,16 @@
 
 import type { FoodAnalysis, FoodAnalysisItem } from './types'
 import { VisionError } from './types'
+import { ALTERNATIVES_PROMPT, parseAlternatives } from './alternatives'
 import { generateContent } from '../gemini/model'
 
 const PROMPT = `You are a nutrition expert analyzing a photo of food. Identify each distinct food or drink item visible in the photo and estimate the visible portion size for each.
 
 Respond with STRICT JSON only, no markdown formatting, no code fences, no extra commentary, and no extra keys. Use exactly this shape:
 
-{"items":[{"name":string,"servingText":string (e.g. "1 cup, ~150g"),"calories":number,"protein":number,"carbs":number,"fat":number,"confidence":number between 0 and 1}]}
+{"items":[{"name":string,"servingText":string (e.g. "1 cup, ~150g"),"calories":number,"protein":number,"carbs":number,"fat":number,"confidence":number between 0 and 1,"alternatives":[{"name":string,"servingText":string,"calories":number,"protein":number,"carbs":number,"fat":number}]}]}
 
-Estimate calories, protein (g), carbs (g), and fat (g) for the portion shown. If you cannot identify any food, return {"items":[]}.`
+Estimate calories, protein (g), carbs (g), and fat (g) for the portion shown. ${ALTERNATIVES_PROMPT} If you cannot identify any food, return {"items":[]}.`
 
 function stripDataUrlPrefix(dataUrl: string): string {
   const commaIdx = dataUrl.indexOf(',')
@@ -65,6 +66,7 @@ function parseItems(raw: unknown): FoodAnalysisItem[] {
       carbs: Math.max(0, coerceNumber(entry.carbs)),
       fat: Math.max(0, coerceNumber(entry.fat)),
       confidence: clamp(coerceNumber(entry.confidence, 0.6), 0, 1),
+      alternatives: parseAlternatives(entry.alternatives, name),
     })
   }
 

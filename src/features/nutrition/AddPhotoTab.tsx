@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Camera, Loader2 } from 'lucide-react'
+import { Camera, ChevronRight, Loader2, Repeat2 } from 'lucide-react'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
 import EmptyState from '../../components/EmptyState'
+import RefineFoodItemSheet from './RefineFoodItemSheet'
 import { fileToDownscaledDataUrl, dataUrlToThumb } from '../../lib/image'
 import { savePhotoThumb } from '../../services/photoStore'
 import { analyzeFoodPhoto, VisionError } from '../../services/vision'
@@ -27,12 +28,6 @@ type AddPhotoTabProps = {
   onClose: () => void
 }
 
-function confidenceBadgeClasses(confidence: number): string {
-  if (confidence >= 0.75) return 'bg-emerald-500/15 text-emerald-400'
-  if (confidence >= 0.5) return 'bg-amber-500/15 text-amber-400'
-  return 'bg-red-500/15 text-red-400'
-}
-
 export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhotoTabProps) {
   const addEntry = useNutritionStore((s) => s.addEntry)
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey)
@@ -42,6 +37,9 @@ export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhoto
   const [stage, setStage] = useState<Stage>('pick')
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
   const [items, setItems] = useState<ReviewItem[]>([])
+  // Which item's adjust sheet is open. Same component as the describe path, so
+  // a correction works identically however the food got identified.
+  const [refiningId, setRefiningId] = useState<string | null>(null)
   const [provider, setProvider] = useState<'mock' | 'gemini'>('mock')
   const [mealType, setMealType] = useState<MealType>(defaultMealType ?? 'breakfast')
   const [errorMessage, setErrorMessage] = useState('')
@@ -202,58 +200,54 @@ export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhoto
               actual macros read from your photo. You can still edit these numbers and log them.
             </div>
           )}
+          <p className="text-xs text-slate-400">Tap an item to fix its portion or swap it</p>
           <div className="space-y-2">
-            {items.map((item) => (
-              <Card key={item.id} className="p-3 space-y-2">
-                <div className="flex items-start gap-2">
+            {items.map((item) => {
+              const alts = item.alternatives?.length ?? 0
+              return (
+                <Card key={item.id} className="flex items-center gap-2 p-3">
                   <input
                     type="checkbox"
                     checked={item.included}
                     onChange={(e) => updateItem(item.id, { included: e.target.checked })}
-                    className="mt-1 w-5 h-5 shrink-0 accent-primary-500"
+                    className="h-5 w-5 shrink-0 accent-primary-500"
                     aria-label={`Include ${item.name}`}
                   />
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                      className="w-full bg-slate-800 rounded-lg px-2.5 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <p className="text-xs text-slate-500">{item.servingText}</p>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${confidenceBadgeClasses(item.confidence)}`}
+                  <button
+                    type="button"
+                    onClick={() => setRefiningId(item.id)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    {Math.round(item.confidence * 100)}%
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-4 gap-2">
-                  <MiniMacroInput
-                    label="kcal"
-                    value={item.calories}
-                    onChange={(v) => updateItem(item.id, { calories: v })}
-                  />
-                  <MiniMacroInput
-                    label="P"
-                    value={item.protein}
-                    onChange={(v) => updateItem(item.id, { protein: v })}
-                  />
-                  <MiniMacroInput
-                    label="C"
-                    value={item.carbs}
-                    onChange={(v) => updateItem(item.id, { carbs: v })}
-                  />
-                  <MiniMacroInput
-                    label="F"
-                    value={item.fat}
-                    onChange={(v) => updateItem(item.id, { fat: v })}
-                  />
-                </div>
-              </Card>
-            ))}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-100">{item.name}</span>
+                      <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <span className="truncate">
+                          {item.servingText} · {Math.round(item.protein)}P {Math.round(item.carbs)}C{' '}
+                          {Math.round(item.fat)}F
+                        </span>
+                        {alts > 0 && (
+                          <span className="flex shrink-0 items-center gap-0.5 text-slate-600">
+                            <Repeat2 size={10} />
+                            {alts}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-200">
+                      {Math.round(item.calories)}
+                    </span>
+                    <ChevronRight size={15} className="shrink-0 text-slate-500" />
+                  </button>
+                </Card>
+              )
+            })}
           </div>
+
+          <RefineFoodItemSheet
+            item={items.find((i) => i.id === refiningId) ?? null}
+            onClose={() => setRefiningId(null)}
+            onApply={(next) => refiningId && updateItem(refiningId, next)}
+          />
 
           <p className="text-sm text-slate-400">
             Adding {includedItems.length} item{includedItems.length === 1 ? '' : 's'} · {Math.round(totalCalories)} kcal
@@ -302,29 +296,6 @@ export default function AddPhotoTab({ date, defaultMealType, onClose }: AddPhoto
           </Button>
         </div>
       )}
-    </div>
-  )
-}
-
-type MiniMacroInputProps = {
-  label: string
-  value: number
-  onChange: (value: number) => void
-}
-
-function MiniMacroInput({ label, value, onChange }: MiniMacroInputProps) {
-  return (
-    <div>
-      <label className="block text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">{label}</label>
-      <input
-        type="number"
-        inputMode="decimal"
-        min={0}
-        value={value}
-        onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
-        onFocus={(e) => e.currentTarget.select()}
-        className="w-full bg-slate-800 rounded-lg px-2 py-2 text-sm text-center text-slate-100 outline-none focus:ring-2 focus:ring-primary-500 min-h-[40px]"
-      />
     </div>
   )
 }

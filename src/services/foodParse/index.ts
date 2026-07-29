@@ -11,6 +11,7 @@
 
 import { generateContent } from '../gemini/model'
 import { VisionError, type FoodAnalysisItem } from '../vision/types'
+import { ALTERNATIVES_PROMPT, parseAlternatives } from '../vision/alternatives'
 
 export type { FoodAnalysisItem } from '../vision/types'
 export { VisionError } from '../vision/types'
@@ -32,7 +33,9 @@ Rules:
 
 Respond with STRICT JSON only, no markdown, no code fences, no commentary, no extra keys:
 
-{"items":[{"name":string,"servingText":string,"calories":number,"protein":number,"carbs":number,"fat":number,"confidence":number between 0 and 1}]}
+{"items":[{"name":string,"servingText":string,"calories":number,"protein":number,"carbs":number,"fat":number,"confidence":number between 0 and 1,"alternatives":[{"name":string,"servingText":string,"calories":number,"protein":number,"carbs":number,"fat":number}]}]}
+
+${ALTERNATIVES_PROMPT}
 
 If the text describes no food at all, return {"items":[]}.
 
@@ -78,6 +81,7 @@ export function parseFoodItems(raw: unknown): FoodAnalysisItem[] {
       carbs: clamp(Math.round(coerceNumber(entry.carbs)), 0, 1_000),
       fat: clamp(Math.round(coerceNumber(entry.fat)), 0, 1_000),
       confidence: clamp(coerceNumber(entry.confidence, 0.5), 0, 1),
+      alternatives: parseAlternatives(entry.alternatives, name),
     })
   }
   return items
