@@ -7,7 +7,8 @@ import { useAuth } from '../../auth/AuthProvider'
 import { useChallengeStore } from '../../store/challenges'
 import { useSupplementStore } from '../../store/supplements'
 import HabitWeightEditor from './HabitWeightEditor'
-import { createChallenge, upsertMember, ChallengeError } from './challengeRepo'
+import { createChallenge, inviteEmail, upsertMember, ChallengeError } from './challengeRepo'
+import { normalizeEmail, parseEmailList } from './invites'
 import { generateJoinCode } from './joinCode'
 import { DEFAULT_BONUS_PCT, type Challenge } from './scoring'
 import { equalSplit, isBalanced, type WeightMap } from './weights'
@@ -39,6 +40,9 @@ export default function CreateChallengeSheet({ open, onClose, onCreated }: Props
   const [reset, setReset] = useState<Reset>('none')
   const [bonus, setBonus] = useState(true)
   const [nickname, setNickname] = useState(storedName || user?.displayName || '')
+  // Invites can be added later on the challenge page; offering them here means
+  // the common case is one screen rather than two.
+  const [inviteText, setInviteText] = useState('')
   // Everything selected at an even split is the sane starting point; most people
   // will just accept it.
   const [weights, setWeights] = useState<WeightMap>(() => equalSplit(items.map((i) => i.id)))
@@ -54,6 +58,11 @@ export default function CreateChallengeSheet({ open, onClose, onCreated }: Props
 
   async function submit() {
     if (!user || !canCreate) return
+    const { valid: inviteEmails, invalid } = parseEmailList(inviteText)
+    if (invalid.length > 0) {
+      setError(`Doesn't look like an email address: ${invalid.join(', ')}`)
+      return
+    }
     setBusy(true)
     setError('')
     const challenge: Challenge = {
@@ -66,7 +75,12 @@ export default function CreateChallengeSheet({ open, onClose, onCreated }: Props
       bonusPct: bonus ? DEFAULT_BONUS_PCT : 0,
     }
     try {
-      await createChallenge(challenge)
+      // Creating also puts the organiser on the guest list — writing a member
+      // document requires being invited, so that has to land first.
+      await createChallenge(challenge, normalizeEmail(user.email ?? ''))
+      for (const email of inviteEmails) {
+        await inviteEmail(challenge.code, email, user.uid)
+      }
       await upsertMember(challenge.code, user.uid, {
         displayName: nickname.trim(),
         joinedAt: Date.now(),
@@ -157,6 +171,27 @@ export default function CreateChallengeSheet({ open, onClose, onCreated }: Props
             className="w-full rounded-lg bg-slate-800 px-3 py-2 text-base text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
           />
         </label>
+
+        <div className="space-y-1.5 border-t border-slate-800 pt-3">
+          <span className="text-sm font-semibold text-slate-100">Invite people</span>
+          <textarea
+            value={inviteText}
+            onChange={(e) => setInviteText(e.target.value)}
+            placeholder="friend@gmail.com, other@gmail.com"
+            rows={2}
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            className="w-full resize-none rounded-lg bg-slate-800 px-3 py-2 text-base text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
+          />
+          {/* This is the access control, not a notification — worth being blunt
+              about, or the organiser will assume sharing the code is enough. */}
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            Only people on this list can open the challenge — the code alone won't let anyone in. Use the email
+            they sign in with. You can add more later.
+          </p>
+        </div>
 
         <div className="space-y-2 border-t border-slate-800 pt-3">
           <p className="text-sm font-semibold text-slate-100">Your habits</p>

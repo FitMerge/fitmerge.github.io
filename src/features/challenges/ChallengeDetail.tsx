@@ -10,6 +10,7 @@ import { findJoined, useChallengeStore } from '../../store/challenges'
 import { useSupplementStore } from '../../store/supplements'
 import Leaderboard, { TrustNote } from './Leaderboard'
 import HabitWeightEditor from './HabitWeightEditor'
+import InviteManager from './InviteManager'
 import { useChallengeBoard } from './useChallengeBoard'
 import { archiveChallenge, fetchChallenge, leaveChallenge, upsertMember } from './challengeRepo'
 import { formatCode, inviteLink } from './joinCode'
@@ -159,7 +160,10 @@ export default function ChallengeDetail() {
           <span className="block font-mono text-lg font-bold tracking-widest text-slate-100">
             {formatCode(code)}
           </span>
-          <span className="block text-[11px] text-slate-500">Share this to invite someone</span>
+          {/* The code is a shortcut to the right challenge, not a credential —
+              access is the guest list below. Saying so stops the organiser
+              assuming a forwarded link is enough (or that it's a leak). */}
+          <span className="block text-[11px] text-slate-500">Send to people you've invited</span>
         </span>
         <Button variant="ghost" onClick={copyInvite}>
           <span className="flex items-center gap-1.5 text-sm">
@@ -167,6 +171,10 @@ export default function ChallengeDetail() {
             {copied ? 'Copied' : 'Copy link'}
           </span>
         </Button>
+      </Card>
+
+      <Card>
+        <InviteManager code={code} canEdit={isOwner} memberCount={Object.keys(members).length} />
       </Card>
 
       <Card className="space-y-3">

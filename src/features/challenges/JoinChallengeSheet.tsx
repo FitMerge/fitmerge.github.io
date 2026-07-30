@@ -7,7 +7,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { useChallengeStore } from '../../store/challenges'
 import { useSupplementStore } from '../../store/supplements'
 import HabitWeightEditor from './HabitWeightEditor'
-import { ChallengeError, fetchChallenge, upsertMember } from './challengeRepo'
+import { ChallengeAccessError, ChallengeError, fetchChallenge, upsertMember } from './challengeRepo'
 import { formatCode, isValidCode, normalizeCode } from './joinCode'
 import { challengeLength, type Challenge } from './scoring'
 import { equalSplit, isBalanced, type WeightMap } from './weights'
@@ -63,6 +63,17 @@ export default function JoinChallengeSheet({ open, onClose, onJoined, initialCod
       }
       setFound(challenge)
     } catch (err) {
+      // Challenges are invite-only, so a refusal here nearly always means this
+      // account isn't on the guest list — but a non-existent code is refused
+      // the same way, and the rules can't tell us which. Say both.
+      if (err instanceof ChallengeAccessError) {
+        setError(
+          user?.email
+            ? `Either that code is wrong, or ${user.email} hasn't been invited. Ask the organiser to add it.`
+            : "Either that code is wrong, or you haven't been invited to this challenge.",
+        )
+        return
+      }
       setError(err instanceof ChallengeError ? err.message : "Couldn't look that code up.")
     } finally {
       setBusy(false)
@@ -113,6 +124,10 @@ export default function JoinChallengeSheet({ open, onClose, onJoined, initialCod
           <Button variant="primary" full onClick={() => void lookup(code)} disabled={busy || code.trim() === ''}>
             {busy ? 'Looking…' : 'Find challenge'}
           </Button>
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            Challenges are invite-only. The organiser needs to have added
+            {user?.email ? ` ${user.email}` : ' your email'} before this will work.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">

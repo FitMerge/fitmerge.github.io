@@ -31,14 +31,27 @@ export type BoardSnapshot = {
   scores: Record<string, ScoreDoc>
 }
 
+export type InviteDoc = {
+  email: string
+  invitedAt: number
+  invitedBy: string
+}
+
 /** Thrown with a message that is safe (and useful) to show the user. */
 export class ChallengeError extends Error {}
+
+/**
+ * Refused by the security rules. Challenges are invite-only, so this is now the
+ * expected outcome of trying to open one you weren't invited to — callers show
+ * a different message for it than for a genuine failure.
+ */
+export class ChallengeAccessError extends ChallengeError {}
 
 function friendly(err: unknown, fallback: string): ChallengeError {
   const code = err && typeof err === 'object' && 'code' in err ? String((err as { code: unknown }).code) : ''
   if (code.includes('permission-denied')) {
-    return new ChallengeError(
-      "Firestore turned that down. The challenge rules probably haven't been published yet — see firestore.rules.",
+    return new ChallengeAccessError(
+      'You don’t have access to that challenge. Ask the organiser to invite your email address.',
     )
   }
   if (code.includes('unavailable')) {
@@ -59,7 +72,7 @@ async function db() {
  * create from the client, so we read first. A collision is astronomically
  * unlikely; this catches it rather than silently overwriting someone's board.
  */
-export async function createChallenge(c: Challenge): Promise<void> {
+export async function createChallenge(c: Challenge, ownerEmail: string): Promise<void> {
   const firestore = await db()
   const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore')
   const ref = doc(firestore, 'challenges', c.code)
@@ -80,6 +93,17 @@ export async function createChallenge(c: Challenge): Promise<void> {
       // anyone backdating a challenge.
       createdAt: serverTimestamp(),
     })
+
+    // Put the organiser on their own guest list immediately. Writing a member
+    // or score document requires being invited, so skipping this would leave
+    // whoever created the challenge unable to score in it.
+    if (ownerEmail) {
+      await setDoc(doc(firestore, 'challenges', c.code, 'invites', ownerEmail), {
+        email: ownerEmail,
+        invitedAt: Date.now(),
+        invitedBy: c.ownerUid,
+      })
+    }
   } catch (err) {
     if (err instanceof ChallengeError) throw err
     throw friendly(err, "Couldn't create the challenge.")
@@ -246,6 +270,73 @@ export async function removeMyData(code: string, uid: string): Promise<void> {
   } catch (err) {
     throw friendly(err, "Couldn't remove your data.")
   }
+}
+
+// --- the guest list --------------------------------------------------------
+//
+// The invite document's ID is the invited email address. That is what lets the
+// security rule decide access with one exists() and no query, and it means
+// somebody can be invited before they have ever signed in. Addresses must be
+// normalized (see invites.ts) or they won't match the auth token.
+
+/**
+ * Add someone to the guest list. Safe to call for an address already on it —
+ * this is a plain overwrite, so re-inviting is a no-op rather than an error.
+ */
+export async function inviteEmail(code: string, email: string, invitedBy: string): Promise<void> {
+  const firestore = await db()
+  const { doc, setDoc } = await import('firebase/firestore')
+  try {
+    await setDoc(doc(firestore, 'challenges', code, 'invites', email), {
+      email,
+      invitedAt: Date.now(),
+      invitedBy,
+    })
+  } catch (err) {
+    throw friendly(err, `Couldn't invite ${email}.`)
+  }
+}
+
+/**
+ * Remove someone. Their member and score documents stay put — the rules stop
+ * them writing anything further, but deleting their history would silently
+ * rewrite the board for everyone else.
+ */
+export async function revokeInvite(code: string, email: string): Promise<void> {
+  const firestore = await db()
+  const { doc, deleteDoc } = await import('firebase/firestore')
+  try {
+    await deleteDoc(doc(firestore, 'challenges', code, 'invites', email))
+  } catch (err) {
+    throw friendly(err, `Couldn't remove ${email}.`)
+  }
+}
+
+export async function watchInvites(
+  code: string,
+  onChange: (invites: InviteDoc[]) => void,
+  onError: (err: ChallengeError) => void,
+): Promise<() => void> {
+  const firestore = await db()
+  const { collection, onSnapshot } = await import('firebase/firestore')
+  return onSnapshot(
+    collection(firestore, 'challenges', code, 'invites'),
+    (snap) => {
+      const list: InviteDoc[] = []
+      snap.forEach((docSnap) => {
+        const d = docSnap.data()
+        list.push({
+          // The document ID is authoritative: it is what the rule matches on.
+          email: docSnap.id,
+          invitedAt: typeof d.invitedAt === 'number' ? d.invitedAt : 0,
+          invitedBy: String(d.invitedBy ?? ''),
+        })
+      })
+      list.sort((a, b) => a.invitedAt - b.invitedAt)
+      onChange(list)
+    },
+    (err) => onError(friendly(err, "Couldn't load the guest list.")),
+  )
 }
 
 /**

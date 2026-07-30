@@ -48,18 +48,43 @@ service cloud.firestore {
 
     // --- Accountability challenges -------------------------------------------
     //
-    // The 8-character document id IS the secret: whoever has the join code can
-    // read the challenge and its board. `get` rather than `read` is deliberate —
-    // it permits fetching a code you were given while leaving the collection
-    // unenumerable, so nobody can list other people's challenges.
+    // Challenges are INVITE-ONLY. The organiser adds email addresses; each one
+    // becomes a document under .../invites/{email}, and that document existing
+    // is what grants access. Holding the join code is not enough — an
+    // uninvited account is refused even with the exact code, so a link
+    // forwarded to the wrong group leaks nothing.
+    //
+    // Email as the document ID is what makes this cheap: the rule answers "are
+    // they allowed in?" with one exists() and no query. It also means people
+    // can be invited before they have ever opened the app. It does require the
+    // stored address to match request.auth.token.email exactly, which is why
+    // everything is lowercased on the way in (see features/challenges/invites.ts).
     //
     // Nothing here is server-verified. There are no Cloud Functions on this
-    // project, so scores are self-reported and these rules enforce SHAPE and
-    // OWNERSHIP only. A member can always write a dishonest number for
-    // themselves; they can never write one for somebody else, which is the
-    // property that actually matters.
+    // project, so scores are self-reported and these rules enforce SHAPE,
+    // OWNERSHIP and ACCESS only. A member can always write a dishonest number
+    // for themselves; they can never write one for somebody else, and nobody
+    // uninvited can read the board at all.
+
+    function isInvitedTo(code) {
+      return request.auth != null
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/challenges/$(code)/invites/$(request.auth.token.email));
+    }
+
+    // Costs one document read per rule evaluation, so it is only used where the
+    // challenge document itself isn't already in hand.
+    function ownsChallenge(code) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/challenges/$(code)).data.ownerUid == request.auth.uid;
+    }
+
     match /challenges/{code} {
-      allow get: if request.auth != null;
+      // The owner is matched against the document in hand rather than through
+      // isInvitedTo, so a failed self-invite write can never lock somebody out
+      // of the challenge they created.
+      allow get: if request.auth != null
+        && (resource.data.ownerUid == request.auth.uid || isInvitedTo(code));
       allow list: if false;
 
       allow create: if request.auth != null
@@ -98,13 +123,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // One document per participant, writable only by that participant. It
-    // carries a display name rather than an email: the whole board is readable
-    // by anyone holding the join code.
+    // The guest list. Only the organiser edits it; anyone already on it can read
+    // it, so members can see who else was asked. The document ID is the invited
+    // email, which is the whole mechanism — see isInvitedTo above.
+    match /challenges/{code}/invites/{email} {
+      allow read: if ownsChallenge(code) || isInvitedTo(code);
+      allow create, update, delete: if ownsChallenge(code);
+    }
+
+    // One document per participant, writable only by that participant, and only
+    // while they are on the guest list. It carries a display name rather than an
+    // email — everyone invited can read the whole board.
     match /challenges/{code}/members/{memberUid} {
-      allow read: if request.auth != null;
+      allow read: if ownsChallenge(code) || isInvitedTo(code);
       allow create, update: if request.auth != null
         && request.auth.uid == memberUid
+        && (isInvitedTo(code) || ownsChallenge(code))
         && request.resource.data.keys().hasOnly(
              ['displayName', 'joinedAt', 'leftAt', 'tz', 'habits'])
         && request.resource.data.displayName is string
@@ -119,9 +153,10 @@ service cloud.firestore {
     // Capped at 400 entries so a bug — or a bad actor — can't inflate one
     // document toward the 1MB limit and break the whole board's listener.
     match /challenges/{code}/scores/{memberUid} {
-      allow read: if request.auth != null;
+      allow read: if ownsChallenge(code) || isInvitedTo(code);
       allow create, update: if request.auth != null
         && request.auth.uid == memberUid
+        && (isInvitedTo(code) || ownsChallenge(code))
         && request.resource.data.keys().hasOnly(['days', 'updatedAt'])
         && request.resource.data.days is map
         && request.resource.data.days.size() <= 400
