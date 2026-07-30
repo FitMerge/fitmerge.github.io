@@ -2,6 +2,7 @@ import SyncSection from './SyncSection'
 import ProfileSection from './ProfileSection'
 import UnitsSection from './UnitsSection'
 import GoalsSection from './GoalsSection'
+import ChallengesSection from './ChallengesSection'
 import EquipmentSection from './EquipmentSection'
 import AiSection from './AiSection'
 import FoodSearchSection from './FoodSearchSection'
@@ -23,6 +24,7 @@ export default function Settings() {
       <ProfileSection />
       <UnitsSection />
       <GoalsSection />
+      <ChallengesSection />
       <EquipmentSection />
       <AiSection />
       <FoodSearchSection />

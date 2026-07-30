@@ -2,7 +2,17 @@
 // (Firestore) lives alongside the Firebase glue; an in-memory fake here powers
 // deterministic multi-device tests without touching the network.
 
-export type StoreName = 'nutrition' | 'workouts' | 'body' | 'settings' | 'health'
+export type StoreName =
+  | 'nutrition'
+  | 'workouts'
+  | 'body'
+  | 'settings'
+  | 'health'
+  // The daily checklist and its log. Local-only until challenges needed it —
+  // without this a new device starts with an empty habit history, and any
+  // challenge score would rebuild from nothing.
+  | 'supplements'
+  | 'challenges'
 
 /** A store's synced data — a plain, JSON-serializable snapshot of its fields. */
 export type StoreData = Record<string, unknown>

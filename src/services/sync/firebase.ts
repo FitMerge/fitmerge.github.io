@@ -14,7 +14,9 @@ import { loadFirebaseConfig, type FirebaseConfig } from './firebaseConfig'
 
 type FirebaseHandle = { auth: Auth; db: Firestore }
 
-export type SyncUser = { uid: string; email: string | null }
+/** `displayName` is kept only to seed a challenge nickname — the challenge board
+ * publishes that editable nickname, never the email. */
+export type SyncUser = { uid: string; email: string | null; displayName: string | null }
 
 let cached: Promise<FirebaseHandle | null> | null = null
 let cachedApp: FirebaseApp | null = null
@@ -133,7 +135,7 @@ export async function watchAuth(cb: (user: SyncUser | null) => void): Promise<()
 
   const { onAuthStateChanged } = await import('firebase/auth')
   return onAuthStateChanged(handle.auth, (user) => {
-    cb(user ? { uid: user.uid, email: user.email ?? null } : null)
+    cb(user ? { uid: user.uid, email: user.email ?? null, displayName: user.displayName ?? null } : null)
   })
 }
 

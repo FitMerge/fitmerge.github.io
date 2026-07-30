@@ -4,6 +4,7 @@ import { doseFor, fullCompletionStreak, useSupplementStore, type GoalMetric } fr
 import { useSettingsStore } from '../../store/settings'
 import { GOAL_METRICS, goalRuleFor, suggestMetric } from './goalAutoCheck'
 import { todayISO } from '../../lib/date'
+import ChallengePanel from '../challenges/ChallengePanel'
 
 /** The 75 Hard checklist, one tap to install. Water/diet/workouts are still
  * tracked in their own parts of the app — these are the daily check-offs. */
@@ -122,6 +123,10 @@ export default function SupplementList({ date = todayISO(), compact = false }: {
 
   return (
     <div className="space-y-2">
+      {/* Any live challenge sits directly above the boxes that feed it, so the
+          consequence of ticking one is visible without leaving the screen. */}
+      <ChallengePanel />
+
       {items.length === 0 && !adding && !pending && (
         <p className="text-xs text-slate-500">
           No daily goals yet. Add habits, supplements or targets — many tick themselves from your logs.

@@ -10,6 +10,8 @@ const Workouts = lazy(() => import('./features/workouts/Workouts'))
 const Health = lazy(() => import('./features/health/Health'))
 const Progress = lazy(() => import('./features/progress/Progress'))
 const Settings = lazy(() => import('./features/settings/Settings'))
+const Challenges = lazy(() => import('./features/challenges/Challenges'))
+const ChallengeDetail = lazy(() => import('./features/challenges/ChallengeDetail'))
 import OnboardingWizard from './features/onboarding/OnboardingWizard'
 import { useSettingsStore } from './store/settings'
 import { useAuth } from './auth/AuthProvider'
@@ -33,6 +35,10 @@ export default function App() {
           <Route path="health" element={<Health />} />
           <Route path="progress" element={<Progress />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="challenges" element={<Challenges />} />
+          {/* Invite links land here: same page, join sheet already open. */}
+          <Route path="challenges/join/:code" element={<Challenges />} />
+          <Route path="challenges/:code" element={<ChallengeDetail />} />
         </Route>
       </Routes>
       {!onboarded && !cloudSettling && <OnboardingWizard />}

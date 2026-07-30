@@ -46,9 +46,93 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
+    // --- Accountability challenges -------------------------------------------
+    //
+    // The 8-character document id IS the secret: whoever has the join code can
+    // read the challenge and its board. `get` rather than `read` is deliberate —
+    // it permits fetching a code you were given while leaving the collection
+    // unenumerable, so nobody can list other people's challenges.
+    //
+    // Nothing here is server-verified. There are no Cloud Functions on this
+    // project, so scores are self-reported and these rules enforce SHAPE and
+    // OWNERSHIP only. A member can always write a dishonest number for
+    // themselves; they can never write one for somebody else, which is the
+    // property that actually matters.
+    match /challenges/{code} {
+      allow get: if request.auth != null;
+      allow list: if false;
+
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(
+             ['name', 'ownerUid', 'createdAt', 'startDate', 'endDate',
+              'periodDays', 'bonusPct', 'archived'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.startDate is string
+        && request.resource.data.startDate.size() == 10
+        && request.resource.data.endDate is string
+        && request.resource.data.endDate.size() == 10
+        // ISO 'YYYY-MM-DD' sorts lexicographically, so this really does mean
+        // "ends no earlier than it starts".
+        && request.resource.data.endDate >= request.resource.data.startDate
+        && request.resource.data.bonusPct is number
+        && request.resource.data.bonusPct >= 0
+        && request.resource.data.bonusPct <= 1
+        && request.resource.data.periodDays in [0, 7, 28]
+        && request.resource.data.createdAt == request.time;
+
+      // The dates and the scoring rules are frozen once people start banking
+      // points — changing them would silently revalue everything already
+      // earned. Only the name and the archived flag can move, and only for the
+      // owner.
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'archived']);
+
+      // Firestore has no cascading delete without the Admin SDK, and there is no
+      // privileged server here — a deleted parent would orphan every member and
+      // score document. Owners archive instead.
+      allow delete: if false;
+    }
+
+    // One document per participant, writable only by that participant. It
+    // carries a display name rather than an email: the whole board is readable
+    // by anyone holding the join code.
+    match /challenges/{code}/members/{memberUid} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.uid == memberUid
+        && request.resource.data.keys().hasOnly(
+             ['displayName', 'joinedAt', 'leftAt', 'tz', 'habits'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40
+        && request.resource.data.habits is list
+        && request.resource.data.habits.size() <= 20;
+      allow delete: if request.auth != null && request.auth.uid == memberUid;
+    }
+
+    // Self-reported daily scores: `days` maps dateISO -> {done, total, points}.
+    // Capped at 400 entries so a bug — or a bad actor — can't inflate one
+    // document toward the 1MB limit and break the whole board's listener.
+    match /challenges/{code}/scores/{memberUid} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.uid == memberUid
+        && request.resource.data.keys().hasOnly(['days', 'updatedAt'])
+        && request.resource.data.days is map
+        && request.resource.data.days.size() <= 400
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if request.auth != null && request.auth.uid == memberUid;
+    }
+
     // Everything else is denied. Any new per-user data needs its own rule
     // above — deliberately no /users/{uid}/{doc=**} wildcard, which would
-    // otherwise override the write-only credential rule above.
+    // otherwise override the write-only credential rule above. The same is true
+    // of any new shared collection: challenges needed the explicit rules above.
     match /{document=**} {
       allow read, write: if false;
     }

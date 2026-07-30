@@ -5,6 +5,7 @@ import ActionHub from '../features/assistant/ActionHub'
 import ActiveWorkoutBar from '../features/workouts/ActiveWorkoutBar'
 import { useGoalAutoCheck } from '../features/assistant/goalAutoCheck'
 import { useGarminSourceDetect } from '../features/settings/useGarminLink'
+import { useChallengeScorePush } from '../features/challenges/useChallengeScorePush'
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -21,6 +22,8 @@ export default function AppShell() {
   useGoalAutoCheck()
   // A connected Garmin answers "how do you track?" without asking.
   useGarminSourceDetect()
+  // Publishes challenge scores off the same checklist the hook above ticks.
+  useChallengeScorePush()
 
   return (
     <div className="h-dvh flex flex-col">

@@ -12,6 +12,8 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { useBodyStore } from '../../store/body'
 import { useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
+import { useSupplementStore, type Supplement } from '../../store/supplements'
+import { useChallengeStore, type JoinedChallenge } from '../../store/challenges'
 import type {
   BodyEntry,
   CustomFood,
@@ -71,6 +73,33 @@ function asHealthDays(v: unknown): Record<string, HealthDay> {
     if (day && typeof day === 'object' && typeof (day as HealthDay).metrics === 'object') {
       out[date] = { date, metrics: (day as HealthDay).metrics }
     }
+  }
+  return out
+}
+
+/**
+ * Union two date→id→value maps, local winning per individual cell.
+ *
+ * `unionBy` is list-shaped and no use here: the supplement log is a nested
+ * record, so a naive spread at the top level would let one device's version of a
+ * date replace the other's entirely, losing habits ticked on the other phone.
+ */
+function mergeDayMaps<V>(
+  local: Record<string, Record<string, V>>,
+  cloud: Record<string, Record<string, V>>,
+): Record<string, Record<string, V>> {
+  const out: Record<string, Record<string, V>> = {}
+  for (const date of new Set([...Object.keys(local), ...Object.keys(cloud)])) {
+    out[date] = { ...(cloud[date] ?? {}), ...(local[date] ?? {}) }
+  }
+  return out
+}
+
+function asDayMap<V>(v: unknown): Record<string, Record<string, V>> {
+  if (!v || typeof v !== 'object') return {}
+  const out: Record<string, Record<string, V>> = {}
+  for (const [date, day] of Object.entries(v as Record<string, unknown>)) {
+    if (day && typeof day === 'object') out[date] = day as Record<string, V>
   }
   return out
 }
@@ -311,4 +340,81 @@ const settings: StoreAdapter = {
   },
 }
 
-export const STORE_ADAPTERS: StoreAdapter[] = [nutrition, workouts, body, settings, health]
+// --- supplements -----------------------------------------------------------
+// The daily checklist: habits/supplements plus the per-day log of what was
+// ticked. This went unsynced for a long time, which meant signing in on a new
+// phone restored everything except your habit history. Challenges score off this
+// log, so it now has to travel with the account.
+
+const supplements: StoreAdapter = {
+  name: 'supplements',
+  read() {
+    const s = useSupplementStore.getState()
+    return { items: s.items, log: s.log, manualClears: s.manualClears }
+  },
+  apply(data) {
+    useSupplementStore.setState({
+      items: asArray<Supplement>(data.items),
+      log: asDayMap<number>(data.log),
+      manualClears: asDayMap<true>(data.manualClears),
+    })
+  },
+  subscribe(cb) {
+    return useSupplementStore.subscribe(cb)
+  },
+  merge(local, cloud) {
+    if (!cloud) return local
+    return {
+      items: unionBy(asArray<Supplement>(local.items), asArray<Supplement>(cloud.items), (i) => i.id),
+      // Per-cell union: two phones ticking different habits on the same day must
+      // both survive, and a tick is never something to undo by merging.
+      log: mergeDayMaps<number>(asDayMap(local.log), asDayMap(cloud.log)),
+      manualClears: mergeDayMaps<true>(asDayMap(local.manualClears), asDayMap(cloud.manualClears)),
+    }
+  },
+}
+
+// --- challenges ------------------------------------------------------------
+// Only the private half: which challenges you're in, the cached definition, and
+// your own habit weights. The shared half (members, scores) lives in its own
+// Firestore collection and never passes through this layer.
+
+const challenges: StoreAdapter = {
+  name: 'challenges',
+  read() {
+    const s = useChallengeStore.getState()
+    return { joined: s.joined, displayName: s.displayName }
+  },
+  apply(data) {
+    useChallengeStore.setState((prev) => ({
+      joined: asArray<JoinedChallenge>(data.joined),
+      // `||` not `??`: an empty incoming name must not blank out a real one, the
+      // same guard the settings credentials use.
+      displayName: (data.displayName as string | undefined) || prev.displayName,
+    }))
+  },
+  subscribe(cb) {
+    return useChallengeStore.subscribe(cb)
+  },
+  merge(local, cloud) {
+    if (!cloud) return local
+    return {
+      joined: unionBy(
+        asArray<JoinedChallenge>(local.joined),
+        asArray<JoinedChallenge>(cloud.joined),
+        (j) => j.challenge.code,
+      ),
+      displayName: (local.displayName as string) || (cloud.displayName as string) || '',
+    }
+  },
+}
+
+export const STORE_ADAPTERS: StoreAdapter[] = [
+  nutrition,
+  workouts,
+  body,
+  settings,
+  health,
+  supplements,
+  challenges,
+]
