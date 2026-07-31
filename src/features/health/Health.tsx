@@ -7,6 +7,7 @@ import RingChart from '../../components/RingChart'
 import Sparkline from '../../components/Sparkline'
 import SegmentedControl from '../../components/SegmentedControl'
 import { healthDaysDesc, useHealthStore } from '../../store/health'
+import { useBodyStore } from '../../store/body'
 import { useSettingsStore } from '../../store/settings'
 import { metricMeta } from '../../lib/healthMetrics'
 import { isoToLabel } from '../../lib/date'
@@ -25,90 +26,114 @@ import FitnessTipsSection from './FitnessTipsSection'
 import IntensityDistributionSection from '../progress/IntensityDistributionSection'
 import HealthMetricsSection from '../progress/HealthMetricsSection'
 import HealthStorySection from '../progress/HealthStorySection'
+import WeightSection from '../progress/WeightSection'
+import MeasurementsSection from '../progress/MeasurementsSection'
 
-type TabKey = 'today' | 'vitals' | 'fitness'
+type TabKey = 'performance' | 'vitals' | 'body'
 
 const TAB_OPTIONS = [
-  { key: 'today' as const, label: 'Today' },
+  { key: 'performance' as const, label: 'Performance' },
   { key: 'vitals' as const, label: 'Vitals' },
-  { key: 'fitness' as const, label: 'Fitness' },
+  { key: 'body' as const, label: 'Body' },
 ]
 
 const TAB_BLURB: Record<TabKey, string> = {
-  today: 'Your recovery and activity right now.',
-  vitals: 'Heart, sleep and body trends.',
-  fitness: 'Training load and performance.',
+  performance: 'Training load, VO₂ max and race predictions.',
+  vitals: 'Recovery, heart, sleep and daily activity.',
+  body: 'Weight trend, composition and measurements.',
 }
 
 export default function Health() {
-  const navigate = useNavigate()
   const days = useHealthStore((s) => s.days)
+  const bodyEntries = useBodyStore((s) => s.entries)
   const trackingSource = useSettingsStore((s) => s.trackingSource)
   const desc = useMemo(() => healthDaysDesc(days), [days])
-  const [tab, setTab] = useState<TabKey>('today')
+  const hasHealth = desc.length > 0
+  const hasBody = bodyEntries.length > 0
+  // Performance leads — it's what gets looked at most — unless there's no watch
+  // data at all, in which case Body (weigh-ins work without one) is the landing.
+  const [tab, setTab] = useState<TabKey>(hasHealth ? 'performance' : 'body')
 
-  if (desc.length === 0) {
-    // Speak to how this person actually tracks — telling someone with no watch to
-    // "connect Garmin" is a dead end, when they can just log sleep and steps.
-    const manual = trackingSource === 'manual'
+  // Nothing to show at all: no health metrics AND no weigh-ins.
+  if (!hasHealth && !hasBody) {
     return (
       <div className="space-y-4 p-4 pb-24">
         <Header blurb="Recovery, sleep & daily wellness" />
-        <Card className="space-y-3 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
-            <HeartPulse size={26} />
-          </div>
-          <h2 className="text-base font-semibold text-slate-100">
-            {manual ? 'Track sleep and steps' : 'Connect your health data'}
-          </h2>
-          <p className="text-sm text-slate-400">
-            {manual
-              ? 'Log your sleep and steps from the + button and they’ll build into trends here. Everything else — meals, workouts, water and weight — already works without a watch.'
-              : trackingSource === 'apple'
-                ? 'Export your data from the Apple Health app, then import the zip to see sleep, workouts and weight as live trends.'
-                : trackingSource === 'other'
-                  ? 'Import a CSV or JSON export from your tracker to see sleep, heart rate and activity as live trends.'
-                  : 'Import from Garmin or Apple Health to see Body Battery, readiness, sleep, HRV, stress, VO₂ max, steps and more — each as a live trend.'}
-          </p>
-          <Button variant="primary" full onClick={() => navigate('/settings')}>
-            {manual ? 'Open settings' : 'Connect health data'}
-          </Button>
-        </Card>
+        <ConnectPrompt trackingSource={trackingSource} />
       </div>
     )
   }
 
   return (
     <div className="space-y-4 p-4 pb-24">
-      <Header blurb={TAB_BLURB[tab]} latestDate={desc[0]?.date ?? null} />
+      <Header blurb={TAB_BLURB[tab]} latestDate={hasHealth ? desc[0]?.date ?? null : null} />
 
       <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} ariaLabel="Health view" />
 
-      {tab === 'today' && (
-        <div className="space-y-4">
-          {/* Above the snapshot: what today's numbers mean only lands once you
-              know which way they have been moving. */}
-          <HealthStorySection />
-          <TodayTab desc={desc} />
-        </div>
-      )}
+      {tab === 'performance' &&
+        (hasHealth ? (
+          <div className="space-y-4">
+            {/* Promoted to first: training load and race predictions are the most
+                looked-at numbers, and they used to be buried on a third tab. */}
+            <FormFitnessSection />
+            <FitnessTipsSection />
+            <RecoveryRiskSection />
+            <IntensityDistributionSection />
+            <HealthMetricsSection only={['training']} title="Performance metrics" />
+          </div>
+        ) : (
+          <ConnectPrompt trackingSource={trackingSource} />
+        ))}
 
-      {tab === 'vitals' && (
-        <div className="space-y-4">
-          <HealthMetricsSection only={['heart', 'sleep', 'activity', 'body']} title="Vitals & body metrics" />
-        </div>
-      )}
+      {tab === 'vitals' &&
+        (hasHealth ? (
+          <div className="space-y-4">
+            {/* Today's snapshot leads the vitals — the recovery ring and activity
+                rings that used to be their own skippable "Today" tab. */}
+            <HealthStorySection />
+            <TodayTab desc={desc} />
+            <HealthMetricsSection only={['heart', 'sleep', 'activity']} title="Heart, sleep & activity" />
+          </div>
+        ) : (
+          <ConnectPrompt trackingSource={trackingSource} />
+        ))}
 
-      {tab === 'fitness' && (
+      {tab === 'body' && (
         <div className="space-y-4">
-          <FormFitnessSection />
-          <FitnessTipsSection />
-          <RecoveryRiskSection />
-          <IntensityDistributionSection />
-          <HealthMetricsSection only={['training']} title="Performance metrics" />
+          <WeightSection />
+          {hasHealth && <HealthMetricsSection only={['body']} title="Body composition" />}
+          <MeasurementsSection />
         </div>
       )}
     </div>
+  )
+}
+
+/** The "no data yet" card — worded to how this person actually tracks. */
+function ConnectPrompt({ trackingSource }: { trackingSource?: string }) {
+  const navigate = useNavigate()
+  const manual = trackingSource === 'manual'
+  return (
+    <Card className="space-y-3 text-center">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+        <HeartPulse size={26} />
+      </div>
+      <h2 className="text-base font-semibold text-slate-100">
+        {manual ? 'Track sleep and steps' : 'Connect your health data'}
+      </h2>
+      <p className="text-sm text-slate-400">
+        {manual
+          ? 'Log your sleep and steps from the + button and they’ll build into trends here. Everything else — meals, workouts, water and weight — already works without a watch.'
+          : trackingSource === 'apple'
+            ? 'Export your data from the Apple Health app, then import the zip to see sleep, workouts and weight as live trends.'
+            : trackingSource === 'other'
+              ? 'Import a CSV or JSON export from your tracker to see sleep, heart rate and activity as live trends.'
+              : 'Import from Garmin or Apple Health to see Body Battery, readiness, sleep, HRV, stress, VO₂ max, steps and more — each as a live trend.'}
+      </p>
+      <Button variant="primary" full onClick={() => navigate('/settings')}>
+        {manual ? 'Open settings' : 'Connect health data'}
+      </Button>
+    </Card>
   )
 }
 
