@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import Card from '../../components/Card'
 import MacroBar from '../../components/MacroBar'
 import Button from '../../components/Button'
 import Sheet from '../../components/Sheet'
+import SegmentedControl from '../../components/SegmentedControl'
 import MealSection from './MealSection'
 import AddFoodSheet from './AddFoodSheet'
 import AddManualTab from './AddManualTab'
 import SaveMealSheet from './SaveMealSheet'
 import WaterCard from './WaterCard'
-import ExerciseCard from './ExerciseCard'
 import { useNutritionStore, entriesForDate } from '../../store/nutrition'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useBodyStore } from '../../store/body'
@@ -18,7 +18,13 @@ import { useSettingsStore } from '../../store/settings'
 import { burnedCaloriesForDate, latestBodyWeightKg } from '../../lib/exercise'
 import { addDays, isoToLabel, todayISO } from '../../lib/date'
 import { macroPct, sumMacros } from '../../lib/macros'
+import { RANGE_OPTIONS, type RangeKey } from '../progress/utils'
 import type { FoodEntry, MealType } from '../../types'
+
+// Trends pull in Recharts; lazy so the Diet chunk stays light until the tab is
+// actually opened (same reasoning as the route-level splits in App.tsx).
+const CaloriesSection = lazy(() => import('../progress/CaloriesSection'))
+const MacroAveragesSection = lazy(() => import('../progress/MacroAveragesSection'))
 
 const MEALS: { type: MealType; label: string }[] = [
   { type: 'breakfast', label: 'Breakfast' },
@@ -35,7 +41,16 @@ function shortDateLabel(iso: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+type DietView = 'today' | 'trends'
+
+const VIEW_OPTIONS = [
+  { key: 'today' as const, label: 'Today' },
+  { key: 'trends' as const, label: 'Trends' },
+]
+
 export default function Diary() {
+  const [view, setView] = useState<DietView>('today')
+  const [trendsRange, setTrendsRange] = useState<RangeKey>('30d')
   const [selectedDate, setSelectedDate] = useState(todayISO())
   const [addOpen, setAddOpen] = useState(false)
   const [addMealType, setAddMealType] = useState<MealType>('breakfast')
@@ -88,6 +103,7 @@ export default function Diary() {
     if (!st?.openAdd) return
     const h = new Date().getHours()
     const meal: MealType = h < 11 ? 'breakfast' : h < 16 ? 'lunch' : h < 21 ? 'dinner' : 'snack'
+    setView('today')
     setSelectedDate(todayISO())
     openAdd(meal)
     navigate('.', { replace: true, state: null })
@@ -117,8 +133,35 @@ export default function Diary() {
     }
   }
 
+  if (view === 'trends') {
+    return (
+      <div className="p-4 pb-24 space-y-4">
+        <SegmentedControl options={VIEW_OPTIONS} value={view} onChange={setView} ariaLabel="Diet view" />
+        <SegmentedControl
+          size="sm"
+          options={RANGE_OPTIONS}
+          value={trendsRange}
+          onChange={setTrendsRange}
+          ariaLabel="Trends range"
+        />
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-16">
+              <Loader2 size={24} className="animate-spin text-emerald-400" />
+            </div>
+          }
+        >
+          <CaloriesSection range={trendsRange} />
+          <MacroAveragesSection range={trendsRange} />
+        </Suspense>
+      </div>
+    )
+  }
+
   return (
     <div className="p-4 pb-24 space-y-4">
+      <SegmentedControl options={VIEW_OPTIONS} value={view} onChange={setView} ariaLabel="Diet view" />
+
       <header className="flex items-center justify-between">
         <button
           type="button"
@@ -199,10 +242,9 @@ export default function Diary() {
         </Button>
       )}
 
-      {/* Exercise and water sit below the food log — quick to reach, but not in
-          the way of the primary task. */}
-      <ExerciseCard date={selectedDate} />
-
+      {/* Water sits below the food log — quick to reach, but not in the way of
+          the primary task. Exercise moved out to the training surface; burned
+          calories still show in the summary above. */}
       <WaterCard date={selectedDate} />
 
       <AddFoodSheet
