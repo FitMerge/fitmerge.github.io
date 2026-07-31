@@ -309,12 +309,15 @@ export default function LogFoodHub({
               if (!e.target.value.trim()) setDescribeText(null)
             }}
             onKeyDown={(e) => {
-              // Dismiss the on-screen keyboard on Enter so the results below are
-              // visible (search is live, so there's nothing to "submit").
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.currentTarget.blur()
-              }
+              if (e.key !== 'Enter') return
+              e.preventDefault()
+              const q = query.trim()
+              // A described meal ("4 eggs and 2 toast") runs the AI breakdown on
+              // Enter, instead of making you reach for the "Log this as a meal"
+              // card below. A plain product name has nothing to break down, so
+              // Enter just dismisses the keyboard and the live search shows.
+              if (q && looksLikeMeal(q)) setDescribeText(q)
+              e.currentTarget.blur()
             }}
             enterKeyHint="search"
             placeholder="Tell FitMerge what you ate"
