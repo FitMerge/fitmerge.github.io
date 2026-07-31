@@ -73,9 +73,11 @@ service cloud.firestore {
     }
 
     // Costs one document read per rule evaluation, so it is only used where the
-    // challenge document itself isn't already in hand.
+    // challenge document itself isn't already in hand. The exists() check keeps
+    // a missing parent from raising an evaluation error instead of denying.
     function ownsChallenge(code) {
       return request.auth != null
+        && exists(/databases/$(database)/documents/challenges/$(code))
         && get(/databases/$(database)/documents/challenges/$(code)).data.ownerUid == request.auth.uid;
     }
 
@@ -84,14 +86,23 @@ service cloud.firestore {
       // isInvitedTo, so a failed self-invite write can never lock somebody out
       // of the challenge they created.
       allow get: if request.auth != null
-        && (resource.data.ownerUid == request.auth.uid || isInvitedTo(code));
+        && ((resource != null && resource.data.ownerUid == request.auth.uid) || isInvitedTo(code));
       allow list: if false;
 
+      // hasAll as well as hasOnly: Firestore evaluates every applicable rule on
+      // a write, so this one also runs during an update, where reading a field
+      // that isn't in the payload would raise an evaluation error rather than
+      // cleanly returning false. Requiring the keys up front makes every access
+      // below safe.
       allow create: if request.auth != null
-        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(
+             ['name', 'ownerUid', 'createdAt', 'startDate', 'endDate',
+              'periodDays', 'bonusPct'])
         && request.resource.data.keys().hasOnly(
              ['name', 'ownerUid', 'createdAt', 'startDate', 'endDate',
               'periodDays', 'bonusPct', 'archived'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdAt is timestamp
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 60
@@ -112,7 +123,10 @@ service cloud.firestore {
       // points — changing them would silently revalue everything already
       // earned. Only the name and the archived flag can move, and only for the
       // owner.
+      // `resource != null` guards the same way: this rule is also evaluated on a
+      // create, where there is no existing document to read.
       allow update: if request.auth != null
+        && resource != null
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['name', 'archived']);

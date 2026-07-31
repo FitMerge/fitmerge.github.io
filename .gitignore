@@ -22,3 +22,9 @@ __pycache__/
 
 # Local dev-server launch config — paths are machine-specific
 .claude/
+
+# Firebase emulator artefacts (security-rules tests)
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+.firebase/

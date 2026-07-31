@@ -1,6 +1,8 @@
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { defineConfig } from 'vite'
+// `vitest/config` rather than `vite`: same defineConfig, but it also types the
+// `test` block below. Importing it from 'vite' fails to compile.
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -63,6 +65,12 @@ const changelog = git('git log --no-merges -n 25 --pretty=format:"%h %ad %s" --d
 
 export default defineConfig({
   base,
+  test: {
+    // The security-rules suite needs a running Firestore emulator, so it is not
+    // part of the default `npm test`. Run it with `npm run test:rules`, which
+    // starts the emulator around it.
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.rules.test.ts'],
+  },
   define: {
     __BUILD_TIME__: JSON.stringify(`${buildTime} UTC`),
     __APP_VERSION__: JSON.stringify(appVersion),
