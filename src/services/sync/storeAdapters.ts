@@ -341,10 +341,21 @@ const body: StoreAdapter = {
     return { entries: s.entries, measurements: s.measurements, removedAt: s.removedAt }
   },
   apply(data) {
+    // Tombstones must not be wiped by an incoming snapshot — otherwise a device
+    // still running old code (no `at`, no removedAt) pushes its full weigh-in
+    // list and a live apply resurrects everything you deleted. So an apply runs
+    // through the SAME merge as a reconcile: a stamped local deletion survives,
+    // and a genuinely newer remote edit still wins. Measurements aren't
+    // tombstoned, so they take the incoming value as before.
+    const current = useBodyStore.getState()
+    const merged = mergeBodyEntries(
+      { entries: current.entries, removedAt: current.removedAt },
+      { entries: asArray<BodyEntry>(data.entries), removedAt: asRemovedAt(data.removedAt) },
+    )
     useBodyStore.setState({
-      entries: asArray<BodyEntry>(data.entries),
+      entries: merged.entries,
       measurements: asArray<MeasurementEntry>(data.measurements),
-      removedAt: asRemovedAt(data.removedAt),
+      removedAt: merged.removedAt,
     })
   },
   subscribe(cb) {
