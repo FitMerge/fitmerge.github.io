@@ -33,6 +33,21 @@ type SupplementState = {
    * Without this an auto-linked goal re-ticks itself the moment any watched data
    * changes, so unchecking it is impossible. Cleared when they check it again. */
   manualClears: Record<string, Record<string, true>>
+  /**
+   * dateISO → supplementId → epoch ms when that checkbox last changed.
+   *
+   * This is what makes unchecking survive a sync. Merging two devices by union
+   * can only ever ADD entries, so a cleared checkbox looked identical to one
+   * that had never been touched, and the other device put it straight back.
+   * With a timestamp per cell the merge can tell "removed just now" from "never
+   * set", and the most recent change wins in either direction.
+   *
+   * Kept even when the dose is cleared — the stamp IS the record of the
+   * removal, so it must outlive the value. Absent means "written before this
+   * existed", which the merge treats as the old union behaviour so no history
+   * is lost.
+   */
+  logAt: Record<string, Record<string, number>>
   addItem: (item: Omit<Supplement, 'id'>) => string
   updateItem: (id: string, patch: Partial<Omit<Supplement, 'id'>>) => void
   removeItem: (id: string) => void
@@ -53,12 +68,18 @@ function writeDose(log: SupplementState['log'], date: string, id: string, amount
   return next
 }
 
+/** Record when a checkbox changed. Never pruned — see `logAt` above. */
+function stamp(logAt: SupplementState['logAt'], date: string, id: string): SupplementState['logAt'] {
+  return { ...logAt, [date]: { ...(logAt[date] ?? {}), [id]: Date.now() } }
+}
+
 export const useSupplementStore = create<SupplementState>()(
   persist(
     (set, get) => ({
       items: [],
       log: {},
       manualClears: {},
+      logAt: {},
       addItem: (item) => {
         const id = uid()
         set({ items: [...get().items, { ...item, id }] })
@@ -67,20 +88,28 @@ export const useSupplementStore = create<SupplementState>()(
       updateItem: (id, patch) =>
         set({ items: get().items.map((i) => (i.id === id ? { ...i, ...patch } : i)) }),
       removeItem: (id) => {
-        // Drop the item and any of its logged doses.
+        // Drop the item and any of its logged doses. Each dropped day is
+        // stamped so the removal travels to other devices instead of being
+        // unioned straight back.
         const log: SupplementState['log'] = {}
+        let logAt = get().logAt
         for (const [date, day] of Object.entries(get().log)) {
-          const { [id]: _drop, ...rest } = day
+          const { [id]: dropped, ...rest } = day
+          if (dropped !== undefined) logAt = stamp(logAt, date, id)
           if (Object.keys(rest).length) log[date] = rest
         }
-        set({ items: get().items.filter((i) => i.id !== id), log })
+        set({ items: get().items.filter((i) => i.id !== id), log, logAt })
       },
-      setDose: (date, id, amount) => set({ log: writeDose(get().log, date, id, amount) }),
+      setDose: (date, id, amount) =>
+        set({ log: writeDose(get().log, date, id, amount), logAt: stamp(get().logAt, date, id) }),
       addDose: (date, id, amount) => {
         const item = get().items.find((i) => i.id === id)
         const step = amount ?? item?.targetAmount ?? 1
         const current = get().log[date]?.[id] ?? 0
-        set({ log: writeDose(get().log, date, id, current + step) })
+        set({
+          log: writeDose(get().log, date, id, current + step),
+          logAt: stamp(get().logAt, date, id),
+        })
       },
       toggle: (date, id) => {
         const item = get().items.find((i) => i.id === id)
@@ -92,7 +121,14 @@ export const useSupplementStore = create<SupplementState>()(
         else delete day[id]
         const manualClears = { ...get().manualClears, [date]: day }
         if (Object.keys(day).length === 0) delete manualClears[date]
-        set({ log: writeDose(get().log, date, id, done ? 0 : item?.targetAmount ?? 1), manualClears })
+        set({
+          log: writeDose(get().log, date, id, done ? 0 : item?.targetAmount ?? 1),
+          manualClears,
+          // Stamped on both paths: unchecking is the case the timestamp exists
+          // for, and checking must be able to win over another device's stale
+          // uncheck just as readily.
+          logAt: stamp(get().logAt, date, id),
+        })
       },
     }),
     { name: 'fm-supplements' },

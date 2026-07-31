@@ -77,24 +77,6 @@ function asHealthDays(v: unknown): Record<string, HealthDay> {
   return out
 }
 
-/**
- * Union two date→id→value maps, local winning per individual cell.
- *
- * `unionBy` is list-shaped and no use here: the supplement log is a nested
- * record, so a naive spread at the top level would let one device's version of a
- * date replace the other's entirely, losing habits ticked on the other phone.
- */
-function mergeDayMaps<V>(
-  local: Record<string, Record<string, V>>,
-  cloud: Record<string, Record<string, V>>,
-): Record<string, Record<string, V>> {
-  const out: Record<string, Record<string, V>> = {}
-  for (const date of new Set([...Object.keys(local), ...Object.keys(cloud)])) {
-    out[date] = { ...(cloud[date] ?? {}), ...(local[date] ?? {}) }
-  }
-  return out
-}
-
 function asDayMap<V>(v: unknown): Record<string, Record<string, V>> {
   if (!v || typeof v !== 'object') return {}
   const out: Record<string, Record<string, V>> = {}
@@ -102,6 +84,83 @@ function asDayMap<V>(v: unknown): Record<string, Record<string, V>> {
     if (day && typeof day === 'object') out[date] = day as Record<string, V>
   }
   return out
+}
+
+type DoseMap = Record<string, Record<string, number>>
+type ClearMap = Record<string, Record<string, true>>
+
+export type SupplementLog = { log: DoseMap; manualClears: ClearMap; logAt: DoseMap }
+
+function put<V>(into: Record<string, Record<string, V>>, date: string, id: string, value: V): void {
+  const day = into[date] ?? (into[date] = {})
+  day[id] = value
+}
+
+/**
+ * Merge two copies of the daily checklist, one checkbox at a time.
+ *
+ * A plain union was the obvious approach and it was wrong: it can only ever ADD
+ * entries, so a checkbox cleared on your phone looked exactly like one your
+ * laptop had never touched, and the laptop put it straight back. Unchecking a
+ * habit simply would not stick — and a resurrected tick silently inflates a
+ * challenge score, which is the number everybody else sees.
+ *
+ * So each cell carries the moment it last changed and the newer side wins,
+ * whether that change was a tick or a clear. Ties go to local, matching
+ * `unionBy` elsewhere in this file.
+ *
+ * Cells with no timestamp on EITHER side predate this and fall back to the old
+ * union, so nothing already recorded is lost by the upgrade.
+ */
+export function mergeSupplementLog(local: SupplementLog, cloud: SupplementLog): SupplementLog {
+  const log: DoseMap = {}
+  const manualClears: ClearMap = {}
+  const logAt: DoseMap = {}
+
+  const dates = new Set([
+    ...Object.keys(local.log),
+    ...Object.keys(cloud.log),
+    ...Object.keys(local.manualClears),
+    ...Object.keys(cloud.manualClears),
+    ...Object.keys(local.logAt),
+    ...Object.keys(cloud.logAt),
+  ])
+
+  for (const date of dates) {
+    const ids = new Set([
+      ...Object.keys(local.log[date] ?? {}),
+      ...Object.keys(cloud.log[date] ?? {}),
+      ...Object.keys(local.manualClears[date] ?? {}),
+      ...Object.keys(cloud.manualClears[date] ?? {}),
+      ...Object.keys(local.logAt[date] ?? {}),
+      ...Object.keys(cloud.logAt[date] ?? {}),
+    ])
+
+    for (const id of ids) {
+      const localAt = local.logAt[date]?.[id] ?? 0
+      const cloudAt = cloud.logAt[date]?.[id] ?? 0
+
+      if (localAt === 0 && cloudAt === 0) {
+        // Legacy cell: no side can say when it changed, so keep whatever exists.
+        const dose = local.log[date]?.[id] ?? cloud.log[date]?.[id]
+        if (dose !== undefined) put(log, date, id, dose)
+        if (local.manualClears[date]?.[id] || cloud.manualClears[date]?.[id]) {
+          put(manualClears, date, id, true)
+        }
+        continue
+      }
+
+      const winner = localAt >= cloudAt ? local : cloud
+      const dose = winner.log[date]?.[id]
+      // An absent dose on the winning side is a deliberate clear, and must stay
+      // absent — that is the whole point of the timestamp.
+      if (dose !== undefined) put(log, date, id, dose)
+      if (winner.manualClears[date]?.[id]) put(manualClears, date, id, true)
+      put(logAt, date, id, Math.max(localAt, cloudAt))
+    }
+  }
+
+  return { log, manualClears, logAt }
 }
 
 function asExerciseMap(v: unknown): Record<string, ExerciseEntry[]> {
@@ -350,13 +409,14 @@ const supplements: StoreAdapter = {
   name: 'supplements',
   read() {
     const s = useSupplementStore.getState()
-    return { items: s.items, log: s.log, manualClears: s.manualClears }
+    return { items: s.items, log: s.log, manualClears: s.manualClears, logAt: s.logAt }
   },
   apply(data) {
     useSupplementStore.setState({
       items: asArray<Supplement>(data.items),
       log: asDayMap<number>(data.log),
       manualClears: asDayMap<true>(data.manualClears),
+      logAt: asDayMap<number>(data.logAt),
     })
   },
   subscribe(cb) {
@@ -364,12 +424,21 @@ const supplements: StoreAdapter = {
   },
   merge(local, cloud) {
     if (!cloud) return local
+    const merged = mergeSupplementLog(
+      {
+        log: asDayMap<number>(local.log),
+        manualClears: asDayMap<true>(local.manualClears),
+        logAt: asDayMap<number>(local.logAt),
+      },
+      {
+        log: asDayMap<number>(cloud.log),
+        manualClears: asDayMap<true>(cloud.manualClears),
+        logAt: asDayMap<number>(cloud.logAt),
+      },
+    )
     return {
       items: unionBy(asArray<Supplement>(local.items), asArray<Supplement>(cloud.items), (i) => i.id),
-      // Per-cell union: two phones ticking different habits on the same day must
-      // both survive, and a tick is never something to undo by merging.
-      log: mergeDayMaps<number>(asDayMap(local.log), asDayMap(cloud.log)),
-      manualClears: mergeDayMaps<true>(asDayMap(local.manualClears), asDayMap(cloud.manualClears)),
+      ...merged,
     }
   },
 }
