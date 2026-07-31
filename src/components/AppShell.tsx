@@ -10,7 +10,7 @@ import { useChallengeScorePush } from '../features/challenges/useChallengeScoreP
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/nutrition', label: 'Diet', icon: UtensilsCrossed, end: false },
-  { to: '/workouts', label: 'Workouts', icon: Dumbbell, end: false },
+  { to: '/workouts', label: 'Train', icon: Dumbbell, end: false },
   { to: '/health', label: 'Health', icon: HeartPulse, end: false },
   { to: '/progress', label: 'Progress', icon: TrendingUp, end: false },
 ]

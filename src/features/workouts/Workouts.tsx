@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarRange, ChevronRight, Dumbbell, History, LayoutList, Plus } from 'lucide-react'
+import { BarChart3, CalendarRange, ChevronRight, Dumbbell, History, LayoutList, Loader2, Plus } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import EmptyState from '../../components/EmptyState'
+import SegmentedControl from '../../components/SegmentedControl'
 import RoutineCard from './RoutineCard'
 import RoutinePreviewSheet from './RoutinePreviewSheet'
 import ExerciseLibrary from './ExerciseLibrary'
@@ -15,10 +16,15 @@ import ProgramBuilder from './ProgramBuilder'
 import ProgramLibrary from './ProgramLibrary'
 import ProgramDetail from './ProgramDetail'
 import WorkoutStats from './WorkoutStats'
+import ExerciseCard from '../nutrition/ExerciseCard'
 import { useWorkoutsStore } from '../../store/workouts'
 import { todayISO, weekdayIndex } from '../../lib/date'
 import { lastWeightForExercise } from './utils'
 import type { Routine, WorkoutSessionEntry } from '../../types'
+
+// Progress charts pull in Recharts; lazy so the Train chunk stays light until the
+// Progress sub-tab is opened.
+const TrainingProgress = lazy(() => import('./TrainingProgress'))
 
 type ViewState =
   | { kind: 'home' }
@@ -31,7 +37,15 @@ type ViewState =
   | { kind: 'programEdit'; programId?: string }
   | { kind: 'programs' }
 
+type TrainTab = 'train' | 'progress'
+
+const TAB_OPTIONS = [
+  { key: 'train' as const, label: 'Train' },
+  { key: 'progress' as const, label: 'Progress' },
+]
+
 export default function Workouts() {
+  const [tab, setTab] = useState<TrainTab>('train')
   // Land back IN the workout when one is running. This state is local, so leaving
   // the tab used to drop you on the workouts home with a Resume card — an extra
   // tap to get back to a session you never left, and no clock in the meantime.
@@ -183,12 +197,35 @@ export default function Workouts() {
     )
   }
 
+  if (tab === 'progress') {
+    return (
+      <div className="p-4 pb-24 space-y-4">
+        <header>
+          <h1 className="text-xl font-bold text-slate-100">Train</h1>
+          <p className="text-sm text-slate-400">Strength per lift, volume, records and cardio.</p>
+        </header>
+        <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} ariaLabel="Training view" />
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-16">
+              <Loader2 size={24} className="animate-spin text-emerald-400" />
+            </div>
+          }
+        >
+          <TrainingProgress />
+        </Suspense>
+      </div>
+    )
+  }
+
   return (
     <div className="p-4 pb-24 space-y-4">
       <header>
-        <h1 className="text-xl font-bold text-slate-100">Workouts</h1>
+        <h1 className="text-xl font-bold text-slate-100">Train</h1>
         <p className="text-sm text-slate-400">Plan routines and log training sessions.</p>
       </header>
+
+      <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} ariaLabel="Training view" />
 
       {activeSession && !activeSession.finishedAt ? (
         <Card className="border-primary-500/60" onClick={() => setView({ kind: 'session' })}>
@@ -352,6 +389,11 @@ export default function Workouts() {
       <Button variant="ghost" full onClick={quickStart}>
         Start empty workout
       </Button>
+
+      {/* Manual cardio for today — a run or a class that isn't a logged lifting
+          session. Lives here now that the Diet tab is food-only; the calories
+          still feed the daily budget shown on Diet. */}
+      <ExerciseCard date={todayISO()} />
 
       <Card className="active:bg-slate-800/60 flex items-center gap-3" onClick={() => setView({ kind: 'library' })}>
         <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-primary-400 shrink-0">
