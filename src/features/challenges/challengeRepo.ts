@@ -74,13 +74,17 @@ async function db() {
  */
 export async function createChallenge(c: Challenge, ownerEmail: string): Promise<void> {
   const firestore = await db()
-  const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore')
+  const { doc, setDoc, serverTimestamp } = await import('firebase/firestore')
   const ref = doc(firestore, 'challenges', c.code)
   try {
-    const existing = await getDoc(ref)
-    if (existing.exists()) {
-      throw new ChallengeError('That code is already taken — try creating it again.')
-    }
+    // No "is this code taken?" read first. Challenges are invite-only, so
+    // reading one you don't belong to is denied — including one that doesn't
+    // exist yet, which made the check refuse every creation.
+    //
+    // It isn't needed anyway: writing over an existing challenge would be an
+    // update, and the update rule only lets its owner change the name or the
+    // archived flag. A collision (1 in ~6.6e11) therefore fails safely rather
+    // than overwriting somebody's board.
     await setDoc(ref, {
       name: c.name,
       ownerUid: c.ownerUid,
@@ -105,7 +109,16 @@ export async function createChallenge(c: Challenge, ownerEmail: string): Promise
       })
     }
   } catch (err) {
-    if (err instanceof ChallengeError) throw err
+    if (err instanceof ChallengeError && !(err instanceof ChallengeAccessError)) throw err
+    // A refusal here is never "you weren't invited" — you are the one creating
+    // it. It means the rules aren't published, or the generated code collided
+    // with an existing challenge.
+    const code = err && typeof err === 'object' && 'code' in err ? String((err as { code: unknown }).code) : ''
+    if (code.includes('permission-denied')) {
+      throw new ChallengeError(
+        "Firestore refused to create that. Check the challenge rules are published, then try again — retrying also picks a new code.",
+      )
+    }
     throw friendly(err, "Couldn't create the challenge.")
   }
 }

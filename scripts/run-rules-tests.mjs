@@ -16,7 +16,7 @@
 // Requires a JDK on PATH (the emulator won't start without one).
 
 import { spawn } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 
@@ -27,21 +27,43 @@ function safeTempDir() {
   return candidate
 }
 
+/** Does `dir` contain a java executable? */
+function hasJava(dir) {
+  const exe = process.platform === 'win32' ? 'java.exe' : 'java'
+  return existsSync(join(dir, exe))
+}
+
 /**
- * The Temurin installer sets JAVA_HOME machine-wide but doesn't always put the
- * JDK on PATH — and a PATH change doesn't reach shells that were already open.
- * Fall back to JAVA_HOME so the first run after installing a JDK works instead
- * of failing with "emulator won't start".
+ * Locate a JDK's bin directory.
+ *
+ * Installing a JDK updates the machine environment, but shells that were
+ * already open keep the old one — so right after installing, neither PATH nor
+ * JAVA_HOME necessarily has it, and the emulator fails with a confusing
+ * "Could not spawn `java -version`". Checking the usual install locations means
+ * the tests work without needing to reopen a terminal.
  */
+function findJavaBin() {
+  const fromPath = (process.env.PATH ?? '').split(delimiter).find((p) => p && hasJava(p))
+  if (fromPath) return null // already reachable, nothing to prepend
+
+  const home = process.env.JAVA_HOME
+  if (home && hasJava(join(home, 'bin'))) return join(home, 'bin')
+
+  if (process.platform !== 'win32') return null
+  for (const base of ['C:\\Program Files\\Eclipse Adoptium', 'C:\\Program Files\\Java', 'C:\\Program Files\\Microsoft']) {
+    if (!existsSync(base)) continue
+    for (const entry of readdirSync(base)) {
+      const bin = join(base, entry, 'bin')
+      if (hasJava(bin)) return bin
+    }
+  }
+  return null
+}
+
 function pathWithJava() {
   const path = process.env.PATH ?? ''
-  const home = process.env.JAVA_HOME
-  if (!home) return path
-  const bin = join(home, 'bin')
-  if (path.split(delimiter).some((p) => p.replace(/[\\/]+$/, '') === bin.replace(/[\\/]+$/, ''))) {
-    return path
-  }
-  return `${bin}${delimiter}${path}`
+  const bin = findJavaBin()
+  return bin ? `${bin}${delimiter}${path}` : path
 }
 
 const temp = safeTempDir()

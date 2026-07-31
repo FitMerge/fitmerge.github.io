@@ -488,6 +488,27 @@ describe('rules deny cleanly rather than erroring', () => {
     await assertFails(getDoc(doc(as(STRANGER), 'challenges', 'NOSUCH00')))
   })
 
+  // Reading a challenge you don't belong to is denied, and a challenge that
+  // doesn't exist yet has nobody belonging to it — so creation must NOT check
+  // whether its code is taken first. It used to, which refused every attempt.
+  // This is the regression: the app's real call sequence, not a rule in
+  // isolation.
+  it('creates without reading the code first, the way the app does', async () => {
+    await assertSucceeds(setDoc(doc(as(OWNER), 'challenges', 'FRESH001'), validChallenge()))
+  })
+
+  // Which is only safe because a collision can't clobber anyone: writing over
+  // an existing challenge is an update, and the update rule allows the owner to
+  // change nothing but the name and the archived flag.
+  it('cannot overwrite someone else’s challenge by writing to their code', async () => {
+    await seedChallengeWithGuest()
+    await assertFails(
+      setDoc(doc(as(STRANGER), 'challenges', CODE), validChallenge({ ownerUid: STRANGER.uid })),
+    )
+    // Not even the owner can reset their own challenge's dates this way.
+    await assertFails(setDoc(doc(as(OWNER), 'challenges', CODE), validChallenge()))
+  })
+
   it('denies a member write when the parent challenge is missing', async () => {
     await assertFails(setDoc(doc(as(GUEST), 'challenges', 'NOSUCH00', 'members', GUEST.uid), validMember()))
   })
