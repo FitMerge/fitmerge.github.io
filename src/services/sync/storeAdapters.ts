@@ -269,16 +269,82 @@ const workouts: StoreAdapter = {
 
 // --- body ------------------------------------------------------------------
 
+export type BodySnapshot = { entries: BodyEntry[]; removedAt: Record<string, number> }
+
+function asRemovedAt(v: unknown): Record<string, number> {
+  return v && typeof v === 'object' ? (v as Record<string, number>) : {}
+}
+
+/**
+ * Merge two copies of the weigh-in history, one date at a time.
+ *
+ * The old union-by-date could only ever ADD, so a deleted weigh-in was
+ * indistinguishable from one the other side had never seen and every reconcile
+ * resurrected it. Now each entry carries `at` (when it was written) and the
+ * store keeps `removedAt` tombstones (when a date was deleted); whichever
+ * happened last wins.
+ *
+ * Dates with no timestamp on EITHER side predate this and fall back to the old
+ * union (local wins a conflict), so nothing already recorded is lost. An entry
+ * with no `at` facing a tombstone loses — deleting in the app beats a row the
+ * Garmin job re-imports for the same date, which is what you want when the
+ * Garmin data was the mistake.
+ */
+export function mergeBodyEntries(local: BodySnapshot, cloud: BodySnapshot): BodySnapshot {
+  const localBy = new Map(local.entries.map((e) => [e.date, e]))
+  const cloudBy = new Map(cloud.entries.map((e) => [e.date, e]))
+  const dates = new Set([
+    ...localBy.keys(),
+    ...cloudBy.keys(),
+    ...Object.keys(local.removedAt),
+    ...Object.keys(cloud.removedAt),
+  ])
+
+  const entries: BodyEntry[] = []
+  const removedAt: Record<string, number> = {}
+
+  for (const date of dates) {
+    const le = localBy.get(date)
+    const ce = cloudBy.get(date)
+    const lRemoved = local.removedAt[date] ?? 0
+    const cRemoved = cloud.removedAt[date] ?? 0
+    const lAt = Math.max(le?.at ?? 0, lRemoved)
+    const cAt = Math.max(ce?.at ?? 0, cRemoved)
+
+    if (lAt === 0 && cAt === 0) {
+      // Legacy date: no side can say when it changed, keep whatever exists.
+      const e = le ?? ce
+      if (e) entries.push(e)
+      continue
+    }
+
+    // A side "has" the entry only when the write is at least as new as its own
+    // tombstone — a stamped tombstone beats an unstamped (imported) row.
+    const winnerEntry = lAt >= cAt ? le : ce
+    const winnerRemoved = lAt >= cAt ? lRemoved : cRemoved
+    const newest = Math.max(lAt, cAt)
+    if (winnerEntry && (winnerEntry.at ?? 0) >= winnerRemoved) {
+      // Stamp with the newest time seen so repeated merges stay stable.
+      entries.push({ ...winnerEntry, at: newest })
+    } else {
+      removedAt[date] = newest
+    }
+  }
+
+  return { entries, removedAt }
+}
+
 const body: StoreAdapter = {
   name: 'body',
   read() {
     const s = useBodyStore.getState()
-    return { entries: s.entries, measurements: s.measurements }
+    return { entries: s.entries, measurements: s.measurements, removedAt: s.removedAt }
   },
   apply(data) {
     useBodyStore.setState({
       entries: asArray<BodyEntry>(data.entries),
       measurements: asArray<MeasurementEntry>(data.measurements),
+      removedAt: asRemovedAt(data.removedAt),
     })
   },
   subscribe(cb) {
@@ -286,14 +352,20 @@ const body: StoreAdapter = {
   },
   merge(local, cloud) {
     if (!cloud) return local
-    // One weigh-in / measurement set per date; local wins a same-date conflict.
+    const merged = mergeBodyEntries(
+      { entries: asArray<BodyEntry>(local.entries), removedAt: asRemovedAt(local.removedAt) },
+      { entries: asArray<BodyEntry>(cloud.entries), removedAt: asRemovedAt(cloud.removedAt) },
+    )
     return {
-      entries: unionBy(asArray<BodyEntry>(local.entries), asArray<BodyEntry>(cloud.entries), (e) => e.date),
+      entries: merged.entries,
+      // Measurements still union by date (local wins a conflict) — deleting one
+      // can resurrect from another device. Same fix applies if it ever matters.
       measurements: unionBy(
         asArray<MeasurementEntry>(local.measurements),
         asArray<MeasurementEntry>(cloud.measurements),
         (e) => e.date,
       ),
+      removedAt: merged.removedAt,
     }
   },
 }

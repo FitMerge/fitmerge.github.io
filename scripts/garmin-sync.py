@@ -242,17 +242,26 @@ def _epoch_noon_ms(ds):
 
 def merge_body(existing, weights):
     """Upsert Garmin weigh-ins into the body store by date (Garmin wins the weight fields,
-    any existing note on that date is preserved); untouched dates and measurements stay."""
+    any existing note on that date is preserved); untouched dates and measurements stay.
+
+    Respects the app's deletion tombstones (`removedAt`, dateISO -> epoch ms): a date
+    the user deleted in the app is never re-added by this job, and the tombstone map
+    itself — like any other store field this function doesn't own — is passed through
+    untouched so an hourly sync can't erase the record of a deletion."""
     ex = existing if isinstance(existing, dict) else {}
     measurements = ex.get("measurements") if isinstance(ex.get("measurements"), list) else []
+    removed = ex.get("removedAt") if isinstance(ex.get("removedAt"), dict) else {}
     by_date = {}
     for e in ex.get("entries") or []:
         if isinstance(e, dict) and isinstance(e.get("date"), str):
             by_date[e["date"]] = dict(e)
     for w in weights:
+        if w["date"] in removed:
+            continue  # deleted in the app; deletion wins over a re-import
         by_date[w["date"]] = {**by_date.get(w["date"], {}), **w}
     entries = [by_date[d] for d in sorted(by_date)]
-    return {"entries": entries, "measurements": measurements}
+    extra = {k: v for k, v in ex.items() if k not in ("entries", "measurements")}
+    return {**extra, "entries": entries, "measurements": measurements}
 
 
 #: Fields carried from a Garmin activity onto its stored session. Also the fields
@@ -1231,6 +1240,21 @@ def self_test():
         b_by_date["2026-05-01"]["weightKg"] == 83.0,  # untouched date preserved
         mb["measurements"] == existing_body["measurements"],  # measurements untouched
         [e["date"] for e in mb["entries"]] == sorted(b_by_date),  # sorted by date
+    ]
+
+    # body: an app-side deletion tombstone blocks a Garmin re-import of that date,
+    # and the tombstone map itself survives the round-trip.
+    tombstoned_body = {
+        "entries": [{"date": "2026-05-01", "weightKg": 83.0}],
+        "measurements": [],
+        "removedAt": {"2026-06-01": 1753000000000},
+    }
+    mt = merge_body(tombstoned_body, payload["weights"])
+    t_dates = {e["date"] for e in mt["entries"]}
+    checks += [
+        "2026-06-01" not in t_dates,  # deleted in the app; not re-added
+        "2026-06-15" in t_dates and "2026-07-01" in t_dates,  # other Garmin dates land
+        mt.get("removedAt") == tombstoned_body["removedAt"],  # tombstones passed through
     ]
 
     # workouts: dedupe imported sessions; keep routines/programs + app-logged sessions.

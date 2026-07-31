@@ -175,6 +175,10 @@ export type BodyEntry = {
   weightKg: number
   bodyFatPct?: number
   note?: string
+  /** Epoch ms when this entry was last written on a device. Drives the sync
+   * merge (newest change per date wins); absent on entries written before this
+   * existed and on rows the Garmin job imports. */
+  at?: number
 }
 
 /**
