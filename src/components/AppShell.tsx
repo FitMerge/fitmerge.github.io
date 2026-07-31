@@ -1,6 +1,6 @@
 import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Home, UtensilsCrossed, Dumbbell, HeartPulse, TrendingUp, Plus, Loader2 } from 'lucide-react'
+import { Home, UtensilsCrossed, Dumbbell, HeartPulse, Plus, Loader2 } from 'lucide-react'
 import ActionHub from '../features/assistant/ActionHub'
 import ActiveWorkoutBar from '../features/workouts/ActiveWorkoutBar'
 import { useGoalAutoCheck } from '../features/assistant/goalAutoCheck'
@@ -12,7 +12,6 @@ const tabs = [
   { to: '/nutrition', label: 'Diet', icon: UtensilsCrossed, end: false },
   { to: '/workouts', label: 'Train', icon: Dumbbell, end: false },
   { to: '/health', label: 'Health', icon: HeartPulse, end: false },
-  { to: '/progress', label: 'Progress', icon: TrendingUp, end: false },
 ]
 
 export default function AppShell() {

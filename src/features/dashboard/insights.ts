@@ -59,7 +59,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
       icon: 'pr',
       title: `New ${d.recentPR.exerciseName} PR 🎉`,
       body: `${d.recentPR.weight} ${weightUnit(d.units)} × ${d.recentPR.reps} this week — a new best estimated 1RM of ${Math.round(d.recentPR.est1RM)} ${weightUnit(d.units)}.`,
-      to: '/progress',
+      to: '/workouts',
     })
   }
 
@@ -176,7 +176,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
         icon: 'training',
         title: `Training volume up ${pct}%`,
         body: `${fmtVolume(d.week.volume)} ${weightUnit(d.units)} this week vs ${fmtVolume(d.week.prevVolume)} last — nice overload.`,
-        to: '/progress',
+        to: '/workouts',
       })
     } else if (pct <= -25) {
       out.push({
@@ -185,7 +185,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
         icon: 'training',
         title: 'Lighter training week so far',
         body: `${fmtVolume(d.week.volume)} ${weightUnit(d.units)} vs ${fmtVolume(d.week.prevVolume)} last week. Deload or just busy? ${d.week.sessions} session${d.week.sessions === 1 ? '' : 's'} in.`,
-        to: '/progress',
+        to: '/workouts',
       })
     }
   }
@@ -261,7 +261,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
       icon: 'weight',
       title: `${losing ? 'Down' : 'Up'} ${Math.abs(d.weight.change).toFixed(1)} ${unit} this quarter`,
       body: `Trending ${Math.abs(d.weight.ratePerWeek).toFixed(1)} ${unit}/week ${losing ? 'down' : 'up'} — steady and sustainable.`,
-      to: '/progress',
+      to: '/health',
     })
   }
 

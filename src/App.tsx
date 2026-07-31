@@ -8,7 +8,6 @@ const Dashboard = lazy(() => import('./features/dashboard/Dashboard'))
 const Diary = lazy(() => import('./features/nutrition/Diary'))
 const Workouts = lazy(() => import('./features/workouts/Workouts'))
 const Health = lazy(() => import('./features/health/Health'))
-const Progress = lazy(() => import('./features/progress/Progress'))
 const Settings = lazy(() => import('./features/settings/Settings'))
 const Challenges = lazy(() => import('./features/challenges/Challenges'))
 const ChallengeDetail = lazy(() => import('./features/challenges/ChallengeDetail'))
@@ -33,7 +32,6 @@ export default function App() {
           <Route path="nutrition" element={<Diary />} />
           <Route path="workouts" element={<Workouts />} />
           <Route path="health" element={<Health />} />
-          <Route path="progress" element={<Progress />} />
           <Route path="settings" element={<Settings />} />
           <Route path="challenges" element={<Challenges />} />
           {/* Invite links land here: same page, join sheet already open. */}

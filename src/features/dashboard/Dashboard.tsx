@@ -5,19 +5,16 @@
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Droplets, Dumbbell, Minus, Pill, Plus, Sparkles } from 'lucide-react'
+import { Check, Droplets, Dumbbell, Minus, Plus, Sparkles } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
-import Sheet from '../../components/Sheet'
-import RingChart from '../../components/RingChart'
 import CoachSheet from './CoachSheet'
 import LogWaterSheet from '../nutrition/LogWaterSheet'
 import SupplementList from '../assistant/SupplementList'
 import { useNutritionStore } from '../../store/nutrition'
-import { useSettingsStore } from '../../store/settings'
 import { useHomeData } from './homeData'
 import { buildInsights } from './insights'
-import { metricSpark, scoreColor } from '../health/healthToday'
+import { metricSpark } from '../health/healthToday'
 import { typicalRangeOf } from '../progress/healthTrends'
 import { isoToLabel } from '../../lib/date'
 import { mlToFloz, weightUnit } from '../../lib/units'
@@ -31,17 +28,12 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const d = useHomeData()
   const addWater = useNutritionStore((s) => s.addWater)
-  const trackingSource = useSettingsStore((s) => s.trackingSource)
   const [coachOpen, setCoachOpen] = useState(false)
   const [waterOpen, setWaterOpen] = useState(false)
-  const [goalsOpen, setGoalsOpen] = useState(false)
   const insights = useMemo(() => buildInsights(d, new Date().getHours()), [d])
   const featured = insights[0]
   const FeaturedIcon = featured ? INSIGHT_ICONS[featured.icon] : null
 
-  const fuelPct = Math.min(1, d.foodCalories / Math.max(1, d.goals.calories + d.burned))
-  const overBudget = d.remaining < 0
-  const stepsPct = d.steps != null ? Math.min(1, d.steps / d.stepsGoal) : 0
   const waterPct = Math.min(1, d.waterMl / Math.max(1, d.waterGoalMl))
   const waterLabel =
     d.units === 'imperial'
@@ -73,16 +65,6 @@ export default function Dashboard() {
   const hrvHl = d.highlights.find((h) => h.key === 'hrv')
   const rhrHl = d.highlights.find((h) => h.key === 'restingHr')
 
-  // The hero's mood follows recovery: emerald glow when charged, amber when low.
-  const heroTint =
-    d.hero == null
-      ? 'from-slate-800/60'
-      : d.hero.value >= 66
-        ? 'from-emerald-500/15'
-        : d.hero.value >= 33
-          ? 'from-amber-500/10'
-          : 'from-rose-500/10'
-
   const headerSub = d.todaysRoutine && !d.trainedToday
     ? `${isoToLabel(d.today)} · ${d.todaysRoutine.name} scheduled`
     : isoToLabel(d.today)
@@ -90,37 +72,6 @@ export default function Dashboard() {
   return (
     <div className="space-y-4 p-4 pb-24">
       <HomeHeader sub={headerSub} />
-
-      {/* Status hero — recovery, fuel and movement at a glance. */}
-      <Card className={`bg-gradient-to-br ${heroTint} via-slate-900 to-slate-900`}>
-        <div className="flex justify-around">
-          <Dial
-            pct={d.hero ? d.hero.value / 100 : 0}
-            color={d.hero ? scoreColor(d.hero.value) : '#334155'}
-            value={d.hero ? `${Math.round(d.hero.value)}` : '—'}
-            label="Recovery"
-            // Without a watch there's nothing to "connect" — point at logging instead.
-            sub={d.hero ? d.hero.label : trackingSource === 'manual' ? 'Log sleep' : 'Connect data'}
-            onClick={() => navigate('/health')}
-          />
-          <Dial
-            pct={fuelPct}
-            color={overBudget ? '#fbbf24' : '#34d399'}
-            value={Math.abs(d.remaining).toLocaleString()}
-            label="Fuel"
-            sub={overBudget ? 'kcal over' : 'kcal left'}
-            onClick={() => navigate('/nutrition')}
-          />
-          <Dial
-            pct={stepsPct}
-            color="#38bdf8"
-            value={d.steps != null ? fmtK(d.steps) : '—'}
-            label="Move"
-            sub={d.steps != null ? `of ${fmtK(d.stepsGoal)} steps` : 'No data'}
-            onClick={() => navigate('/health')}
-          />
-        </div>
-      </Card>
 
       {/* Coach — AI plan on demand, then the featured rule-based read + rows. */}
       <Card className="space-y-2">
@@ -203,32 +154,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {d.supplements.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setGoalsOpen(true)}
-              className="flex w-full items-center justify-between gap-3 text-left active:opacity-80"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
-                  <Pill size={17} />
-                </span>
-                <p className="text-sm text-slate-200">Daily goals</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {d.supplements.slice(0, 6).map((s, i) => (
-                  <span
-                    key={s.id}
-                    className={`h-2.5 w-2.5 rounded-full ${i < d.supplementsTaken ? 'bg-violet-400' : 'bg-slate-700'}`}
-                  />
-                ))}
-                <span className="ml-1 text-xs text-slate-500">
-                  {d.supplementsTaken}/{d.supplements.length}
-                </span>
-              </div>
-            </button>
-          )}
-
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -271,6 +196,13 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* Daily goals + any challenge you're in — the habits checklist, inline,
+          where the recovery/fuel/move dials used to be. */}
+      <Card className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-100">Daily goals</h2>
+        <SupplementList />
+      </Card>
+
       {/* The key stat from every page, with its recent shape. */}
       <div className="grid grid-cols-2 gap-2">
         <StatTile
@@ -286,7 +218,7 @@ export default function Dashboard() {
           spark={d.weightSpark}
           sparkTrend={weightTrend}
           span="last 14 weigh-ins"
-          to="/progress"
+          to="/health"
         />
         <StatTile
           label="Sleep"
@@ -329,7 +261,7 @@ export default function Dashboard() {
           spark={d.week.weeklyVolumes}
           sparkColor="#818cf8"
           span="8 weeks"
-          to="/progress"
+          to="/workouts"
         />
         <StatTile
           label="Streak"
@@ -343,33 +275,6 @@ export default function Dashboard() {
 
       <CoachSheet open={coachOpen} onClose={() => setCoachOpen(false)} />
       <LogWaterSheet open={waterOpen} onClose={() => setWaterOpen(false)} date={d.today} />
-      <Sheet open={goalsOpen} onClose={() => setGoalsOpen(false)} title="Daily goals">
-        <SupplementList />
-      </Sheet>
     </div>
-  )
-}
-
-function Dial({
-  pct,
-  color,
-  value,
-  label,
-  sub,
-  onClick,
-}: {
-  pct: number
-  color: string
-  value: string
-  label: string
-  sub: string
-  onClick: () => void
-}) {
-  return (
-    <button type="button" onClick={onClick} className="flex flex-col items-center gap-1">
-      <RingChart value={pct} size={94} stroke={9} color={color} label={value} />
-      <p className="text-xs font-semibold text-slate-200">{label}</p>
-      <p className="text-[10px] text-slate-500">{sub}</p>
-    </button>
   )
 }
