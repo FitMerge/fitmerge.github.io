@@ -74,7 +74,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
         icon: 'recovery',
         title: 'Take it easier today',
         body: `${d.hero.label} is at ${Math.round(d.hero.value)} and your recovery markers are off baseline — keep intensity light and get to bed early.`,
-        to: '/health',
+        to: '/vitals',
       })
     } else if (d.hero.value >= 66 && d.todaysRoutine && !d.trainedToday && !d.activeSessionId) {
       const signals = [
@@ -96,7 +96,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
         icon: 'recovery',
         title: 'Moderate recovery',
         body: `${d.hero.label} is at ${Math.round(d.hero.value)} — train, but leave a rep or two in the tank.`,
-        to: '/health',
+        to: '/vitals',
       })
     }
   }
@@ -110,7 +110,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
         icon: 'sleep',
         title: `Short night — ${fmtSleep(d.sleepMinutes)}`,
         body: `That's ${sleep.note.replace(' below normal', '')} under your usual. An earlier night tonight will pay back tomorrow's training.`,
-        to: '/health',
+        to: '/vitals',
       })
     } else if (sleep.tone === 'good') {
       out.push({
@@ -119,7 +119,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
         icon: 'sleep',
         title: `Well slept — ${fmtSleep(d.sleepMinutes)}`,
         body: `${sleep.note.replace('above normal', 'above your usual')} — recovery loves it.`,
-        to: '/health',
+        to: '/vitals',
       })
     }
   }
@@ -132,7 +132,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
       icon: 'stress',
       title: `Stress running high — ${stress.value}`,
       body: `That's ${stress.note}. A walk, some sun or 5 minutes of slow breathing genuinely moves this number.`,
-      to: '/health',
+      to: '/vitals',
     })
   }
 
@@ -284,7 +284,7 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
       icon: 'weight',
       title: `${losing ? 'Down' : 'Up'} ${Math.abs(d.weight.change).toFixed(1)} ${unit} this quarter`,
       body: `Trending ${Math.abs(d.weight.ratePerWeek).toFixed(1)} ${unit}/week ${losing ? 'down' : 'up'} — steady and sustainable.`,
-      to: '/health',
+      to: '/weight',
     })
   }
 

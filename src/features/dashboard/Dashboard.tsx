@@ -228,7 +228,7 @@ export default function Dashboard() {
           spark={d.weightSpark}
           sparkTrend={weightTrend}
           span="last 14 weigh-ins"
-          to="/health"
+          to="/weight"
         />
         <StatTile
           label="Sleep"
@@ -239,7 +239,7 @@ export default function Dashboard() {
           sparkColor="#38bdf8"
           sparkBand={sleepBand ? [sleepBand.low, sleepBand.high] : undefined}
           span="14 nights"
-          to="/health"
+          to="/vitals"
         />
         <StatTile
           label="HRV"
@@ -250,7 +250,7 @@ export default function Dashboard() {
           sparkColor="#a78bfa"
           sparkBand={hrvBand ? [hrvBand.low, hrvBand.high] : undefined}
           span="14 days"
-          to="/health"
+          to="/vitals"
         />
         <StatTile
           label="Resting HR"
@@ -261,7 +261,7 @@ export default function Dashboard() {
           sparkColor="#f87171"
           sparkBand={rhrBand ? [rhrBand.low, rhrBand.high] : undefined}
           span="14 days"
-          to="/health"
+          to="/vitals"
         />
         <StatTile
           label="Volume this week"

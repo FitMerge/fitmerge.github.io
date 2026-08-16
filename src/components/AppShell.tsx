@@ -1,17 +1,21 @@
 import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Home, UtensilsCrossed, Dumbbell, HeartPulse, Plus, Loader2 } from 'lucide-react'
+import { Home, UtensilsCrossed, Dumbbell, Scale, Activity, HeartPulse, Plus, Loader2 } from 'lucide-react'
 import ActionHub from '../features/assistant/ActionHub'
 import ActiveWorkoutBar from '../features/workouts/ActiveWorkoutBar'
 import { useGoalAutoCheck } from '../features/assistant/goalAutoCheck'
 import { useGarminSourceDetect } from '../features/settings/useGarminLink'
 import { useChallengeScorePush } from '../features/challenges/useChallengeScorePush'
 
+// Three on each side of the centre "+": daily logging on the left, the health
+// readouts on the right. Weight is its own tab because it's what gets opened most.
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/nutrition', label: 'Diet', icon: UtensilsCrossed, end: false },
   { to: '/workouts', label: 'Train', icon: Dumbbell, end: false },
-  { to: '/health', label: 'Health', icon: HeartPulse, end: false },
+  { to: '/weight', label: 'Weight', icon: Scale, end: false },
+  { to: '/performance', label: 'Perform', icon: Activity, end: false },
+  { to: '/vitals', label: 'Vitals', icon: HeartPulse, end: false },
 ]
 
 export default function AppShell() {
@@ -43,19 +47,19 @@ export default function AppShell() {
           than one tap away and its clocks stay on screen wherever you are. */}
       <ActiveWorkoutBar />
       <nav className="border-t border-slate-800 bg-slate-950/90 backdrop-blur safe-bottom">
-        <div className="max-w-md mx-auto w-full flex items-stretch justify-between px-2">
-          {tabs.slice(0, 2).map(({ to, label, icon: Icon, end }) => (
+        <div className="max-w-md mx-auto w-full flex items-stretch justify-between px-1">
+          {tabs.slice(0, 3).map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${
+                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] ${
                   isActive ? 'text-emerald-400' : 'text-slate-500'
                 }`
               }
             >
-              <Icon size={20} />
+              <Icon size={19} />
               <span className="whitespace-nowrap">{label}</span>
             </NavLink>
           ))}
@@ -73,18 +77,18 @@ export default function AppShell() {
             </button>
           </div>
 
-          {tabs.slice(2).map(({ to, label, icon: Icon, end }) => (
+          {tabs.slice(3).map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${
+                `flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] ${
                   isActive ? 'text-emerald-400' : 'text-slate-500'
                 }`
               }
             >
-              <Icon size={20} />
+              <Icon size={19} />
               <span className="whitespace-nowrap">{label}</span>
             </NavLink>
           ))}

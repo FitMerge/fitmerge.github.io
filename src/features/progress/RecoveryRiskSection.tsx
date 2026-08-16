@@ -3,7 +3,7 @@ import { ShieldAlert } from 'lucide-react'
 import Card from '../../components/Card'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useHealthStore } from '../../store/health'
-import { acwr, type AcwrLevel } from '../../lib/trainingLoad'
+import { acwr, hasRealTrainingLoad, type AcwrLevel } from '../../lib/trainingLoad'
 import { coachSignals } from '../../lib/coachSignals'
 
 // ACWR gauge zones across a 0–2 scale (clamped). Colors mark the risk bands.
@@ -26,6 +26,7 @@ export default function RecoveryRiskSection() {
 
   const risk = useMemo(() => acwr(sessions), [sessions])
   const signals = useMemo(() => coachSignals(days), [days])
+  const calibrated = useMemo(() => hasRealTrainingLoad(sessions), [sessions])
 
   if (!risk && signals.every((s) => s.title === 'Not enough data yet')) {
     return (
@@ -41,19 +42,31 @@ export default function RecoveryRiskSection() {
 
   // Position the marker on a 0–2 ACWR scale (0.8–1.3 is the green sweet spot).
   const pct = risk ? Math.min(100, Math.max(0, (risk.ratio / 2) * 100)) : 0
+  const flags = signals.filter((s) => s.title !== 'Not enough data yet')
 
   return (
     <Card className="space-y-3">
       <Header />
 
+      <p className="text-[11px] leading-relaxed text-slate-400">
+        A <span className="font-medium text-slate-300">leading indicator</span>, not a diagnosis: it flags
+        when your training is ramping faster than your body has adapted to — the window most associated with
+        injury and illness — plus recovery markers that tend to move first.
+      </p>
+
       {risk && (
         <div className="space-y-2">
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-slate-400">Acute:Chronic load ratio</span>
-            <span className="text-lg font-bold" style={{ color: LEVEL_COLOR[risk.level] }}>
-              {risk.ratio.toFixed(2)}
-              <span className="ml-1.5 text-xs font-semibold">{risk.label}</span>
-            </span>
+          {/* The actual load numbers, not just the ratio — so "acute load" reads as
+              the hundreds it is on the watch, not a bare 1.x. */}
+          <div className="grid grid-cols-3 gap-2">
+            <LoadTile label="Acute" sub="last 7 days" value={Math.round(risk.acute).toLocaleString()} />
+            <LoadTile label="Chronic" sub="weekly avg" value={Math.round(risk.chronic).toLocaleString()} />
+            <LoadTile
+              label="Ratio"
+              sub={risk.label}
+              value={risk.ratio.toFixed(2)}
+              color={LEVEL_COLOR[risk.level]}
+            />
           </div>
 
           {/* Zone bar: blue (detraining) | green (sweet spot) | amber | red. */}
@@ -69,21 +82,48 @@ export default function RecoveryRiskSection() {
               style={{ left: `calc(${pct}% - 2px)` }}
             />
           </div>
+          <div className="flex justify-between text-[9px] text-slate-500">
+            <span>detraining</span>
+            <span>sweet spot</span>
+            <span>injury risk →</span>
+          </div>
+
           <p className="text-[11px] text-slate-400">{risk.detail}</p>
+          <p className="text-[10px] leading-relaxed text-slate-500">
+            The ratio is your <span className="text-slate-400">acute</span> load (total of the last 7 days)
+            divided by your <span className="text-slate-400">chronic</span> load (average week over the last
+            28). Load is {calibrated ? "Garmin's own training-load number" : "estimated from each activity's calories"}.
+          </p>
         </div>
       )}
 
-      <div className="space-y-2 pt-1">
-        {signals
-          .filter((s) => s.title !== 'Not enough data yet')
-          .map((sig, i) => (
+      {flags.length > 0 && (
+        <div className="space-y-2 border-t border-slate-800 pt-2.5">
+          <p className="text-[11px] font-medium text-slate-400">
+            Recovery signals{' '}
+            <span className="font-normal text-slate-500">· from HRV, resting HR, sleep &amp; Body Battery</span>
+          </p>
+          {flags.map((sig, i) => (
             <div key={i} className={`rounded-lg border p-2.5 ${SIGNAL_CLASSES[sig.level]}`}>
               <p className="text-xs font-semibold text-slate-100">{sig.title}</p>
               <p className="text-[11px] text-slate-300">{sig.detail}</p>
             </div>
           ))}
-      </div>
+        </div>
+      )}
     </Card>
+  )
+}
+
+function LoadTile({ label, sub, value, color }: { label: string; sub: string; value: string; color?: string }) {
+  return (
+    <div className="rounded-lg bg-slate-800/60 p-2.5 text-center">
+      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: color ?? '#e2e8f0' }}>
+        {value}
+      </p>
+      <p className="truncate text-[9px] text-slate-500">{sub}</p>
+    </div>
   )
 }
 

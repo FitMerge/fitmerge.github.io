@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import AppShell from './components/AppShell'
 
 // Route-level code splitting: heavy dependencies (Recharts on Progress and the
@@ -7,7 +7,9 @@ import AppShell from './components/AppShell'
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard'))
 const Diary = lazy(() => import('./features/nutrition/Diary'))
 const Workouts = lazy(() => import('./features/workouts/Workouts'))
-const Health = lazy(() => import('./features/health/Health'))
+const Weight = lazy(() => import('./features/health/Weight'))
+const Performance = lazy(() => import('./features/health/Performance'))
+const Vitals = lazy(() => import('./features/health/Vitals'))
 const Settings = lazy(() => import('./features/settings/Settings'))
 const Challenges = lazy(() => import('./features/challenges/Challenges'))
 const ChallengeDetail = lazy(() => import('./features/challenges/ChallengeDetail'))
@@ -31,7 +33,11 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="nutrition" element={<Diary />} />
           <Route path="workouts" element={<Workouts />} />
-          <Route path="health" element={<Health />} />
+          <Route path="weight" element={<Weight />} />
+          <Route path="performance" element={<Performance />} />
+          <Route path="vitals" element={<Vitals />} />
+          {/* Old single Health tab, now split three ways — keep deep links alive. */}
+          <Route path="health" element={<Navigate to="/vitals" replace />} />
           <Route path="settings" element={<Settings />} />
           <Route path="challenges" element={<Challenges />} />
           {/* Invite links land here: same page, join sheet already open. */}

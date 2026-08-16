@@ -182,6 +182,16 @@ export default function FormFitnessSection() {
         <span className={`font-semibold ${TONE_CLASSES[fs.tone]}`}>{fs.label}.</span> {fs.detail}
       </p>
 
+      {/* The one-time "what am I even looking at" explainer — this chart is opaque
+          without it. Colours match the three lines below. */}
+      <p className="rounded-lg bg-slate-800/40 p-2.5 text-[11px] leading-relaxed text-slate-400">
+        <span className="font-medium text-sky-400">Fitness</span> is your training load banked over about six
+        weeks; <span className="font-medium text-amber-400">Fatigue</span> is just the last week;{' '}
+        <span className="font-medium text-emerald-400">Form</span> = Fitness − Fatigue, i.e. how fresh you are.
+        Positive Form means rested and ready to perform; negative means you're carrying fatigue — either
+        building fitness or overdoing it. The dashed lines project the next four weeks at your current load.
+      </p>
+
       {/* Fitness (CTL) and Form build from a zero seed over a ~42-day window, so
           until that much history exists the numbers read artificially low — even
           right after a Garmin backfill. Say so rather than let a new user read a

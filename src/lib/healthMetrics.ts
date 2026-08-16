@@ -21,6 +21,11 @@ export type MetricMeta = {
 const round = (v: number) => String(Math.round(v))
 const commas = (v: number) => Math.round(v).toLocaleString()
 const one = (v: number) => v.toFixed(1)
+/** Nearest half — how Garmin reports Fitness Age (e.g. 33.5), not raw decimals. */
+const half = (v: number) => {
+  const r = Math.round(v * 2) / 2
+  return Number.isInteger(r) ? String(r) : r.toFixed(1)
+}
 const hoursMinutes = (v: number) => `${Math.floor(v / 60)}h ${Math.round(v % 60)}m`
 /** Minutes → "7h" / "45m", for an axis where "7h 12m" does not fit. */
 const axisHours = (v: number) => (Math.abs(v) >= 60 ? `${(v / 60).toFixed(v % 60 === 0 ? 0 : 1)}h` : `${Math.round(v)}m`)
@@ -75,13 +80,14 @@ const CATALOG: Record<string, CatalogEntry> = {
   awakeMinutes: { label: 'Awake time', group: 'sleep', order: 25, format: hoursMinutes, axisFormat: axisHours, lowerIsBetter: true },
 
   // ── Training & performance ─────────────────────────────────────────────────
-  vo2max: { label: 'VO₂ Max', group: 'training', order: 30, format: one },
-  vo2maxCycling: { label: 'VO₂ Max (cycling)', group: 'training', order: 31, format: one },
+  // Garmin reports VO₂ max as a whole number; showing a decimal invents precision.
+  vo2max: { label: 'VO₂ Max', group: 'training', order: 30, format: round },
+  vo2maxCycling: { label: 'VO₂ Max (cycling)', group: 'training', order: 31, format: round },
   trainingReadiness: { label: 'Training readiness', group: 'training', order: 32, format: round },
   acuteLoad: { label: 'Acute load (7d)', group: 'training', order: 33, format: round },
   enduranceScore: { label: 'Endurance score', group: 'training', order: 34, format: round },
   hillScore: { label: 'Hill score', group: 'training', order: 35, format: round },
-  fitnessAge: { label: 'Fitness age', unit: 'yr', group: 'training', order: 36, format: one, lowerIsBetter: true },
+  fitnessAge: { label: 'Fitness age', unit: 'yr', group: 'training', order: 36, format: half, lowerIsBetter: true },
   raceTime5k: { label: 'Race predictor · 5K', group: 'training', order: 37, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
   raceTime10k: { label: 'Race predictor · 10K', group: 'training', order: 38, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
   raceTimeHalf: { label: 'Race predictor · Half', group: 'training', order: 39, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
