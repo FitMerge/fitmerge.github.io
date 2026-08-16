@@ -13,20 +13,20 @@ import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
 import SessionHistory from './SessionHistory'
 import RecentWorkoutsCard from './RecentWorkoutsCard'
-import CardioSummaryCard from './CardioSummaryCard'
+import Collapsible from '../../components/Collapsible'
 import ProgramBuilder from './ProgramBuilder'
 import ProgramLibrary from './ProgramLibrary'
 import ProgramDetail from './ProgramDetail'
 import WorkoutStats from './WorkoutStats'
-import ExerciseCard from '../nutrition/ExerciseCard'
 import { useWorkoutsStore } from '../../store/workouts'
 import { todayISO, weekdayIndex } from '../../lib/date'
 import { lastWeightForExercise } from './utils'
 import type { Routine, WorkoutSessionEntry } from '../../types'
 
-// Progress charts pull in Recharts; lazy so the Train chunk stays light until the
-// Progress sub-tab is opened.
-const TrainingProgress = lazy(() => import('./TrainingProgress'))
+// Both pull in Recharts; lazy so the Train chunk stays light until you open the
+// Cardio tab or expand lifting progress.
+const CardioTab = lazy(() => import('./CardioTab'))
+const LiftingProgress = lazy(() => import('./LiftingProgress'))
 
 type ViewState =
   | { kind: 'home' }
@@ -39,15 +39,15 @@ type ViewState =
   | { kind: 'programEdit'; programId?: string }
   | { kind: 'programs' }
 
-type TrainTab = 'train' | 'progress'
+type TrainTab = 'lifting' | 'cardio'
 
 const TAB_OPTIONS = [
-  { key: 'train' as const, label: 'Train' },
-  { key: 'progress' as const, label: 'Progress' },
+  { key: 'lifting' as const, label: 'Lifting' },
+  { key: 'cardio' as const, label: 'Cardio' },
 ]
 
 export default function Workouts() {
-  const [tab, setTab] = useState<TrainTab>('train')
+  const [tab, setTab] = useState<TrainTab>('lifting')
   // Land back IN the workout when one is running. This state is local, so leaving
   // the tab used to drop you on the workouts home with a Resume card — an extra
   // tap to get back to a session you never left, and no clock in the meantime.
@@ -57,14 +57,6 @@ export default function Workouts() {
   )
   const [previewRoutine, setPreviewRoutine] = useState<Routine | null>(null)
   const [logActivityOpen, setLogActivityOpen] = useState(false)
-  // Which discipline the Progress view opens on. "See all" on the cardio card
-  // jumps straight to cardio instead of the lifting-first default.
-  const [progressDiscipline, setProgressDiscipline] = useState<'lifting' | 'cardio'>('lifting')
-
-  function openCardioDashboard() {
-    setProgressDiscipline('cardio')
-    setTab('progress')
-  }
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -208,12 +200,12 @@ export default function Workouts() {
     )
   }
 
-  if (tab === 'progress') {
+  if (tab === 'cardio') {
     return (
       <div className="p-4 pb-24 space-y-4">
         <header>
           <h1 className="text-xl font-bold text-slate-100">Train</h1>
-          <p className="text-sm text-slate-400">Strength per lift, volume, records and cardio.</p>
+          <p className="text-sm text-slate-400">Runs, rides, hikes — and every cardio stat.</p>
         </header>
         <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} ariaLabel="Training view" />
         <Suspense
@@ -223,8 +215,9 @@ export default function Workouts() {
             </div>
           }
         >
-          <TrainingProgress initialDiscipline={progressDiscipline} />
+          <CardioTab onLog={() => setLogActivityOpen(true)} />
         </Suspense>
+        <LogActivitySheet open={logActivityOpen} onClose={() => setLogActivityOpen(false)} />
       </div>
     )
   }
@@ -233,7 +226,7 @@ export default function Workouts() {
     <div className="p-4 pb-24 space-y-4">
       <header>
         <h1 className="text-xl font-bold text-slate-100">Train</h1>
-        <p className="text-sm text-slate-400">Plan routines and log training sessions.</p>
+        <p className="text-sm text-slate-400">Plan routines and track your lifting.</p>
       </header>
 
       <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} ariaLabel="Training view" />
@@ -280,10 +273,6 @@ export default function Workouts() {
           )}
         </Card>
       )}
-
-      {/* Cardio up front, so a run/ride/hike is visible the moment you open Train
-          rather than three taps deep under Progress → Cardio. */}
-      <CardioSummaryCard onSeeAll={openCardioDashboard} onLog={() => setLogActivityOpen(true)} />
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-slate-200">My routines</h2>
@@ -401,22 +390,23 @@ export default function Workouts() {
         )}
       </section>
 
-      {/* Two ways in that aren't a routine: an empty tracked lifting session, or a
-          one-off activity (run, yoga, hike) you just want on the record. */}
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="ghost" full onClick={quickStart}>
-          Empty workout
-        </Button>
-        <Button variant="primary" full onClick={() => setLogActivityOpen(true)}>
-          <span className="flex items-center justify-center gap-1.5">
-            <Plus size={16} /> Log activity
-          </span>
-        </Button>
-      </div>
+      <Button variant="ghost" full onClick={quickStart}>
+        Empty workout
+      </Button>
 
-      {/* Today's calorie burn — finished workouts, logged activities, and quick
-          calorie-only adds. The calories feed the daily budget shown on Diet. */}
-      <ExerciseCard date={todayISO()} />
+      {/* Lifting analytics, collapsed by default so the tab stays about doing —
+          the charts (and their Recharts bundle) load only when expanded. */}
+      <Collapsible title="Lifting progress" subtitle="Per-lift charts, volume and records">
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-10">
+              <Loader2 size={22} className="animate-spin text-emerald-400" />
+            </div>
+          }
+        >
+          <LiftingProgress />
+        </Suspense>
+      </Collapsible>
 
       <Card className="active:bg-slate-800/60 flex items-center gap-3" onClick={() => setView({ kind: 'library' })}>
         <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-primary-400 shrink-0">
@@ -465,8 +455,6 @@ export default function Workouts() {
           setView({ kind: 'edit', routineId: routine.id })
         }}
       />
-
-      <LogActivitySheet open={logActivityOpen} onClose={() => setLogActivityOpen(false)} />
     </div>
   )
 }

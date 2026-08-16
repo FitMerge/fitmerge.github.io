@@ -13,7 +13,7 @@ import { useWorkoutsStore } from '../../store/workouts'
 import { useSettingsStore } from '../../store/settings'
 import { getExerciseById } from '../../data/exercises'
 import { addDays, todayISO } from '../../lib/date'
-import { cardioSummaryLine, isCardioSession } from './cardio'
+import { isCardioSession } from './cardio'
 import { isWorkingSet, totalSetsDone, weightUnitLabel } from './utils'
 import type { WorkoutSession } from '../../types'
 
@@ -63,7 +63,7 @@ export default function RecentWorkoutsCard({ onSeeAll, onRepeated }: Props) {
   const recent = useMemo(
     () =>
       sessions
-        .filter((s) => s.finishedAt !== undefined || s.imported)
+        .filter((s) => s.finishedAt !== undefined && !isCardioSession(s))
         .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
         .slice(0, SHOWN),
     [sessions],
@@ -76,7 +76,7 @@ export default function RecentWorkoutsCard({ onSeeAll, onRepeated }: Props) {
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <History size={15} className="text-primary-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Recent activity</h2>
+          <h2 className="text-sm font-semibold text-slate-200">Recent workouts</h2>
         </div>
         <button
           type="button"
@@ -89,7 +89,7 @@ export default function RecentWorkoutsCard({ onSeeAll, onRepeated }: Props) {
 
       <div className="space-y-1">
         {recent.map((s) => {
-          const summary = isCardioSession(s) ? cardioSummaryLine(s, units) : topSetSummary(s, unitLabel)
+          const summary = topSetSummary(s, unitLabel)
           return (
             <button
               key={s.id}
