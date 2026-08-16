@@ -230,9 +230,9 @@ export default function CardioTab({ onLog }: { onLog: () => void }) {
 
       {selected !== null && (
         <>
-          <Collapsible title="Recent activities" subtitle="Every session, with the details" defaultOpen>
-            <ActivityFeedSection range={range} category={selected} bare />
-          </Collapsible>
+          {/* Progress first — trends and improvement are what you open the tab to
+              see. The full session history is long, so it sits last and starts
+              collapsed, opened on demand rather than pushing the trends off-screen. */}
           <Collapsible title="Pace & distance" subtitle="How your training is trending" defaultOpen>
             <CardioProgressSection range={range} category={selected} bare />
           </Collapsible>
@@ -244,6 +244,9 @@ export default function CardioTab({ onLog }: { onLog: () => void }) {
               <RacePredictionSection range={range} bare />
             </Collapsible>
           )}
+          <Collapsible title="Recent activities" subtitle="Full session history, with the details">
+            <ActivityFeedSection range={range} category={selected} bare />
+          </Collapsible>
         </>
       )}
 
