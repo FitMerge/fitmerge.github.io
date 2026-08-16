@@ -13,13 +13,14 @@ import { TrendingDown, TrendingUp } from 'lucide-react'
 import Sheet from '../../components/Sheet'
 import SegmentedControl from '../../components/SegmentedControl'
 import ScrubChart from '../../components/ScrubChart'
-import { formatMetric, metricAxisValue, metricMeta } from '../../lib/healthMetrics'
+import { familyFor, formatMetric, metricAxisValue, metricMeta } from '../../lib/healthMetrics'
 import {
   HEALTH_RANGE_OPTIONS,
   bandPosition,
   metricSamples,
   metricSeries,
   metricStats,
+  rangeBandSeries,
   typicalRange,
   withMovingAverage,
   type HealthRangeKey,
@@ -69,7 +70,27 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
   // a stepped one it is noise, so skip the band entirely.
   const band = useMemo(() => (slow ? null : typicalRange(samples, range)), [samples, range, slow])
 
-  const hasPoints = series.some((p) => p.value !== null)
+  // Range families (Body Battery, stress, SpO₂, respiration) each swing within a day,
+  // so on their headline metric we chart the daily low→high band instead of a single
+  // "most recent value" line — the way Garmin shows it.
+  const family = useMemo(() => (charted ? familyFor(charted) : undefined), [charted])
+  const isRangePrimary = !!(family && family.kind === 'range' && family.primary === charted && family.low && family.high)
+  const bandSeries = useMemo(
+    () => (isRangePrimary ? rangeBandSeries(days, family!.low!, family!.high!, range) : []),
+    [isRangePrimary, days, family, range],
+  )
+  const useBand = isRangePrimary && bandSeries.some((p) => p.range !== null)
+  const lowStats = useMemo(
+    () => (useBand ? metricStats(metricSamples(days, family!.low!), range) : null),
+    [useBand, days, family, range],
+  )
+  const highStats = useMemo(
+    () => (useBand ? metricStats(metricSamples(days, family!.high!), range) : null),
+    [useBand, days, family, range],
+  )
+
+  const chartData = useBand ? bandSeries : series
+  const hasPoints = useBand ? bandSeries.some((p) => p.range !== null) : series.some((p) => p.value !== null)
   // Show the 7-day smoothing line only for noisy day-by-day ranges, never for slow metrics.
   const showAvg = !slow && (range === '30d' || range === '90d')
 
@@ -114,15 +135,37 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
             ariaLabel="History range"
           />
 
-          {hasPoints && stats ? (
+          {hasPoints ? (
             <>
               <div className="grid grid-cols-3 gap-2">
-                <Stat label="Average" value={formatMetric(charted, stats.avg)} />
-                <Stat label="Low" value={formatMetric(charted, stats.min)} />
-                <Stat label="High" value={formatMetric(charted, stats.max)} />
+                <Stat label="Average" value={stats ? formatMetric(charted, stats.avg) : '—'} />
+                <Stat
+                  label={useBand ? 'Lowest' : 'Low'}
+                  value={
+                    useBand
+                      ? lowStats
+                        ? formatMetric(charted, lowStats.min)
+                        : '—'
+                      : stats
+                        ? formatMetric(charted, stats.min)
+                        : '—'
+                  }
+                />
+                <Stat
+                  label={useBand ? 'Highest' : 'High'}
+                  value={
+                    useBand
+                      ? highStats
+                        ? formatMetric(charted, highStats.max)
+                        : '—'
+                      : stats
+                        ? formatMetric(charted, stats.max)
+                        : '—'
+                  }
+                />
               </div>
 
-              {band && (
+              {!useBand && band && stats && (
                 <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
                   Latest <span className="font-semibold text-slate-100">{formatMetric(charted, stats.last)}</span> ·{' '}
                   <span className={pos === 'within' ? 'text-slate-400' : 'text-sky-300'}>{posLabel}</span>
@@ -133,7 +176,7 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                 </div>
               )}
 
-              {meaningful && (
+              {!useBand && meaningful && stats && (
                 <div
                   className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${
                     improving ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
@@ -147,21 +190,28 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
               )}
 
               <ScrubChart
-                data={series}
+                data={chartData as any}
                 height={200}
                 label={(p) => p.label}
-                values={(p) =>
-                  p.value === null
-                    ? []
-                    : [
-                        { key: 'value', value: formatMetric(charted, p.value) },
-                        ...(showAvg && p.avg != null
-                          ? [{ key: 'avg', name: '7d', value: formatMetric(charted, p.avg), color: '#38bdf8' }]
-                          : []),
-                      ]
+                values={(p: any) =>
+                  useBand
+                    ? p.range === null
+                      ? []
+                      : [
+                          { key: 'high', name: 'high', value: formatMetric(charted, p.high) },
+                          { key: 'low', name: 'low', value: formatMetric(charted, p.low), color: '#38bdf8' },
+                        ]
+                    : p.value === null
+                      ? []
+                      : [
+                          { key: 'value', value: formatMetric(charted, p.value) },
+                          ...(showAvg && p.avg != null
+                            ? [{ key: 'avg', name: '7d', value: formatMetric(charted, p.avg), color: '#38bdf8' }]
+                            : []),
+                        ]
                 }
               >
-                <ComposedChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <ComposedChart data={chartData as any} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="metricFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#34d399" stopOpacity={0.35} />
@@ -186,8 +236,9 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                       width={48}
                       tickFormatter={(v: number) => metricAxisValue(charted, v)}
                     />
-                    {/* Typical-range band (15th–85th pct) + median = "your normal". */}
-                    {band && (
+                    {/* Typical-range band (15th–85th pct) + median = "your normal".
+                        Hidden in band mode, where the chart itself is a range. */}
+                    {!useBand && band && (
                       <ReferenceArea
                         y1={band.low}
                         y2={band.high}
@@ -197,10 +248,23 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                         ifOverflow="extendDomain"
                       />
                     )}
-                    {band && (
+                    {!useBand && band && (
                       <ReferenceLine y={band.mid} stroke="#64748b" strokeDasharray="4 3" ifOverflow="extendDomain" />
                     )}
-                    {slow ? (
+                    {useBand ? (
+                      // The daily low→high range as a filled band, Garmin-style.
+                      <Area
+                        type="monotone"
+                        dataKey="range"
+                        stroke="#34d399"
+                        strokeWidth={1}
+                        strokeOpacity={0.5}
+                        fill="#34d399"
+                        fillOpacity={0.18}
+                        connectNulls
+                        isAnimationActive={false}
+                      />
+                    ) : slow ? (
                       // A stepped line that holds each value until it changes, with a
                       // dot only where it stepped — how Garmin draws VO₂ max.
                       <Line
@@ -245,15 +309,22 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
               </ScrubChart>
 
               <p className="text-center text-xs text-slate-500">
-                {stats.count} day{stats.count === 1 ? '' : 's'} of data
-                {band ? ' · shaded = your typical range' : ''}
-                {slow
-                  ? ' · dots mark each change'
-                  : showAvg
-                    ? ' · dashed blue = 7-day average'
-                    : range === '1y'
-                      ? ' · weekly average'
-                      : ' · monthly average'}
+                {(() => {
+                  const n = stats?.count ?? bandSeries.filter((p) => p.range !== null).length
+                  return `${n} day${n === 1 ? '' : 's'} of data`
+                })()}
+                {useBand
+                  ? range === '30d' || range === '90d'
+                    ? ' · shaded = daily low–high range'
+                    : ' · shaded = low–high range (averaged per period)'
+                  : (band ? ' · shaded = your typical range' : '') +
+                    (slow
+                      ? ' · dots mark each change'
+                      : showAvg
+                        ? ' · dashed blue = 7-day average'
+                        : range === '1y'
+                          ? ' · weekly average'
+                          : ' · monthly average')}
               </p>
             </>
           ) : (

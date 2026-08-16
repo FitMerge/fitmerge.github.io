@@ -108,6 +108,85 @@ export function metricSeries(samples: MetricSample[], range: HealthRangeKey): Tr
     .map(([ym, v]) => ({ date: `${ym}-01`, label: monthYearLabel(`${ym}-01`), value: v.sum / v.count }))
 }
 
+export type BandPoint = {
+  date: string
+  label: string
+  low: number | null
+  high: number | null
+  /** [low, high] for a recharts range area, or null on a day missing either end. */
+  range: [number, number] | null
+}
+
+/**
+ * A daily low→high band for a metric that swings within each day (Body Battery,
+ * stress, SpO₂, respiration). Mirrors {@link metricSeries}' bucketing — per-day for
+ * short ranges, weekly/monthly averages for long ones — but carries both ends so the
+ * chart can shade the range you actually moved through, the way Garmin draws it,
+ * instead of a single "most recent value" line that reads as noise.
+ */
+export function rangeBandSeries(
+  days: Record<string, HealthDay>,
+  lowKey: string,
+  highKey: string,
+  range: HealthRangeKey,
+): BandPoint[] {
+  const lowMap = new Map(metricSamples(days, lowKey).map((s) => [s.date, s.value]))
+  const highMap = new Map(metricSamples(days, highKey).map((s) => [s.date, s.value]))
+  const at = (low: number | null, high: number | null): [number, number] | null =>
+    low !== null && high !== null ? [Math.min(low, high), Math.max(low, high)] : null
+
+  if (range === '30d' || range === '90d') {
+    const n = range === '30d' ? 30 : 90
+    const start = addDays(todayISO(), -(n - 1))
+    const pts: BandPoint[] = []
+    for (let d = start; d <= todayISO(); d = addDays(d, 1)) {
+      const low = lowMap.get(d) ?? null
+      const high = highMap.get(d) ?? null
+      pts.push({ date: d, label: monthDayLabel(d), low, high, range: at(low, high) })
+    }
+    return pts
+  }
+
+  const avg = (map: Map<string, number>, from: string, to: string): number | null => {
+    let sum = 0
+    let count = 0
+    for (const [date, value] of map) {
+      if (date >= from && date <= to) {
+        sum += value
+        count++
+      }
+    }
+    return count ? sum / count : null
+  }
+
+  if (range === '1y') {
+    const start = addDays(todayISO(), -363)
+    const pts: BandPoint[] = []
+    for (let i = 0; i < 52; i++) {
+      const ws = addDays(start, i * 7)
+      const we = addDays(ws, 6)
+      const low = avg(lowMap, ws, we)
+      const high = avg(highMap, ws, we)
+      pts.push({ date: ws, label: monthDayLabel(ws), low, high, range: at(low, high) })
+    }
+    return pts
+  }
+
+  // 'all' → one point per month that has data on either end.
+  const months = new Set<string>()
+  for (const d of lowMap.keys()) months.add(d.slice(0, 7))
+  for (const d of highMap.keys()) months.add(d.slice(0, 7))
+  return [...months]
+    .sort()
+    .map((ym) => {
+      const from = `${ym}-01`
+      const to = `${ym}-31`
+      const low = avg(lowMap, from, to)
+      const high = avg(highMap, from, to)
+      return { date: `${ym}-01`, label: monthYearLabel(`${ym}-01`), low, high, range: at(low, high) }
+    })
+}
+
 /** Raw values recorded within `range`, oldest→newest. */
 export function valuesInRange(samples: MetricSample[], range: HealthRangeKey): number[] {
   const start =
