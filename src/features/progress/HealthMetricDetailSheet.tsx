@@ -88,6 +88,15 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
     () => (useBand ? metricStats(metricSamples(days, family!.high!), range) : null),
     [useBand, days, family, range],
   )
+  // The range each end normally sits in — a faint band behind its line.
+  const highBand = useMemo(
+    () => (useBand ? typicalRange(metricSamples(days, family!.high!), range) : null),
+    [useBand, days, family, range],
+  )
+  const lowBand = useMemo(
+    () => (useBand ? typicalRange(metricSamples(days, family!.low!), range) : null),
+    [useBand, days, family, range],
+  )
 
   const chartData = useBand ? bandSeries : series
   const hasPoints = useBand ? bandSeries.some((p) => p.range !== null) : series.some((p) => p.value !== null)
@@ -110,7 +119,9 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
           {/* Every reading the tile folded in, still one tap away. Without this,
               consolidating families would genuinely lose data rather than just
               stop shouting it. */}
-          {siblings.length > 1 && (
+          {/* In band mode the one high/low chart is the whole story, so the sibling
+              chips (charged/drained) are hidden to cut clutter. */}
+          {!useBand && siblings.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
               {siblings.map((k) => (
                 <button
@@ -137,33 +148,19 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
 
           {hasPoints ? (
             <>
-              <div className="grid grid-cols-3 gap-2">
-                <Stat label="Average" value={stats ? formatMetric(charted, stats.avg) : '—'} />
-                <Stat
-                  label={useBand ? 'Lowest' : 'Low'}
-                  value={
-                    useBand
-                      ? lowStats
-                        ? formatMetric(charted, lowStats.min)
-                        : '—'
-                      : stats
-                        ? formatMetric(charted, stats.min)
-                        : '—'
-                  }
-                />
-                <Stat
-                  label={useBand ? 'Highest' : 'High'}
-                  value={
-                    useBand
-                      ? highStats
-                        ? formatMetric(charted, highStats.max)
-                        : '—'
-                      : stats
-                        ? formatMetric(charted, stats.max)
-                        : '—'
-                  }
-                />
-              </div>
+              {useBand ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <Stat label="Avg high" color="#34d399" value={highStats ? formatMetric(charted, highStats.avg) : '—'} />
+                  <Stat label="Avg low" color="#f87171" value={lowStats ? formatMetric(charted, lowStats.avg) : '—'} />
+                  <Stat label="Lowest" value={lowStats ? formatMetric(charted, lowStats.min) : '—'} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  <Stat label="Average" value={stats ? formatMetric(charted, stats.avg) : '—'} />
+                  <Stat label="Low" value={stats ? formatMetric(charted, stats.min) : '—'} />
+                  <Stat label="High" value={stats ? formatMetric(charted, stats.max) : '—'} />
+                </div>
+              )}
 
               {!useBand && band && stats && (
                 <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
@@ -195,11 +192,15 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                 label={(p) => p.label}
                 values={(p: any) =>
                   useBand
-                    ? p.range === null
+                    ? p.high === null && p.low === null
                       ? []
                       : [
-                          { key: 'high', name: 'high', value: formatMetric(charted, p.high) },
-                          { key: 'low', name: 'low', value: formatMetric(charted, p.low), color: '#38bdf8' },
+                          ...(p.high !== null
+                            ? [{ key: 'high', name: 'high', value: formatMetric(charted, p.high), color: '#34d399' }]
+                            : []),
+                          ...(p.low !== null
+                            ? [{ key: 'low', name: 'low', value: formatMetric(charted, p.low), color: '#f87171' }]
+                            : []),
                         ]
                     : p.value === null
                       ? []
@@ -252,18 +253,18 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                       <ReferenceLine y={band.mid} stroke="#64748b" strokeDasharray="4 3" ifOverflow="extendDomain" />
                     )}
                     {useBand ? (
-                      // The daily low→high range as a filled band, Garmin-style.
-                      <Area
-                        type="monotone"
-                        dataKey="range"
-                        stroke="#34d399"
-                        strokeWidth={1}
-                        strokeOpacity={0.5}
-                        fill="#34d399"
-                        fillOpacity={0.18}
-                        connectNulls
-                        isAnimationActive={false}
-                      />
+                      // Two lines — daily high (green) and daily low (red) — each over
+                      // a faint band showing the range that end normally sits in.
+                      <>
+                        {highBand && (
+                          <ReferenceArea y1={highBand.low} y2={highBand.high} fill="#34d399" fillOpacity={0.1} stroke="none" ifOverflow="extendDomain" />
+                        )}
+                        {lowBand && (
+                          <ReferenceArea y1={lowBand.low} y2={lowBand.high} fill="#f87171" fillOpacity={0.1} stroke="none" ifOverflow="extendDomain" />
+                        )}
+                        <Line type="monotone" dataKey="high" name="high" stroke="#34d399" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+                        <Line type="monotone" dataKey="low" name="low" stroke="#f87171" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+                      </>
                     ) : slow ? (
                       // A stepped line that holds each value until it changes, with a
                       // dot only where it stepped — how Garmin draws VO₂ max.
@@ -314,9 +315,7 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                   return `${n} day${n === 1 ? '' : 's'} of data`
                 })()}
                 {useBand
-                  ? range === '30d' || range === '90d'
-                    ? ' · shaded = daily low–high range'
-                    : ' · shaded = low–high range (averaged per period)'
+                  ? ' · green = daily high, red = daily low · shaded = your normal range'
                   : (band ? ' · shaded = your typical range' : '') +
                     (slow
                       ? ' · dots mark each change'
@@ -344,11 +343,11 @@ function ChangeDot({ cx, cy, payload }: DotProps) {
   return <circle cx={cx} cy={cy} r={3.5} fill="#34d399" stroke="#0f172a" strokeWidth={1} />
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div className="rounded-lg bg-slate-800/60 p-2.5 text-center">
       <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-0.5 text-sm font-bold text-slate-100">{value}</p>
+      <p className="mt-0.5 text-sm font-bold" style={{ color: color ?? '#f1f5f9' }}>{value}</p>
     </div>
   )
 }
