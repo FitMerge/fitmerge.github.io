@@ -7,10 +7,8 @@ import { useBodyStore } from '../../store/body'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useHealthStore } from '../../store/health'
 import { useSettingsStore, type TrackingSource } from '../../store/settings'
-import { detectAndParse, sourceLabel } from '../../services/healthImport'
-import type { HealthImportResult } from '../../services/healthImport'
-
-type Stage = 'idle' | 'parsing' | 'preview' | 'error'
+import { sourceLabel } from '../../services/healthImport'
+import { useHealthImport } from './useHealthImport'
 
 const SOURCE_CHOICES: { key: TrackingSource; label: string }[] = [
   { key: 'garmin', label: 'Garmin' },
@@ -19,12 +17,7 @@ const SOURCE_CHOICES: { key: TrackingSource; label: string }[] = [
   { key: 'manual', label: 'No watch' },
 ]
 
-type SuccessSummary = { weights: number; sessions: number; health: number }
-
 export default function HealthConnectSection() {
-  const bulkUpsertEntries = useBodyStore((s) => s.bulkUpsertEntries)
-  const addImportedSessions = useWorkoutsStore((s) => s.addImportedSessions)
-  const bulkUpsertDays = useHealthStore((s) => s.bulkUpsertDays)
   const trackingSource = useSettingsStore((s) => s.trackingSource)
   const setTrackingSource = useSettingsStore((s) => s.setTrackingSource)
 
@@ -35,87 +28,29 @@ export default function HealthConnectSection() {
   const storedHealthDays = useHealthStore((s) => Object.keys(s.days).length)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const [stage, setStage] = useState<Stage>('idle')
-  const [progress, setProgress] = useState(0)
-  const [result, setResult] = useState<HealthImportResult | null>(null)
-  const [errorMessage, setErrorMessage] = useState('')
-  const [success, setSuccess] = useState<SuccessSummary | null>(null)
+  const { stage, progress, result, error: errorMessage, success, parseFile, confirmImport, cancel, reset } =
+    useHealthImport()
   const [helpOpen, setHelpOpen] = useState(false)
 
   function openPicker() {
-    setSuccess(null)
+    reset()
     fileInputRef.current?.click()
   }
 
-  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (!file) return
-
-    setSuccess(null)
-    setErrorMessage('')
-    setProgress(0)
-    setStage('parsing')
-
-    try {
-      const parsed = await detectAndParse(file, (pct) => setProgress(pct))
-      if (parsed.weights.length === 0 && parsed.sessions.length === 0 && parsed.health.length === 0) {
-        setErrorMessage('No weigh-ins, workouts, or health metrics found in that file.')
-        setStage('error')
-        return
-      }
-      setResult(parsed)
-      setStage('preview')
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not read that file')
-      setStage('error')
-    }
+    if (file) void parseFile(file)
   }
 
-  function handleCancelPreview() {
-    setResult(null)
-    setStage('idle')
-  }
-
-  function handleImport() {
-    if (!result) return
-
-    // Three batched writes (one per store) instead of one write per record —
-    // importing years of Garmin data is otherwise O(n²) over localStorage and
-    // freezes / gets killed mid-import, silently dropping health metrics.
-    bulkUpsertEntries(result.weights)
-
-    const importedSessions = addImportedSessions(
-      result.sessions.map((session) => {
-        // Use the real start time when the source recorded one, so two activities
-        // on the same day order correctly instead of both sitting at noon.
-        const startedAt = Date.parse(`${session.date}T${session.startTime ?? '12:00'}:00`)
-        // Spreading the parsed session carries every detail field it happens to
-        // have — heart rate, ascent, sport type — without this list needing an
-        // edit each time the importer learns to read one more.
-        return {
-          ...session,
-          startedAt,
-          finishedAt: startedAt + (session.durationMin ?? 0) * 60000,
-          entries: [],
-          imported: true as const,
-        }
-      }),
-    )
-
-    bulkUpsertDays(result.health)
-
-    setSuccess({ weights: result.weights.length, sessions: importedSessions, health: result.health.length })
-    setResult(null)
-    setStage('idle')
-  }
+  const handleCancelPreview = cancel
+  const handleImport = confirmImport
 
   return (
     <Card className="space-y-3">
       <h2 className="text-sm font-semibold text-slate-200">Connect health data</h2>
       <p className="text-sm text-slate-400">
-        Import weight and workouts from Apple Health, Garmin, or a FitMerge JSON file.
+        Import weight and workouts from Apple Health, Garmin, Fitbit, or a FitMerge JSON file.
       </p>
 
       {/* Chosen during onboarding; changeable here so the app keeps shaping itself
@@ -194,7 +129,7 @@ export default function HealthConnectSection() {
       {stage === 'error' && (
         <div className="space-y-2">
           <p className="text-sm text-red-400">{errorMessage}</p>
-          <Button variant="ghost" full onClick={() => setStage('idle')}>
+          <Button variant="ghost" full onClick={reset}>
             Try again
           </Button>
         </div>
@@ -223,7 +158,17 @@ export default function HealthConnectSection() {
             <p>Health app → tap your profile picture → Export All Health Data → import the resulting export.zip here.</p>
           </div>
           <div>
-            <p className="font-semibold text-slate-300">2. Garmin</p>
+            <p className="font-semibold text-slate-300">2. Fitbit</p>
+            <p>
+              Go to <code className="rounded bg-slate-800 px-1 py-0.5">takeout.google.com</code>, deselect all, pick
+              only <span className="text-slate-300">Fitbit</span>, and create the export. Import the resulting zip
+              here. Brings across weight, sleep, steps, resting heart rate and activities (Yoga, spinning, etc.).
+              Weight is read as pounds — the Fitbit export doesn&apos;t record the unit, so tell me if hers is set to
+              kg.
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-300">3. Garmin</p>
             <p>
               Connect website → export your weight or activities CSV, or run{' '}
               <code className="rounded bg-slate-800 px-1 py-0.5">scripts/garmin-sync.py</code> (see README) to
@@ -231,7 +176,7 @@ export default function HealthConnectSection() {
             </p>
           </div>
           <div>
-            <p className="font-semibold text-slate-300">3. Claude / MCP</p>
+            <p className="font-semibold text-slate-300">4. Claude / MCP</p>
             <p>
               Connect a Garmin MCP server to Claude and ask it to produce a FitMerge JSON file, then import it
               here.

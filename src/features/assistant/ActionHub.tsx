@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import {
+  Activity as ActivityIcon,
   CheckCircle2,
   ChevronLeft,
   Droplets,
@@ -10,6 +12,7 @@ import {
   Moon,
   RefreshCw,
   Scale,
+  UploadCloud,
   UtensilsCrossed,
   XCircle,
 } from 'lucide-react'
@@ -21,12 +24,14 @@ import CommandBar from './CommandBar'
 import WaterLogger from '../nutrition/WaterLogger'
 import NumberField from '../../components/NumberField'
 import { useGarminPull } from '../settings/useGarminPull'
+import { useHealthImport } from '../settings/useHealthImport'
+import { sourceLabel } from '../../services/healthImport'
 import { useWorkoutsStore } from '../../store/workouts'
 import { useHealthStore } from '../../store/health'
 import { useSettingsStore } from '../../store/settings'
 import { todayISO } from '../../lib/date'
 
-type Screen = 'menu' | 'weight' | 'water' | 'supplement' | 'workout' | 'garmin' | 'health'
+type Screen = 'menu' | 'weight' | 'water' | 'supplement' | 'workout' | 'garmin' | 'health' | 'fitbit'
 
 type ActionHubProps = {
   open: boolean
@@ -42,6 +47,7 @@ const TITLES: Record<Screen, string> = {
   workout: 'Start a workout',
   garmin: 'Pull from Garmin',
   health: 'Log sleep & steps',
+  fitbit: 'Add Fitbit data',
 }
 
 export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps) {
@@ -54,6 +60,9 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
   // Everyone except Garmin users benefits — including people who onboarded before
   // this question existed (undefined source).
   const showManualHealth = trackingSource !== 'garmin'
+  // "Other" is the Fitbit / Oura / Whoop bucket — those users import a file rather
+  // than auto-syncing, so give them a one-tap way to add it from the + menu.
+  const showFitbit = trackingSource === 'other'
 
   function close() {
     onClose()
@@ -86,6 +95,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
               <Tile icon={Droplets} label="Water" onClick={() => setScreen('water')} />
               <Tile icon={ListChecks} label="Goals" onClick={() => setScreen('supplement')} />
               {showManualHealth && <Tile icon={Moon} label="Sleep" onClick={() => setScreen('health')} />}
+              {showFitbit && <Tile icon={ActivityIcon} label="Fitbit" onClick={() => setScreen('fitbit')} />}
               {showGarmin && <Tile icon={RefreshCw} label="Garmin" onClick={() => setScreen('garmin')} />}
             </div>
           </div>
@@ -98,6 +108,7 @@ export default function ActionHub({ open, onClose, onNavigate }: ActionHubProps)
       {screen === 'health' && <ManualHealthScreen onDone={close} />}
       {screen === 'workout' && <WorkoutScreen onPick={(id) => onNavigate('/workouts', { startRoutineId: id })} onClose={close} />}
       {screen === 'garmin' && <GarminScreen onSetup={() => onNavigate('/settings', null)} />}
+      {screen === 'fitbit' && <FitbitScreen onDone={close} />}
     </Sheet>
   )
 }
@@ -212,6 +223,93 @@ function GarminScreen({ onSetup }: { onSetup: () => void }) {
               Run log <ExternalLink size={12} />
             </a>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Import a Fitbit (Google Takeout) export straight from the + menu, so a Fitbit
+ * user's path to adding data mirrors the Garmin user's one-tap pull. Reuses the
+ * same parse-and-commit flow as Settings via useHealthImport.
+ */
+function FitbitScreen({ onDone }: { onDone: () => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { stage, progress, result, error, success, parseFile, confirmImport, cancel, reset } = useHealthImport()
+
+  function pick() {
+    reset()
+    fileInputRef.current?.click()
+  }
+  function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) void parseFile(file)
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-400">
+        Import your Fitbit export. On <span className="text-slate-300">takeout.google.com</span> deselect all, pick
+        only <span className="text-slate-300">Fitbit</span>, then import the zip here. Weight, sleep, steps, resting
+        heart rate and activities all come across.
+      </p>
+
+      <input ref={fileInputRef} type="file" accept=".zip,.json" onChange={onFile} className="hidden" />
+
+      {stage === 'idle' && !success && (
+        <Button variant="primary" full onClick={pick}>
+          <span className="flex items-center justify-center gap-1.5">
+            <UploadCloud size={16} /> Choose Fitbit zip
+          </span>
+        </Button>
+      )}
+
+      {stage === 'parsing' && (
+        <div className="flex items-center justify-center gap-2 rounded-xl bg-slate-800/60 py-3 text-sm text-slate-300">
+          <Loader2 size={16} className="animate-spin" />
+          Reading… {progress}%
+        </div>
+      )}
+
+      {stage === 'preview' && result && (
+        <div className="space-y-3">
+          <div className="rounded-xl bg-slate-800/60 p-3 text-sm text-slate-200">
+            Found {result.weights.length} weigh-in{result.weights.length === 1 ? '' : 's'} · {result.sessions.length}{' '}
+            activit{result.sessions.length === 1 ? 'y' : 'ies'} · {result.health.length} day
+            {result.health.length === 1 ? '' : 's'} of metrics from {sourceLabel(result.source)}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="ghost" full onClick={cancel}>
+              Cancel
+            </Button>
+            <Button variant="primary" full onClick={confirmImport}>
+              Import
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {stage === 'error' && (
+        <div className="space-y-2">
+          <p className="text-sm text-rose-400">{error}</p>
+          <Button variant="ghost" full onClick={reset}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {success && (
+        <div className="space-y-3 text-center">
+          <CheckCircle2 size={28} className="mx-auto text-emerald-400" />
+          <p className="text-sm text-emerald-400">
+            Imported {success.weights} weigh-in{success.weights === 1 ? '' : 's'} · {success.sessions} activit
+            {success.sessions === 1 ? 'y' : 'ies'} · {success.health} day{success.health === 1 ? '' : 's'} of metrics
+          </p>
+          <Button variant="primary" full onClick={onDone}>
+            Done
+          </Button>
         </div>
       )}
     </div>

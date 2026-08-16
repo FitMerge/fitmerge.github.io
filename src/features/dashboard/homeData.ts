@@ -14,6 +14,7 @@ import { addDays, todayISO, weekdayIndex } from '../../lib/date'
 import { sumMacros } from '../../lib/macros'
 import { burnedCaloriesForDate, latestBodyWeightKg } from '../../lib/exercise'
 import { isWorkingSet, totalVolume } from '../workouts/utils'
+import { activityCategory, distanceUnitLabel, formatDuration, isCardioSession, type ActivityCategory } from '../workouts/cardio'
 import { epley1RM } from '../progress/utils'
 import { getExerciseById } from '../../data/exercises'
 import { weightStats, type WeightStats } from '../progress/weightTrends'
@@ -34,6 +35,18 @@ export type WeekTraining = {
 }
 
 export type RecentPR = { exerciseName: string; est1RM: number; weight: number; reps: number }
+
+/** A finished session flattened for the home "Recent activity" card and coaching —
+ * strength and cardio alike, each with a ready one-line summary. */
+export type RecentActivity = {
+  id: string
+  name: string
+  date: string
+  kind: 'cardio' | 'strength'
+  category: ActivityCategory
+  /** e.g. "32 min · 5.2 km · 410 kcal" or "5 exercises · 4.2k lb". */
+  summary: string
+}
 
 export type HomeData = {
   today: string
@@ -69,6 +82,8 @@ export type HomeData = {
   week: WeekTraining
   /** A lift whose est. 1RM beat its all-time best within the last 7 days, if any. */
   recentPR: RecentPR | null
+  /** The last few finished activities (strength + cardio), newest first. */
+  recentActivities: RecentActivity[]
   // Supplements
   supplements: Supplement[]
   supplementsTaken: number
@@ -198,6 +213,40 @@ export function useHomeData(): HomeData {
     return bestPR
   }, [sessions, today])
 
+  const recentActivities = useMemo<RecentActivity[]>(() => {
+    const imperial = units === 'imperial'
+    const fmtVol = (v: number) => (v >= 10_000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v).toLocaleString())
+    return sessions
+      .filter(isFinished)
+      .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.finishedAt ?? 0) - (a.finishedAt ?? 0)))
+      .slice(0, 4)
+      .map((s): RecentActivity => {
+        if (isCardioSession(s) || s.entries.every((e) => e.sets.length === 0)) {
+          const parts: string[] = []
+          const dur = s.durationMin ?? (s.finishedAt ? (s.finishedAt - s.startedAt) / 60000 : 0)
+          if (dur > 0) parts.push(formatDuration(dur))
+          if ((s.distanceKm ?? 0) > 0) {
+            const dist = imperial ? (s.distanceKm as number) / 1.60934 : (s.distanceKm as number)
+            parts.push(`${dist.toFixed(1)} ${distanceUnitLabel(units)}`)
+          }
+          if ((s.kcal ?? 0) > 0) parts.push(`${Math.round(s.kcal as number)} kcal`)
+          return {
+            id: s.id,
+            name: s.name,
+            date: s.date,
+            kind: 'cardio',
+            category: activityCategory(s.name, s.sportType),
+            summary: parts.join(' · ') || 'Activity',
+          }
+        }
+        const vol = totalVolume(s)
+        const parts: string[] = []
+        if (s.entries.length > 0) parts.push(`${s.entries.length} exercise${s.entries.length === 1 ? '' : 's'}`)
+        if (vol > 0) parts.push(`${fmtVol(vol)} ${units === 'imperial' ? 'lb' : 'kg'}`)
+        return { id: s.id, name: s.name, date: s.date, kind: 'strength', category: 'Strength', summary: parts.join(' · ') || 'Workout' }
+      })
+  }, [sessions, units])
+
   const supplementsTaken = useMemo(
     () => supplements.filter((i) => doseFor(supplementLog, today, i.id) > 0).length,
     [supplements, supplementLog, today],
@@ -232,6 +281,7 @@ export function useHomeData(): HomeData {
     trainedToday,
     week,
     recentPR,
+    recentActivities,
     supplements,
     supplementsTaken,
   }

@@ -7,6 +7,7 @@ import EmptyState from '../../components/EmptyState'
 import SegmentedControl from '../../components/SegmentedControl'
 import RoutineCard from './RoutineCard'
 import RoutinePreviewSheet from './RoutinePreviewSheet'
+import LogActivitySheet from './LogActivitySheet'
 import ExerciseLibrary from './ExerciseLibrary'
 import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
@@ -54,6 +55,7 @@ export default function Workouts() {
     useWorkoutsStore.getState().activeSessionId ? { kind: 'session' } : { kind: 'home' },
   )
   const [previewRoutine, setPreviewRoutine] = useState<Routine | null>(null)
+  const [logActivityOpen, setLogActivityOpen] = useState(false)
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -386,13 +388,21 @@ export default function Workouts() {
         )}
       </section>
 
-      <Button variant="ghost" full onClick={quickStart}>
-        Start empty workout
-      </Button>
+      {/* Two ways in that aren't a routine: an empty tracked lifting session, or a
+          one-off activity (run, yoga, hike) you just want on the record. */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="ghost" full onClick={quickStart}>
+          Empty workout
+        </Button>
+        <Button variant="primary" full onClick={() => setLogActivityOpen(true)}>
+          <span className="flex items-center justify-center gap-1.5">
+            <Plus size={16} /> Log activity
+          </span>
+        </Button>
+      </div>
 
-      {/* Manual cardio for today — a run or a class that isn't a logged lifting
-          session. Lives here now that the Diet tab is food-only; the calories
-          still feed the daily budget shown on Diet. */}
+      {/* Today's calorie burn — finished workouts, logged activities, and quick
+          calorie-only adds. The calories feed the daily budget shown on Diet. */}
       <ExerciseCard date={todayISO()} />
 
       <Card className="active:bg-slate-800/60 flex items-center gap-3" onClick={() => setView({ kind: 'library' })}>
@@ -442,6 +452,8 @@ export default function Workouts() {
           setView({ kind: 'edit', routineId: routine.id })
         }}
       />
+
+      <LogActivitySheet open={logActivityOpen} onClose={() => setLogActivityOpen(false)} />
     </div>
   )
 }

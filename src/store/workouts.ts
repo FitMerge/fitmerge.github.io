@@ -34,6 +34,17 @@ type WorkoutsState = {
   updateRoutine: (id: string, patch: Partial<Routine>) => void
   removeRoutine: (id: string) => void
   addSession: (session: Omit<WorkoutSession, 'id'>) => void
+  /** Log a completed activity done outside a tracked workout — a run, a yoga class,
+   * a hike. Creates a FINISHED session with no strength sets, so it flows into the
+   * cardio views, the activity feed and coaching, and its calories feed the day's
+   * budget — unlike the calorie-only manual exercise entry. */
+  logActivity: (input: {
+    name: string
+    date: string
+    durationMin?: number
+    kcal?: number
+    distanceKm?: number
+  }) => void
   /** Append many imported sessions in a SINGLE persisted write, skipping ones that
    * duplicate an existing imported session (same date + name). Avoids the O(n²)
    * per-session localStorage writes that froze large Garmin imports. */
@@ -91,6 +102,25 @@ export const useWorkoutsStore = create<WorkoutsState>()(
       },
       addSession: (session) => {
         set({ sessions: [...get().sessions, { ...session, id: uid() }] })
+      },
+      logActivity: (input) => {
+        // Anchor to local noon on the chosen day so a past-dated activity sorts
+        // sensibly and a timezone shift can't nudge it onto the wrong date.
+        const [y, m, d] = input.date.split('-').map(Number)
+        const startedAt = new Date(y, (m ?? 1) - 1, d ?? 1, 12).getTime()
+        const durationMin = input.durationMin && input.durationMin > 0 ? input.durationMin : undefined
+        const session: WorkoutSession = {
+          id: uid(),
+          name: input.name,
+          date: input.date,
+          startedAt,
+          finishedAt: startedAt + (durationMin ?? 0) * 60000,
+          entries: [],
+        }
+        if (durationMin !== undefined) session.durationMin = durationMin
+        if (input.kcal && input.kcal > 0) session.kcal = Math.round(input.kcal)
+        if (input.distanceKm && input.distanceKm > 0) session.distanceKm = input.distanceKm
+        set({ sessions: [...get().sessions, session] })
       },
       addImportedSessions: (incoming) => {
         const existing = get().sessions

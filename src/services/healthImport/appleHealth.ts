@@ -124,6 +124,22 @@ export function parseAppleHealthXml(
   return { weights, sessions, health: [], source: 'apple-health' }
 }
 
+/** Pulls the export.xml text out of an already-in-memory Apple Health zip buffer. */
+export async function readAppleExportXml(buf: Uint8Array): Promise<string> {
+  const { unzipSync } = await import('fflate')
+  const entries = unzipSync(buf, { filter: (entry) => entry.name.endsWith('export.xml') })
+
+  const preferredName = 'apple_health_export/export.xml'
+  const entryName = entries[preferredName]
+    ? preferredName
+    : Object.keys(entries).find((name) => name.endsWith('export.xml'))
+
+  if (!entryName) {
+    throw new Error('No export.xml found in this zip')
+  }
+  return new TextDecoder('utf-8').decode(entries[entryName])
+}
+
 /** Reads an Apple Health export (export.zip, export.xml, or plain text) and parses it. */
 export async function parseAppleHealthFile(
   file: File,
@@ -141,18 +157,5 @@ export async function parseAppleHealthFile(
   }
 
   const buf = new Uint8Array(await file.arrayBuffer())
-  const { unzipSync } = await import('fflate')
-  const entries = unzipSync(buf, { filter: (entry) => entry.name.endsWith('export.xml') })
-
-  const preferredName = 'apple_health_export/export.xml'
-  const entryName = entries[preferredName]
-    ? preferredName
-    : Object.keys(entries).find((name) => name.endsWith('export.xml'))
-
-  if (!entryName) {
-    throw new Error('No export.xml found in this zip')
-  }
-
-  const xmlText = new TextDecoder('utf-8').decode(entries[entryName])
-  return parseAppleHealthXml(xmlText, onProgress)
+  return parseAppleHealthXml(await readAppleExportXml(buf), onProgress)
 }

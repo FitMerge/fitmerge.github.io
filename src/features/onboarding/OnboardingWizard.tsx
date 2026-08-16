@@ -356,7 +356,9 @@ export default function OnboardingWizard() {
                 <Card className="space-y-1.5">
                   <p className="text-sm text-slate-300">Import from your app</p>
                   <p className="text-xs text-slate-400">
-                    Export a CSV or JSON from Fitbit, Oura or Whoop, then load it in Settings → Connect health data.
+                    Fitbit: download your data from{' '}
+                    <span className="text-slate-300">takeout.google.com</span> (pick Fitbit) and import the zip in
+                    Settings → Connect health data. Oura or Whoop: export a file and import it the same way.
                   </p>
                 </Card>
               )}

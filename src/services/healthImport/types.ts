@@ -47,7 +47,7 @@ export const STRING_SESSION_FIELDS: (keyof ImportedSessionInput)[] = [
   'garminActivityId',
 ]
 
-export type HealthImportSource = 'fitmerge-json' | 'apple-health' | 'garmin-csv'
+export type HealthImportSource = 'fitmerge-json' | 'apple-health' | 'garmin-csv' | 'fitbit'
 
 export type HealthImportResult = {
   weights: import('../../types').BodyEntry[]
@@ -71,5 +71,6 @@ export function coerceFiniteNumber(value: unknown): number | undefined {
 export function sourceLabel(source: HealthImportSource): string {
   if (source === 'apple-health') return 'Apple Health'
   if (source === 'garmin-csv') return 'Garmin'
+  if (source === 'fitbit') return 'Fitbit'
   return 'FitMerge JSON'
 }

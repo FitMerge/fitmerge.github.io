@@ -60,12 +60,42 @@ async function initFirebase(config: FirebaseConfig): Promise<FirebaseHandle> {
   const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(config)
   cachedApp = app
 
-  const { getAuth } = await import('firebase/auth')
-  const auth = getAuth(app)
+  const auth = await initAuth(app)
 
   const db = await initFirestore(app)
 
   return { auth, db }
+}
+
+/**
+ * Initialise Auth with IndexedDB persistence first. This matters for an installed
+ * (home-screen) PWA: the Google sign-in there has to go through a full-page
+ * redirect (popups are blocked in standalone mode), and the default persistence
+ * doesn't reliably survive that round-trip on iOS — the app came back still
+ * signed-out. IndexedDB persistence carries the pending auth state across the
+ * redirect. Falls back to the default getAuth if initializeAuth isn't usable
+ * (e.g. auth was already initialised, or IndexedDB is blocked in private mode).
+ */
+async function initAuth(app: FirebaseApp): Promise<Auth> {
+  const { initializeAuth, getAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver } =
+    await import('firebase/auth')
+  try {
+    return initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    })
+  } catch {
+    return getAuth(app)
+  }
+}
+
+/** True when running as an installed PWA (home-screen app), where auth popups are blocked. */
+function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false
+  const mq = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches
+  // iOS Safari exposes standalone as a non-standard navigator flag rather than via display-mode.
+  const iosStandalone = (navigator as unknown as { standalone?: boolean }).standalone === true
+  return Boolean(mq) || iosStandalone
 }
 
 async function initFirestore(app: FirebaseApp): Promise<Firestore> {
@@ -87,6 +117,14 @@ export async function signInWithGoogle(): Promise<void> {
 
   const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import('firebase/auth')
   const provider = new GoogleAuthProvider()
+
+  // In an installed PWA the popup is blocked outright, so skip straight to the
+  // full-page redirect — trying the popup first just showed a failed flash and,
+  // on the home-screen app, left people unable to sign in at all.
+  if (isStandalone()) {
+    await signInWithRedirect(handle.auth, provider)
+    return
+  }
 
   try {
     await signInWithPopup(handle.auth, provider)

@@ -7,6 +7,7 @@
 import type { HomeData } from './homeData'
 import { mlToFloz, weightUnit } from '../../lib/units'
 import { totalVolume } from '../workouts/utils'
+import { addDays } from '../../lib/date'
 
 export type InsightTone = 'good' | 'warn' | 'info'
 export type InsightIcon =
@@ -162,6 +163,28 @@ export function buildInsights(d: HomeData, hour: number): Insight[] {
       icon: 'training',
       title: 'No workouts yet this week',
       body: 'Even a short session keeps the habit alive — the + button starts one.',
+      to: '/workouts',
+    })
+  }
+
+  // --- Recent cardio / activity feedback ---------------------------------------------
+  // Runs, hikes, rides and logged activities rarely surfaced here before — strength
+  // dominated the feed. Give the most recent non-strength activity a nod so cardio
+  // is visible in coaching, not just buried on the Train tab.
+  const lastActivity = d.recentActivities.find((a) => a.kind === 'cardio')
+  if (lastActivity && lastActivity.date >= addDays(d.today, -3)) {
+    const when =
+      lastActivity.date === d.today
+        ? 'today'
+        : lastActivity.date === addDays(d.today, -1)
+          ? 'yesterday'
+          : 'in the last few days'
+    out.push({
+      id: 'recent-activity',
+      tone: 'good',
+      icon: 'training',
+      title: `${lastActivity.name} logged ${when}`,
+      body: `${lastActivity.summary} — nice work. Recovery and fuel help it stick.`,
       to: '/workouts',
     })
   }

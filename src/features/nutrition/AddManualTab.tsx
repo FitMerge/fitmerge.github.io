@@ -41,6 +41,28 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
   const canSave = name.trim().length > 0 || calories > 0
   const finalName = name.trim() || 'Quick add'
 
+  /**
+   * Changing the quantity rescales every nutrient by the same factor — so editing
+   * "2 slices" down to "1" halves the macros instead of leaving them stale (which
+   * forced a delete-and-readd). Scales from the CURRENT values, so a manual macro
+   * tweak afterwards is still respected. No-ops when the old qty is 0 (nothing to
+   * scale from) — the user just sets a new quantity.
+   */
+  function handleQtyChange(next: number) {
+    if (qty > 0 && next > 0 && next !== qty) {
+      const f = next / qty
+      const r1 = (n: number) => Math.round(n * f * 10) / 10
+      setCalories(Math.round(calories * f))
+      setProtein(r1(protein))
+      setCarbs(r1(carbs))
+      setFat(r1(fat))
+      setFiber(r1(fiber))
+      setSugar(r1(sugar))
+      setSodium(Math.round(sodium * f))
+    }
+    setQty(next)
+  }
+
   function handleSave() {
     if (!canSave) return
     const fiberValue = fiber > 0 ? fiber : undefined
@@ -100,7 +122,7 @@ export default function AddManualTab({ date, entry, initial, defaultMealType, on
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <NumberField label="Quantity" value={qty} onChange={setQty} step={1} min={0} />
+        <NumberField label="Quantity" value={qty} onChange={handleQtyChange} step={1} min={0} />
         <div>
           <label className="block text-sm text-slate-400 mb-1">Unit</label>
           <input

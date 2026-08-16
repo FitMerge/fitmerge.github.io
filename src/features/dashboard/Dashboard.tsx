@@ -9,6 +9,7 @@ import { Check, Droplets, Dumbbell, Minus, Plus, Sparkles } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import CoachSheet from './CoachSheet'
+import RecentActivityCard from './RecentActivityCard'
 import LogWaterSheet from '../nutrition/LogWaterSheet'
 import SupplementList from '../assistant/SupplementList'
 import { useNutritionStore } from '../../store/nutrition'
@@ -202,6 +203,10 @@ export default function Dashboard() {
         <h2 className="text-sm font-semibold text-slate-100">Daily goals</h2>
         <SupplementList />
       </Card>
+
+      {/* Recent runs, hikes, workouts and logged activities — so cardio isn't
+          buried on the Train tab. */}
+      <RecentActivityCard activities={d.recentActivities} />
 
       {/* The key stat from every page, with its recent shape. */}
       <div className="grid grid-cols-2 gap-2">
