@@ -55,10 +55,14 @@ const CATEGORY_ICON: Record<ActivityCategory, LucideIcon> = {
 export default function ActivityFeedSection({
   range,
   category,
+  bare = false,
 }: {
   range: CardioRange
   /** Null shows every sport, matching the chart's "no tab selected" state. */
   category: ActivityCategory | null
+  /** Inside a Collapsible the surrounding card and header are supplied by it, so
+   *  drop our own to avoid a card-in-a-card and a duplicated title. */
+  bare?: boolean
 }) {
   const sessions = useWorkoutsStore((s) => s.sessions)
   const units = useSettingsStore((s) => s.units)
@@ -94,17 +98,19 @@ export default function ActivityFeedSection({
   }, [sessions, category, units, range])
 
   if (feed.length === 0) {
+    const empty = <p className="text-xs text-slate-500">No activities in this date range.</p>
+    if (bare) return empty
     return (
       <Card className="space-y-2">
         <Header count={0} />
-        <p className="text-xs text-slate-500">No activities in this date range.</p>
+        {empty}
       </Card>
     )
   }
 
-  return (
-    <Card className="space-y-2">
-      <Header count={feed.length} />
+  const inner = (
+    <>
+      {!bare && <Header count={feed.length} />}
 
       <div className="space-y-1.5">
         {feed.slice(0, shown).map(({ point, category: c }) => (
@@ -130,8 +136,11 @@ export default function ActivityFeedSection({
           Show {Math.min(PAGE_SIZE, feed.length - shown)} more
         </button>
       )}
-    </Card>
+    </>
   )
+
+  if (bare) return <div className="space-y-2">{inner}</div>
+  return <Card className="space-y-2">{inner}</Card>
 }
 
 function ActivityRow({

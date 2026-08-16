@@ -2,12 +2,13 @@ import { useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 /**
- * A titled header bar that expands to reveal its content below. Lets a data-rich
- * screen show the full menu of what's available at a glance while keeping each
- * detailed block one tap away — nothing buried, nothing a wall. The content
- * (often already-carded sections) renders as siblings below the bar rather than
- * nested inside it, so there's no double-card look, and only mounts while open so
- * heavy/lazy children don't load until expanded.
+ * One card whose header taps to open. The title, the chevron and the content all
+ * live inside a single border, so it reads unambiguously as one card that is open
+ * or shut — earlier this was a separate header pill sitting above a separate
+ * content card, which left it unclear whether the bar belonged to what was above
+ * or below it. The content (sections rendered in their `bare` mode, without their
+ * own card or header) only mounts while open, so heavy/lazy children don't load
+ * until expanded.
  */
 export default function Collapsible({
   title,
@@ -22,11 +23,11 @@ export default function Collapsible({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="space-y-2">
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-left active:bg-slate-800/40"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left active:bg-slate-800/40"
         aria-expanded={open}
       >
         <span className="min-w-0 flex-1">
@@ -35,7 +36,7 @@ export default function Collapsible({
         </span>
         <ChevronDown size={18} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && children}
+      {open && <div className="border-t border-slate-800 p-4">{children}</div>}
     </div>
   )
 }

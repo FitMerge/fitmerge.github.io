@@ -44,7 +44,14 @@ function sourceNote(source: { km: number; date: string; name: string; fromRecord
   return source.date ? `${what} · ${monthDayLabel(source.date)}` : what
 }
 
-export default function RacePredictionSection({ range }: { range: CardioRange }) {
+export default function RacePredictionSection({
+  range,
+  bare = false,
+}: {
+  range: CardioRange
+  /** Inside a Collapsible the card and title come from it, so drop ours. */
+  bare?: boolean
+}) {
   const sessions = useWorkoutsStore((s) => s.sessions)
   const units = useSettingsStore((s) => s.units)
   const distUnit = distanceUnitLabel(units)
@@ -81,22 +88,26 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
   }, [showingVo2, fromGarmin, desc, sessions, range])
 
   if (estimate === null) {
+    const empty = (
+      <p className="text-xs text-slate-500">
+        Log or import a run of at least 1.5 km with both a distance and a duration, and
+        predicted race times and training paces will appear here.
+      </p>
+    )
+    if (bare) return empty
     return (
       <Card className="space-y-2">
         <Header />
-        <p className="text-xs text-slate-500">
-          Log or import a run of at least 1.5 km with both a distance and a duration, and
-          predicted race times and training paces will appear here.
-        </p>
+        {empty}
       </Card>
     )
   }
 
   const { source, predictions, paces } = estimate
 
-  return (
-    <Card className="space-y-3">
-      <Header />
+  const inner = (
+    <>
+      {!bare && <Header />}
 
       {/* Your single strongest effort, which sets the VDOT the training paces are
           prescribed from. It is deliberately NOT described as what the predictions
@@ -268,8 +279,11 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
           </p>
         </div>
       )}
-    </Card>
+    </>
   )
+
+  if (bare) return <div className="space-y-3">{inner}</div>
+  return <Card className="space-y-3">{inner}</Card>
 }
 
 function Header() {

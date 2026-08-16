@@ -22,7 +22,7 @@ function fmtH(min: number): string {
   return `${Math.round(min)}m`
 }
 
-export default function ActiveTimeSection() {
+export default function ActiveTimeSection({ bare = false }: { bare?: boolean } = {}) {
   const sessions = useWorkoutsStore((s) => s.sessions)
 
   const { weeks, thisWeekMin, thisWeekCount, avgMin } = useMemo(() => {
@@ -49,12 +49,14 @@ export default function ActiveTimeSection() {
 
   if (weeks.every((w) => w.minutes === 0)) return null
 
-  return (
-    <Card className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Timer size={16} className="text-sky-400" />
-        <h2 className="text-sm font-semibold text-slate-200">Active time per week</h2>
-      </div>
+  const inner = (
+    <>
+      {!bare && (
+        <div className="flex items-center gap-2">
+          <Timer size={16} className="text-sky-400" />
+          <h2 className="text-sm font-semibold text-slate-200">Active time per week</h2>
+        </div>
+      )}
 
       <div className="flex items-baseline justify-between">
         <p className="text-2xl font-bold text-slate-100">{fmtH(thisWeekMin)}</p>
@@ -87,6 +89,9 @@ export default function ActiveTimeSection() {
           </BarChart>
       </ScrubChart>
       <p className="text-[11px] text-slate-500">Each bar is a week (label = week start). All cardio activities combined.</p>
-    </Card>
+    </>
   )
+
+  if (bare) return <div className="space-y-3">{inner}</div>
+  return <Card className="space-y-3">{inner}</Card>
 }

@@ -50,9 +50,12 @@ function periodNoun(size: 'week' | 'month'): string {
 export default function CardioProgressSection({
   range,
   category,
+  bare = false,
 }: {
   range: CardioRange
   category: ActivityCategory
+  /** Inside a Collapsible the card and title come from it, so drop ours. */
+  bare?: boolean
 }) {
   const sessions = useWorkoutsStore((s) => s.sessions)
   const garminRecords = useWorkoutsStore((s) => s.garminRecords)
@@ -151,12 +154,14 @@ export default function CardioProgressSection({
             ? elevUnit
             : 'kcal'
 
-  return (
-    <Card className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Footprints size={16} className="text-primary-400" />
-        <h2 className="text-sm font-semibold text-slate-200">{category} progress</h2>
-      </div>
+  const inner = (
+    <>
+      {!bare && (
+        <div className="flex items-center gap-2">
+          <Footprints size={16} className="text-primary-400" />
+          <h2 className="text-sm font-semibold text-slate-200">{category} progress</h2>
+        </div>
+      )}
 
       {/* Headline totals. Ascent joins them for sports that climb, and drops out
           entirely rather than showing a dash for the ones that don't. */}
@@ -372,8 +377,11 @@ export default function CardioProgressSection({
           Older sessions can be filled in with a backfill from Settings → Pull from Garmin.
         </p>
       )}
-    </Card>
+    </>
   )
+
+  if (bare) return <div className="space-y-3">{inner}</div>
+  return <Card className="space-y-3">{inner}</Card>
 }
 
 /** How to name the comparison window in "vs the previous ___". */
