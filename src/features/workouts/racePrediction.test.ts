@@ -274,6 +274,29 @@ describe('estimateFitness with Garmin personal records', () => {
     const short: GarminRecord[] = [{ typeId: 1, label: 'Fastest 1 km', kind: 'time', value: 200 }]
     expect(estimateFitness([], 'metric', { kind: 'all' }, TODAY, short)).toBeNull()
   })
+
+  it('drops a record dated outside the selected range', () => {
+    // A fast 5K from over a year ago has the highest VDOT and would win on an
+    // all-time basis, but on a 90-day view it should not drive current predictions;
+    // the recent long run becomes the source instead.
+    const recent = [run('2026-07-10', 20, 100)]
+    const stale: GarminRecord[] = [
+      { typeId: 3, label: 'Fastest 5K', kind: 'time', value: 1100, date: '2025-06-01' },
+    ]
+    const estimate = estimateFitness(recent, 'metric', { kind: 'days', days: 90 }, TODAY, stale)!
+    expect(estimate.source.fromRecord).toBe(false)
+    expect(estimate.source.km).toBe(20)
+  })
+
+  it('keeps a record dated inside the selected range', () => {
+    const sessions = [run('2026-07-10', 10, 55)]
+    const fresh: GarminRecord[] = [
+      { typeId: 3, label: 'Fastest 5K', kind: 'time', value: 1272, date: '2026-06-01' },
+    ]
+    const estimate = estimateFitness(sessions, 'metric', { kind: 'days', days: 90 }, TODAY, fresh)!
+    expect(estimate.source.fromRecord).toBe(true)
+    expect(estimate.source.km).toBe(5)
+  })
 })
 
 describe('timeAtVdot', () => {

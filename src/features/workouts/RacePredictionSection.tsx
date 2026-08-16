@@ -141,6 +141,12 @@ export default function RacePredictionSection({
       <div className="space-y-1">
         {predictions.map((p) => {
           const style = CONFIDENCE_STYLE[p.confidence]
+          // A "low" rating means the nearest effort is more than 4x from this
+          // distance — Riegel is unreliable that far out and would print an
+          // over-optimistic time (a marathon from a 5K comes out faster per mile
+          // than an easy long run). Better to say what's missing than to guess.
+          const tooFar = p.confidence === 'low'
+          const needLonger = p.km > p.source.km
           return (
             <div
               key={p.label}
@@ -155,18 +161,26 @@ export default function RacePredictionSection({
               />
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-medium text-slate-300">{p.label}</span>
-                {/* Which effort this row rests on. Without it the confidence dot is
-                    an unexplained colour, and a surprising prediction looks arbitrary. */}
+                {/* Which effort this row rests on, or — when it's too far to trust —
+                    what to log so a real prediction can appear. */}
                 <span className="block truncate text-[10px] text-slate-500">
-                  {sourceNote(p.source)}
+                  {tooFar
+                    ? `Log a ${needLonger ? 'longer' : 'shorter, faster'} run to predict this`
+                    : sourceNote(p.source)}
                 </span>
               </span>
-              <span className="shrink-0 text-right text-sm font-bold text-slate-100 tabular-nums">
-                {formatDuration(p.durationMin)}
-              </span>
-              <span className="w-16 shrink-0 text-right text-[11px] text-slate-500 tabular-nums">
-                {formatPace(p.pace)}/{distUnit}
-              </span>
+              {tooFar ? (
+                <span className="shrink-0 text-right text-sm font-bold text-slate-600 tabular-nums">—</span>
+              ) : (
+                <>
+                  <span className="shrink-0 text-right text-sm font-bold text-slate-100 tabular-nums">
+                    {formatDuration(p.durationMin)}
+                  </span>
+                  <span className="w-16 shrink-0 text-right text-[11px] text-slate-500 tabular-nums">
+                    {formatPace(p.pace)}/{distUnit}
+                  </span>
+                </>
+              )}
             </div>
           )
         })}
@@ -239,7 +253,7 @@ export default function RacePredictionSection({
       <p className="text-[10px] leading-relaxed text-slate-500">
         {fromGarmin
           ? 'Straight from your watch — Garmin predicts each distance directly from your heart rate and training load, so none of these are extrapolated.'
-          : "Riegel's model. Each distance is predicted from your strongest effort at a comparable distance — green where that effort was close to the race, grey where it was a long way off. Your watch's own predictions will replace these once it has produced them."}
+          : "Riegel's model. Each distance is predicted from your nearest effort — green when that effort was close to the race, amber when it's a stretch. Distances too far from anything you've run recently show a dash instead of an unreliable guess. Your watch's own predictions will replace these once it has produced them."}
       </p>
 
       {/* Training paces are the part a runner uses weekly, but they are a wall of

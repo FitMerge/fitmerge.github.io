@@ -264,8 +264,22 @@ const RECORD_DISTANCE_KM: Record<number, number> = {
   6: 42.195,
 }
 
-/** Garmin's timed records as candidate performances. */
-function recordPerformances(records: GarminRecord[]): Performance[] {
+/**
+ * Garmin's timed records as candidate performances, within the selected window.
+ *
+ * A record dated outside the range is dropped: a marathon prediction should
+ * describe your *current* fitness, and a fast 5K from a year ago is not that —
+ * on a 90-day view it would otherwise win outright (a short effort has the
+ * highest VDOT) and drive every prediction off a run you barely remember. The
+ * all-time bests still appear, unfiltered, in the "Personal records" panel; here
+ * we only want efforts that reflect how you are training now. Undated records are
+ * kept, since we can't place them in time to exclude them.
+ */
+function recordPerformances(
+  records: GarminRecord[],
+  range: CardioRange,
+  today: string,
+): Performance[] {
   const out: Performance[] = []
   for (const record of records) {
     const km = RECORD_DISTANCE_KM[record.typeId]
@@ -274,6 +288,7 @@ function recordPerformances(records: GarminRecord[]): Performance[] {
     if (km === undefined || record.kind !== 'time' || record.value <= 0) continue
     // A 1km record is too short for the model to be meaningful, same as sessions.
     if (km < 1.5) continue
+    if (record.date && !inCardioRange(record.date, range, today)) continue
     const durationMin = record.value / 60
     const v = vdot(km, durationMin)
     if (v === null) continue
@@ -412,11 +427,14 @@ export function estimateFitness(
   units: Units = 'metric',
   range: CardioRange = { kind: 'all' },
   today: string = todayISO(),
-  /** Garmin's timed records. All-time by nature, so deliberately not filtered by
-   * `range` — a PR is a PR. */
+  /** Garmin's timed records. Filtered to the selected `range`, like sessions, so a
+   * stale PR can't override how you're actually training now. */
   records: GarminRecord[] = [],
 ): FitnessEstimate | null {
-  const candidates = [...allPerformances(sessions, range, today), ...recordPerformances(records)]
+  const candidates = [
+    ...allPerformances(sessions, range, today),
+    ...recordPerformances(records, range, today),
+  ]
   if (candidates.length === 0) return null
 
   // The headline number stays the strongest single effort — that is what "current
