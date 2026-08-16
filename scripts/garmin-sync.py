@@ -841,26 +841,43 @@ def _first_num(d, *keys):
     return None
 
 
-def _deep_num(obj, *names, _depth=0):
-    """Search a nested dict/list for the first numeric value whose key exactly matches
-    one of `names`. Garmin buries values like acute load under varying wrapper keys
-    across firmware/library versions, so a defensive scan keeps us robust."""
+def _deep_num(obj, *names):
+    """Search a nested dict/list for a numeric value keyed by one of `names`, trying
+    the names in the order given: the whole tree is searched for the first name
+    before the second is considered. Order matters — the callers list their preferred
+    key first and a fallback after, and a shallower fallback must never shadow the
+    preferred key sitting deeper (e.g. `achievableFitnessAge`, a goal, must not win
+    over the real `fitnessAge`). Garmin buries values under varying wrapper keys
+    across firmware/library versions, so the scan stays defensive."""
+    for name in names:
+        found = _deep_one(obj, name)
+        if found is not None:
+            return found
+    return None
+
+
+def _deep_one(obj, name, _depth=0):
+    """First numeric value under an exact key `name`, scanning nested dicts/lists."""
     if _depth > 6:
         return None
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k in names and isinstance(v, (int, float)) and not isinstance(v, bool):
+            if k == name and isinstance(v, (int, float)) and not isinstance(v, bool):
                 return v
         for v in obj.values():
-            found = _deep_num(v, *names, _depth=_depth + 1)
+            found = _deep_one(v, name, _depth=_depth + 1)
             if found is not None:
                 return found
     elif isinstance(obj, list):
         for v in obj:
-            found = _deep_num(v, *names, _depth=_depth + 1)
+            found = _deep_one(v, name, _depth=_depth + 1)
             if found is not None:
                 return found
     return None
+
+
+# One-shot latch so FITMERGE_DEBUG_FITNESSAGE prints the raw payload once, not per week.
+_DUMPED = {"fa": False}
 
 
 def fetch_slow_metrics(call, ds, put):
@@ -890,10 +907,23 @@ def fetch_slow_metrics(call, ds, put):
             break
 
     # Fitness age (endpoint name differs across library versions).
+    #
+    # Field semantics, per Garmin: `bioAge` is your real/chronological age and
+    # `achievableFitnessAge` is a GOAL (the best you could realistically reach), so
+    # neither may substitute for the number Garmin displays — using them as
+    # fallbacks would silently show your real age or your target. We only read the
+    # actual fitness age. Note the API's `fitnessAge` may be the older VO2-max-only
+    # ("Standard") value while the watch shows Fitness Age 2.0; if they differ, run
+    # once with FITMERGE_DEBUG_FITNESSAGE=1 to print the raw payload and identify the
+    # 2.0 field, then add its key ahead of "fitnessAge" below.
     for m in ("get_fitnessage_data", "get_fitness_age"):
         fa = call(m, ds)
         if fa is not None:
-            put(ds, "fitnessAge", _deep_num(fa, "fitnessAge", "achievableFitnessAge", "bioAge"))
+            if os.environ.get("FITMERGE_DEBUG_FITNESSAGE") and not _DUMPED["fa"]:
+                _DUMPED["fa"] = True
+                print(f"\n[debug] raw {m}({ds}) response:", file=sys.stderr)
+                print(json.dumps(fa, default=str, indent=2), file=sys.stderr)
+            put(ds, "fitnessAge", _deep_num(fa, "fitnessAge"))
             break
 
     # Race-time predictions (seconds) for 5K / 10K / half / marathon.
