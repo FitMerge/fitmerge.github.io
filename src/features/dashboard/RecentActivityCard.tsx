@@ -29,7 +29,14 @@ function dayLabel(iso: string): string {
  * and one-off activities aren't buried three taps deep on the Train tab. Tapping
  * through goes to Train.
  */
-export default function RecentActivityCard({ activities }: { activities: RecentActivity[] }) {
+export default function RecentActivityCard({
+  activities,
+  onOpen,
+}: {
+  activities: RecentActivity[]
+  /** Open the full detail sheet for this session id. */
+  onOpen: (id: string) => void
+}) {
   const navigate = useNavigate()
   if (activities.length === 0) return null
 
@@ -52,7 +59,7 @@ export default function RecentActivityCard({ activities }: { activities: RecentA
             <button
               key={a.id}
               type="button"
-              onClick={() => navigate('/workouts')}
+              onClick={() => onOpen(a.id)}
               className="flex w-full items-center gap-2.5 rounded-lg bg-slate-800/40 px-2.5 py-2 text-left active:bg-slate-800"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">

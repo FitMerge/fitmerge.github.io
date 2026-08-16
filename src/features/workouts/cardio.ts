@@ -210,6 +210,75 @@ export function distanceUnitLabel(units: Units): string {
   return units === 'imperial' ? 'mi' : 'km'
 }
 
+/** Distance in the user's display units, or null when none was recorded. */
+export function displayDistance(session: WorkoutSession, units: Units): number | null {
+  if (session.distanceKm == null || session.distanceKm <= 0) return null
+  return units === 'imperial' ? session.distanceKm / KM_PER_MILE : session.distanceKm
+}
+
+/** Minutes from an explicit durationMin, else the finished−started span. */
+export function sessionDurationMin(session: WorkoutSession): number {
+  if (session.durationMin && session.durationMin > 0) return session.durationMin
+  if (session.finishedAt && session.finishedAt > session.startedAt) {
+    return (session.finishedAt - session.startedAt) / 60000
+  }
+  return 0
+}
+
+/** One-line summary for an activity row: "5.20 mi · 32:00 · 6:09/mi" or "45:00 · 150 kcal". */
+export function cardioSummaryLine(session: WorkoutSession, units: Units): string {
+  const parts: string[] = []
+  const dist = displayDistance(session, units)
+  const dur = sessionDurationMin(session)
+  const unit = distanceUnitLabel(units)
+  if (dist != null) parts.push(`${dist.toFixed(2)} ${unit}`)
+  if (dur > 0) parts.push(formatDuration(dur))
+  if (dist != null && dur > 0) parts.push(`${formatPace(dur / dist)}/${unit}`)
+  else if (session.kcal) parts.push(`${Math.round(session.kcal)} kcal`)
+  return parts.join(' · ') || 'Activity'
+}
+
+/**
+ * The stats for a cardio/activity detail view, split into up-to-three headline
+ * tiles and the remaining detail rows. Only metrics that were actually recorded
+ * appear, so a bare manual entry shows a couple of tiles rather than a grid of
+ * dashes. Mirrors the metric set the activity feed already surfaces.
+ */
+export function activityStats(
+  session: WorkoutSession,
+  units: Units,
+): { tiles: [string, string][]; rows: [string, string][] } {
+  const distUnit = distanceUnitLabel(units)
+  const elevUnit = elevationUnitLabel(units)
+  const dist = displayDistance(session, units)
+  const dur = sessionDurationMin(session)
+  const pace = dist != null && dur > 0 ? dur / dist : null
+
+  const tiles: [string, string][] = []
+  if (dist != null) tiles.push(['Distance', `${dist.toFixed(2)} ${distUnit}`])
+  if (dur > 0) tiles.push(['Duration', formatDuration(dur)])
+  if (pace != null) tiles.push(['Pace', `${formatPace(pace)}/${distUnit}`])
+  const usedKcal = tiles.length < 3 && !!session.kcal
+  if (usedKcal) tiles.push(['Calories', `${Math.round(session.kcal as number)}`])
+  const usedHr = tiles.length < 3 && !!session.avgHr
+  if (usedHr) tiles.push(['Avg HR', `${Math.round(session.avgHr as number)}`])
+
+  const rows: [string, string][] = []
+  if (session.avgHr && !usedHr) rows.push(['Avg HR', `${Math.round(session.avgHr)} bpm`])
+  if (session.maxHr) rows.push(['Max HR', `${Math.round(session.maxHr)} bpm`])
+  if (session.elevationGainM) {
+    rows.push(['Ascent', `${Math.round(toDisplayElevation(session.elevationGainM, units)).toLocaleString()} ${elevUnit}`])
+  }
+  if (session.avgCadence) rows.push(['Cadence', `${Math.round(session.avgCadence)} spm`])
+  if (session.kcal && !usedKcal) rows.push(['Calories', `${Math.round(session.kcal)} kcal`])
+  if (session.avgPower) rows.push(['Avg power', `${Math.round(session.avgPower)} W`])
+  if (session.aerobicTe) rows.push(['Aerobic effect', session.aerobicTe.toFixed(1)])
+  if (session.anaerobicTe) rows.push(['Anaerobic effect', session.anaerobicTe.toFixed(1)])
+  if (session.trainingLoad) rows.push(['Training load', String(Math.round(session.trainingLoad))])
+
+  return { tiles, rows }
+}
+
 /** Standard race distances, in kilometres regardless of display units. */
 export const DISTANCE_BANDS: { label: string; km: number }[] = [
   { label: '5K', km: 5 },

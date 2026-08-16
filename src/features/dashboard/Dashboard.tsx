@@ -10,9 +10,11 @@ import Card from '../../components/Card'
 import Button from '../../components/Button'
 import CoachSheet from './CoachSheet'
 import RecentActivityCard from './RecentActivityCard'
+import SessionDetail from '../workouts/SessionDetail'
 import LogWaterSheet from '../nutrition/LogWaterSheet'
 import SupplementList from '../assistant/SupplementList'
 import { useNutritionStore } from '../../store/nutrition'
+import { useWorkoutsStore } from '../../store/workouts'
 import { useHomeData } from './homeData'
 import { buildInsights } from './insights'
 import { metricSpark } from '../health/healthToday'
@@ -29,8 +31,11 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const d = useHomeData()
   const addWater = useNutritionStore((s) => s.addWater)
+  const sessions = useWorkoutsStore((s) => s.sessions)
   const [coachOpen, setCoachOpen] = useState(false)
   const [waterOpen, setWaterOpen] = useState(false)
+  const [activityId, setActivityId] = useState<string | null>(null)
+  const activitySession = activityId ? sessions.find((s) => s.id === activityId) ?? null : null
   const insights = useMemo(() => buildInsights(d, new Date().getHours()), [d])
   const featured = insights[0]
   const FeaturedIcon = featured ? INSIGHT_ICONS[featured.icon] : null
@@ -206,7 +211,7 @@ export default function Dashboard() {
 
       {/* Recent runs, hikes, workouts and logged activities — so cardio isn't
           buried on the Train tab. */}
-      <RecentActivityCard activities={d.recentActivities} />
+      <RecentActivityCard activities={d.recentActivities} onOpen={setActivityId} />
 
       {/* The key stat from every page, with its recent shape. */}
       <div className="grid grid-cols-2 gap-2">
@@ -280,6 +285,14 @@ export default function Dashboard() {
 
       <CoachSheet open={coachOpen} onClose={() => setCoachOpen(false)} />
       <LogWaterSheet open={waterOpen} onClose={() => setWaterOpen(false)} date={d.today} />
+      <SessionDetail
+        session={activitySession}
+        onClose={() => setActivityId(null)}
+        onRepeated={() => {
+          setActivityId(null)
+          navigate('/workouts')
+        }}
+      />
     </div>
   )
 }

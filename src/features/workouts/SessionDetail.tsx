@@ -6,6 +6,7 @@ import { useSettingsStore } from '../../store/settings'
 import { getExerciseById } from '../../data/exercises'
 import { isoToLabel, todayISO } from '../../lib/date'
 import { formatDurationMin, sessionDurationMs, totalSetsDone, totalVolume, weightUnitLabel } from './utils'
+import { activityStats } from './cardio'
 import type { WorkoutSession } from '../../types'
 
 type SessionDetailProps = {
@@ -48,7 +49,12 @@ export default function SessionDetail({ session, onClose, onRepeated }: SessionD
   }
 
   const durationMs = session ? sessionDurationMs(session) : 0
-  const canRepeat = session ? !(session.imported && session.entries.length === 0) : false
+  // A session with any logged sets is a strength workout; everything else (runs,
+  // rides, yoga, imported cardio, manual activities) gets the activity layout.
+  const isStrength = session ? session.entries.some((e) => e.sets.length > 0) : false
+  const activity = session && !isStrength ? activityStats(session, units) : null
+  // Repeating only makes sense for a set-based workout; a run has nothing to seed.
+  const canRepeat = isStrength
 
   return (
     <Sheet open={session !== null} onClose={onClose} title={session?.name ?? ''}>
@@ -63,28 +69,58 @@ export default function SessionDetail({ session, onClose, onRepeated }: SessionD
             )}
           </p>
 
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-slate-800/60 py-3">
-              <p className="text-lg font-bold text-slate-100 tabular-nums">{formatDurationMin(durationMs)}</p>
-              <p className="text-xs text-slate-500">Duration</p>
-            </div>
-            <div className="rounded-xl bg-slate-800/60 py-3">
-              <p className="text-lg font-bold text-slate-100">{totalSetsDone(session)}</p>
-              <p className="text-xs text-slate-500">Sets done</p>
-            </div>
-            <div className="rounded-xl bg-slate-800/60 py-3">
-              <p className="text-lg font-bold text-slate-100">{Math.round(totalVolume(session)).toLocaleString()}</p>
-              <p className="text-xs text-slate-500">Volume ({unitLabel})</p>
-            </div>
-          </div>
+          {activity ? (
+            <>
+              {activity.tiles.length > 0 && (
+                <div
+                  className="grid gap-2 text-center"
+                  style={{ gridTemplateColumns: `repeat(${activity.tiles.length}, minmax(0, 1fr))` }}
+                >
+                  {activity.tiles.map(([label, value]) => (
+                    <div key={label} className="rounded-xl bg-slate-800/60 py-3">
+                      <p className="text-lg font-bold text-slate-100 tabular-nums">{value}</p>
+                      <p className="text-xs text-slate-500">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-          {session.entries.length === 0 && session.imported ? (
-            <p className="text-sm text-slate-500">
-              No set-by-set data — imported from Health Connect.
-              {session.kcal !== undefined ? ` ${Math.round(session.kcal)} kcal.` : ''}
-            </p>
+              {activity.rows.length > 0 ? (
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-slate-800/40 p-3">
+                  {activity.rows.map(([label, value]) => (
+                    <div key={label} className="flex items-baseline justify-between gap-2">
+                      <dt className="truncate text-xs text-slate-500">{label}</dt>
+                      <dd className="shrink-0 text-sm font-medium text-slate-200 tabular-nums">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                activity.tiles.length <= 1 && (
+                  <p className="text-sm text-slate-500">
+                    Only the basics were recorded for this one. A Garmin or Fitbit import adds heart rate,
+                    pace, ascent and training effect.
+                  </p>
+                )
+              )}
+            </>
           ) : (
-            <div className="space-y-3">
+            <>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-slate-800/60 py-3">
+                  <p className="text-lg font-bold text-slate-100 tabular-nums">{formatDurationMin(durationMs)}</p>
+                  <p className="text-xs text-slate-500">Duration</p>
+                </div>
+                <div className="rounded-xl bg-slate-800/60 py-3">
+                  <p className="text-lg font-bold text-slate-100">{totalSetsDone(session)}</p>
+                  <p className="text-xs text-slate-500">Sets done</p>
+                </div>
+                <div className="rounded-xl bg-slate-800/60 py-3">
+                  <p className="text-lg font-bold text-slate-100">{Math.round(totalVolume(session)).toLocaleString()}</p>
+                  <p className="text-xs text-slate-500">Volume ({unitLabel})</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
               {session.entries.map((entry) => {
                 const exercise = getExerciseById(entry.exerciseId)
                 const vol = entry.sets
@@ -126,7 +162,8 @@ export default function SessionDetail({ session, onClose, onRepeated }: SessionD
                   </div>
                 )
               })}
-            </div>
+              </div>
+            </>
           )}
 
           {canRepeat && (
