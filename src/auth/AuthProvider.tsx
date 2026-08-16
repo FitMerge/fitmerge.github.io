@@ -34,6 +34,12 @@ type AuthContextValue = {
   /** Epoch ms of the last successful cloud reconcile, or null if not synced yet. */
   lastSyncedAt: number | null
   signIn: () => Promise<void>
+  /** Email + password sign-in ('signin') or account creation ('signup'). The one
+   * auth path that works in an installed iOS home-screen app. Throws on failure so
+   * the form can show the error. */
+  emailSignIn: (mode: 'signin' | 'signup', email: string, password: string) => Promise<void>
+  /** Send a password-reset email. Throws on failure. */
+  resetPassword: (email: string) => Promise<void>
   signOut: () => Promise<void>
   /** Force a pull from the cloud right now (merge + apply all stores). */
   refresh: () => Promise<void>
@@ -215,6 +221,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function emailSignIn(mode: 'signin' | 'signup', email: string, password: string) {
+    setStatus('signing-in')
+    try {
+      const { emailPasswordSignIn } = await import('../services/sync/firebase')
+      await emailPasswordSignIn(mode, email.trim(), password)
+      // watchAuth's onAuthStateChanged callback flips status to 'signed-in'.
+    } catch (err) {
+      if (mountedRef.current) setStatus('signed-out')
+      throw err
+    }
+  }
+
+  async function resetPassword(email: string) {
+    const { sendPasswordReset } = await import('../services/sync/firebase')
+    await sendPasswordReset(email.trim())
+  }
+
   async function signOut() {
     try {
       const { signOutUser } = await import('../services/sync/firebase')
@@ -299,6 +322,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authResolved,
     lastSyncedAt,
     signIn,
+    emailSignIn,
+    resetPassword,
     signOut,
     refresh,
     connect,

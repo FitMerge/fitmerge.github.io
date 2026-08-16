@@ -89,15 +89,6 @@ async function initAuth(app: FirebaseApp): Promise<Auth> {
   }
 }
 
-/** True when running as an installed PWA (home-screen app), where auth popups are blocked. */
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false
-  const mq = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches
-  // iOS Safari exposes standalone as a non-standard navigator flag rather than via display-mode.
-  const iosStandalone = (navigator as unknown as { standalone?: boolean }).standalone === true
-  return Boolean(mq) || iosStandalone
-}
-
 async function initFirestore(app: FirebaseApp): Promise<Firestore> {
   const { initializeFirestore, persistentLocalCache, getFirestore } = await import('firebase/firestore')
   try {
@@ -118,14 +109,6 @@ export async function signInWithGoogle(): Promise<void> {
   const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import('firebase/auth')
   const provider = new GoogleAuthProvider()
 
-  // In an installed PWA the popup is blocked outright, so skip straight to the
-  // full-page redirect — trying the popup first just showed a failed flash and,
-  // on the home-screen app, left people unable to sign in at all.
-  if (isStandalone()) {
-    await signInWithRedirect(handle.auth, provider)
-    return
-  }
-
   try {
     await signInWithPopup(handle.auth, provider)
   } catch (err) {
@@ -135,6 +118,35 @@ export async function signInWithGoogle(): Promise<void> {
     }
     throw err
   }
+}
+
+/**
+ * Email + password sign-in / sign-up. Unlike Google (popup/redirect) and email-link
+ * (which opens in Safari), this completes entirely inside the current webview — the
+ * one auth path that actually works in an installed iOS home-screen PWA, where the
+ * app's storage is walled off from Safari. onAuthStateChanged fires on success, so
+ * the normal watchAuth flow takes it from here.
+ */
+export async function emailPasswordSignIn(
+  mode: 'signin' | 'signup',
+  email: string,
+  password: string,
+): Promise<void> {
+  const handle = await getFirebase()
+  if (!handle) throw new Error('Firebase is not configured')
+  const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth')
+  if (mode === 'signup') {
+    await createUserWithEmailAndPassword(handle.auth, email, password)
+  } else {
+    await signInWithEmailAndPassword(handle.auth, email, password)
+  }
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  const handle = await getFirebase()
+  if (!handle) throw new Error('Firebase is not configured')
+  const { sendPasswordResetEmail } = await import('firebase/auth')
+  await sendPasswordResetEmail(handle.auth, email)
 }
 
 function isPopupError(err: unknown): boolean {

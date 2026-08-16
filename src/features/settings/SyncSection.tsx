@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronUp, Cloud, Copy, LogIn, LogOut, RefreshCw } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Cloud, Copy, LogIn, LogOut, Mail, RefreshCw } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { useAuth } from '../../auth/AuthProvider'
@@ -53,6 +53,9 @@ export default function SyncSection() {
                   {status === 'signing-in' ? 'Signing in…' : 'Sign in with Google'}
                 </span>
               </Button>
+
+              <EmailPasswordSignIn />
+
               <p className="text-xs text-slate-500">
                 Your data is private to your account. Everything keeps working without signing in — it
                 just stays on this device.
@@ -118,6 +121,138 @@ export default function SyncSection() {
         </div>
       )}
     </Card>
+  )
+}
+
+/** Friendlier text for the Firebase auth error codes people actually hit. */
+function emailAuthError(err: unknown): string {
+  const code = err && typeof err === 'object' && 'code' in err ? String((err as { code: unknown }).code) : ''
+  if (code.includes('email-already-in-use')) return 'That email already has an account — try Sign in instead.'
+  if (code.includes('invalid-email')) return "That doesn't look like a valid email."
+  if (code.includes('weak-password')) return 'Password must be at least 6 characters.'
+  if (code.includes('wrong-password') || code.includes('invalid-credential'))
+    return 'Wrong email or password. Try again, or reset your password.'
+  if (code.includes('user-not-found')) return 'No account with that email — try Create account.'
+  if (code.includes('too-many-requests')) return 'Too many attempts — wait a moment and try again.'
+  if (code.includes('operation-not-allowed'))
+    return 'Email sign-in isn’t enabled yet on the server. (Enable Email/Password in Firebase.)'
+  return 'Could not sign in. Check your details and try again.'
+}
+
+/**
+ * Email + password sign-in — the auth path that works inside an installed iPhone
+ * home-screen app, where Google's popup/redirect (and email links, which open in
+ * Safari) can't complete. Collapsed behind a disclosure so the one-tap Google
+ * button stays the headline for everyone else.
+ */
+function EmailPasswordSignIn() {
+  const { emailSignIn, resetPassword, status } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const busy = status === 'signing-in'
+  const canSubmit = /.+@.+\..+/.test(email) && password.length >= 6 && !busy
+
+  async function submit() {
+    setError('')
+    setNotice('')
+    try {
+      await emailSignIn(mode, email, password)
+      // On success the whole section re-renders as signed-in; nothing more to do.
+    } catch (err) {
+      setError(emailAuthError(err))
+    }
+  }
+
+  async function forgotPassword() {
+    setError('')
+    setNotice('')
+    if (!/.+@.+\..+/.test(email)) {
+      setError('Enter your email above first, then tap reset.')
+      return
+    }
+    try {
+      await resetPassword(email)
+      setNotice('Password reset email sent — check your inbox.')
+    } catch (err) {
+      setError(emailAuthError(err))
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-xs text-slate-400"
+      >
+        <span className="flex items-center gap-1.5">
+          <Mail size={13} />
+          Or use email &amp; password (works on iPhone home-screen app)
+        </span>
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2 border-t border-slate-800 pt-2">
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMode('signin')}
+              className={`rounded-lg py-1.5 text-xs font-medium ${mode === 'signin' ? 'bg-primary-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('signup')}
+              className={`rounded-lg py-1.5 text-xs font-medium ${mode === 'signup' ? 'bg-primary-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}
+            >
+              Create account
+            </button>
+          </div>
+
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="w-full rounded-lg bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
+          />
+          <input
+            type="password"
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password (6+ characters)"
+            className="w-full rounded-lg bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary-500"
+          />
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          {notice && <p className="text-sm text-emerald-400">{notice}</p>}
+
+          <Button variant="primary" full onClick={submit} disabled={!canSubmit}>
+            {busy ? 'Working…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+          </Button>
+
+          {mode === 'signin' && (
+            <button
+              type="button"
+              onClick={forgotPassword}
+              className="w-full text-center text-xs text-slate-500 active:text-slate-300"
+            >
+              Forgot password?
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
