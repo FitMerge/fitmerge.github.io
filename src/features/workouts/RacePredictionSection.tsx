@@ -67,10 +67,22 @@ export default function RacePredictionSection({
   // computed one (Riegel over your actual recent runs) reflects what you've truly
   // been doing lately. Neither is definitively right, so when both exist we show a
   // toggle and let you compare rather than hiding one behind the other.
+  // Predictions anchor on your strongest effort over a generous window, not the
+  // chart's range: a race from a few months ago still says what you're capable of,
+  // and a 30- or 90-day view would otherwise drop your last real time trial and
+  // predict off easy long runs instead. The fitness trend below still follows the
+  // selected range. A wider selection (1y / All) widens this too.
+  const anchorRange = useMemo<CardioRange>(
+    () =>
+      range.kind === 'days'
+        ? { kind: 'days', days: Math.max(range.days, 365) }
+        : range,
+    [range],
+  )
   const garmin = useMemo(() => garminFitness(desc, units), [desc, units])
   const computed = useMemo(
-    () => estimateFitness(sessions, units, range, undefined, garminRecords),
-    [sessions, units, range, garminRecords],
+    () => estimateFitness(sessions, units, anchorRange, undefined, garminRecords),
+    [sessions, units, anchorRange, garminRecords],
   )
   const bothAvailable = garmin !== null && computed !== null
   const [predictor, setPredictor] = useState<'garmin' | 'computed'>('garmin')
@@ -286,7 +298,7 @@ export default function RacePredictionSection({
       <p className="text-[10px] leading-relaxed text-slate-500">
         {fromGarmin
           ? 'Straight from your watch — Garmin predicts each distance directly from your heart rate and training load, so none of these are extrapolated.'
-          : "Riegel's model. Each distance is predicted from your nearest effort — green when that effort was close to the race, amber when it's a stretch. Distances too far from anything you've run recently show a dash instead of an unreliable guess. Your watch's own predictions will replace these once it has produced them."}
+          : "Daniels' VDOT model. Every distance comes from your single strongest run in the last year, so the times stay consistent with each other — a mile is never slower than a 5K, and your best effort comes back unchanged at its own distance. Green where that effort is close to the race, amber where it's a stretch; distances too far out show a dash rather than a guess. Your watch's own numbers are under Garmin watch."}
       </p>
 
       {/* Training paces are the part a runner uses weekly, but they are a wall of

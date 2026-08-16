@@ -437,27 +437,31 @@ export function estimateFitness(
   ]
   if (candidates.length === 0) return null
 
-  // The headline number stays the strongest single effort — that is what "current
-  // fitness" means, and it is what the training paces are prescribed from.
+  // The strongest single effort — the highest VDOT — anchors everything, which is
+  // what "current fitness" means and what the training paces are prescribed from.
   const best = candidates.reduce((a, b) => (b.vdot > a.vdot ? b : a))
   const unitKm = units === 'imperial' ? KM_PER_MILE : 1
 
+  // Every distance is predicted from that one VDOT via Daniels' model, exactly as a
+  // VDOT calculator does. Sourcing each distance from a different nearby run instead
+  // (an earlier design) could predict a mile SLOWER than a 5K, because the two rested
+  // on efforts at different fitness levels — physically impossible and confusing. One
+  // VDOT yields strictly monotonic times, and returns your effort unchanged at its own
+  // distance. Confidence still says how far each distance is stretched from that effort.
   const predictions: RacePrediction[] = RACE_DISTANCES.map((race) => {
-    // Non-null: candidates is non-empty, and the last tier accepts everything.
-    const source = sourceFor(race.km, candidates) as Performance
-    const durationMin = riegel(source.km, source.durationMin, race.km)
+    const durationMin = timeAtVdot(best.vdot, race.km)
     return {
       label: race.label,
       km: race.km,
       durationMin,
       pace: durationMin / (race.km / unitKm),
-      confidence: confidenceFor(source.km, race.km),
-      isSource: nearestDistance(source.km).label === race.label,
+      confidence: confidenceFor(best.km, race.km),
+      isSource: nearestDistance(best.km).label === race.label,
       source: {
-        km: source.km,
-        date: source.date,
-        name: source.name,
-        fromRecord: source.fromRecord,
+        km: best.km,
+        date: best.date,
+        name: best.name,
+        fromRecord: best.fromRecord,
       },
     }
   })

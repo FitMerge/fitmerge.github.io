@@ -199,7 +199,8 @@ describe('estimateFitness', () => {
 
   it('returns the source performance unchanged at its own distance', () => {
     const tenK = estimate.predictions.find((p) => p.label === '10K')!
-    expect(tenK.durationMin).toBeCloseTo(50, 6)
+    // Predicted back through the VDOT model, so equal within numeric round-trip.
+    expect(tenK.durationMin).toBeCloseTo(50, 3)
     expect(tenK.isSource).toBe(true)
   })
 
@@ -409,8 +410,10 @@ describe('sourceFor', () => {
   })
 })
 
-describe('estimateFitness sources each distance independently', () => {
-  // The reported case: a strong, old 1-mile PR next to real 5K and 10K running.
+describe('estimateFitness predicts every distance from one VDOT', () => {
+  // A strong 1-mile PR next to real 5K, 10K and half running. The mile has the
+  // highest VDOT, so it anchors every prediction — one fitness level, not a
+  // different nearby run per distance (which could rank a mile slower than a 5K).
   const records: GarminRecord[] = [
     { typeId: 2, label: 'Fastest 1 mile', kind: 'time', value: 363, date: '2025-09-23' },
   ]
@@ -421,31 +424,26 @@ describe('estimateFitness sources each distance independently', () => {
   ]
   const estimate = estimateFitness(sessions, 'imperial', { kind: 'all' }, TODAY, records)!
 
-  it('no longer predicts every distance from the mile PR', () => {
-    // The mile PR is the strongest effort by VDOT, so the old code used it for
-    // everything. Every distance from 5K up should now rest on real running.
-    const longer = estimate.predictions.filter((p) => p.km >= 5)
-    expect(longer.every((p) => !p.source.fromRecord)).toBe(true)
-    expect(longer.every((p) => p.source.km >= 5)).toBe(true)
+  it('anchors every prediction on the single strongest effort', () => {
+    expect(estimate.predictions.every((p) => p.source.fromRecord)).toBe(true)
+    expect(estimate.predictions.every((p) => Math.abs(p.source.km - 1.61) < 0.01)).toBe(true)
   })
 
-  it('still uses the mile PR for the mile', () => {
+  it('produces strictly monotonic paces — a mile is never slower than a 5K', () => {
+    const paces = estimate.predictions.map((p) => p.pace)
+    for (let i = 1; i < paces.length; i += 1) expect(paces[i]).toBeGreaterThan(paces[i - 1])
+  })
+
+  it('returns the anchor effort unchanged at its own distance', () => {
     const mile = estimate.predictions.find((p) => p.label === '1 mile')!
-    expect(mile.source.fromRecord).toBe(true)
+    expect(mile.isSource).toBe(true)
+    expect(mile.durationMin).toBeCloseTo(363 / 60, 2)
   })
 
-  it('rates most distances confidently instead of only the mile', () => {
-    // Previously only the source distance was green and everything else grey.
-    const confident = estimate.predictions.filter((p) => p.confidence === 'high')
-    expect(confident.length).toBeGreaterThanOrEqual(4)
-  })
-
-  it('returns a performance unchanged when it is predicted at its own distance', () => {
-    const half = estimate.predictions.find((p) => p.label === 'Half')!
-    // The 21.1km run is the nearest comparable effort to a half, so it comes back
-    // as itself rather than extrapolated.
-    expect(half.source.km).toBeCloseTo(21.0975, 4)
-    expect(half.durationMin).toBeCloseTo(120, 6)
+  it('rates distances near the anchor confidently and far ones low', () => {
+    const byLabel = Object.fromEntries(estimate.predictions.map((p) => [p.label, p.confidence]))
+    expect(byLabel['5K']).toBe('moderate') // 3.1x from a mile
+    expect(byLabel['Marathon']).toBe('low') // 26x
   })
 
   it('keeps the headline on the strongest effort overall', () => {
