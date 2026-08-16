@@ -23,6 +23,12 @@ export type MetricMeta = {
    * axis turn its occasional ±1 moves into dramatic-looking spikes.
    */
   slow?: boolean
+  /**
+   * A single daily score that genuinely bounces (training readiness), where the
+   * "normal range" band already gives the context a 7-day average would — so the
+   * average line is dropped to keep it clean.
+   */
+  noMovingAverage?: boolean
 }
 
 const round = (v: number) => String(Math.round(v))
@@ -90,7 +96,7 @@ const CATALOG: Record<string, CatalogEntry> = {
   // Garmin reports VO₂ max as a whole number; showing a decimal invents precision.
   vo2max: { label: 'VO₂ Max', group: 'training', order: 30, format: round, slow: true },
   vo2maxCycling: { label: 'VO₂ Max (cycling)', group: 'training', order: 31, format: round, slow: true },
-  trainingReadiness: { label: 'Training readiness', group: 'training', order: 32, format: round },
+  trainingReadiness: { label: 'Training readiness', group: 'training', order: 32, format: round, noMovingAverage: true },
   acuteLoad: { label: 'Acute load (7d)', group: 'training', order: 33, format: round },
   enduranceScore: { label: 'Endurance score', group: 'training', order: 34, format: round },
   hillScore: { label: 'Hill score', group: 'training', order: 35, format: round },

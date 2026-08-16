@@ -100,8 +100,9 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
 
   const chartData = useBand ? bandSeries : series
   const hasPoints = useBand ? bandSeries.some((p) => p.range !== null) : series.some((p) => p.value !== null)
-  // Show the 7-day smoothing line only for noisy day-by-day ranges, never for slow metrics.
-  const showAvg = !slow && (range === '30d' || range === '90d')
+  // Show the 7-day smoothing line only for noisy day-by-day ranges — never for slow
+  // metrics, nor ones whose normal-range band already gives the context.
+  const showAvg = !slow && !meta?.noMovingAverage && (range === '30d' || range === '90d')
 
   const delta = stats ? stats.last - stats.first : 0
   const improving = meta?.lowerIsBetter ? delta < 0 : delta > 0
@@ -316,14 +317,16 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                 })()}
                 {useBand
                   ? ' · green = daily high, red = daily low · shaded = your normal range'
-                  : (band ? ' · shaded = your typical range' : '') +
+                  : (band ? ' · shaded = your normal range' : '') +
                     (slow
                       ? ' · dots mark each change'
                       : showAvg
                         ? ' · dashed blue = 7-day average'
                         : range === '1y'
                           ? ' · weekly average'
-                          : ' · monthly average')}
+                          : range === 'all'
+                            ? ' · monthly average'
+                            : '')}
               </p>
             </>
           ) : (
