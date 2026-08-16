@@ -979,6 +979,11 @@ def fetch_daily_metrics(client, start, end):
             put(ds, "maxHr", st.get("maxHeartRate"))
             put(ds, "stress", st.get("averageStressLevel"))
             put(ds, "bodyBattery", st.get("bodyBatteryMostRecentValue") or st.get("bodyBatteryHighestValue"))
+            # Daily high/low LEVELS come from the summary, not get_body_battery (which
+            # only reports charged/drained deltas). Both are needed for the app's
+            # low→high Body Battery band.
+            put(ds, "bodyBatteryHigh", st.get("bodyBatteryHighestValue"))
+            put(ds, "bodyBatteryLow", st.get("bodyBatteryLowestValue"))
             mod = st.get("moderateIntensityMinutes") or 0
             vig = st.get("vigorousIntensityMinutes") or 0
             if mod or vig:
@@ -995,11 +1000,15 @@ def fetch_daily_metrics(client, start, end):
         if isinstance(stress, dict):
             put(ds, "maxStress", stress.get("maxStressLevel"))
 
-        # Body Battery high/low and charged/drained deltas for the day.
+        # Charged/drained deltas for the day come from this endpoint. High/low LEVELS
+        # are set from the summary above; only override them here if this endpoint
+        # actually carries a level (never fall back to "charged", which is a delta and
+        # would corrupt the high). `put` skips None, so a missing field leaves the
+        # summary value intact.
         bb = call("get_body_battery", ds, ds)
         bb_day = bb[0] if isinstance(bb, list) and bb else (bb if isinstance(bb, dict) else {})
         if isinstance(bb_day, dict):
-            put(ds, "bodyBatteryHigh", _first_num(bb_day, "highestBatteryLevel", "charged"))
+            put(ds, "bodyBatteryHigh", _first_num(bb_day, "highestBatteryLevel"))
             put(ds, "bodyBatteryLow", _first_num(bb_day, "lowestBatteryLevel"))
             put(ds, "bodyBatteryCharged", _first_num(bb_day, "charged"))
             put(ds, "bodyBatteryDrained", _first_num(bb_day, "drained"))
