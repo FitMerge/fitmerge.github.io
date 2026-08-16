@@ -65,13 +65,15 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
   )
   const fromGarmin = estimate?.origin === 'garmin'
 
-  // Two ways to name aerobic fitness, and they answer different questions.
-  // VO2 max is the engine; VDOT is what you actually do with it, because it is
-  // derived from a performance and so carries your running economy too. VO2 max
-  // leads because it is the term people already know and the one on the watch.
+  // VO2 max leads because it is the term people already know and the one on the
+  // watch. VDOT still powers every prediction and training pace below — it carries
+  // running economy, which the pace tables need — but it is no longer surfaced as a
+  // competing score: toggling it changed the badge and the trend line while the
+  // predicted times, which are always VDOT-derived, stayed identical. That read as
+  // two predictors giving the same answer. So we show VO2 max when the watch has
+  // it, and fall back to VDOT only when it doesn't.
   const vo2 = useMemo(() => latestVo2max(desc), [desc])
-  const [scoreKey, setScoreKey] = useState<'vo2max' | 'vdot'>('vo2max')
-  const showingVo2 = scoreKey === 'vo2max' && vo2 !== null
+  const showingVo2 = vo2 !== null
 
   const trend = useMemo(() => {
     if (showingVo2) return vo2maxTrend(desc, range)
@@ -118,28 +120,6 @@ export default function RacePredictionSection({ range }: { range: CardioRange })
           <p className="text-[10px] text-slate-500">{showingVo2 ? 'VO₂ max' : 'VDOT'}</p>
         </div>
       </div>
-
-      {vo2 !== null && (
-        <div className="flex gap-1.5">
-          {(
-            [
-              ['vo2max', 'VO₂ max'],
-              ['vdot', 'VDOT'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setScoreKey(key)}
-              className={`flex-1 rounded-full py-1 text-[11px] font-medium ${
-                scoreKey === key ? 'bg-slate-700 text-slate-100' : 'bg-slate-800 text-slate-400'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
         {showingVo2

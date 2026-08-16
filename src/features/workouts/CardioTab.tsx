@@ -233,14 +233,14 @@ export default function CardioTab({ onLog }: { onLog: () => void }) {
           <Collapsible title="Recent activities" subtitle="Every session, with the details" defaultOpen>
             <ActivityFeedSection range={range} category={selected} />
           </Collapsible>
-          <Collapsible title="Pace & distance" subtitle="How your training is trending">
+          <Collapsible title="Pace & distance" subtitle="How your training is trending" defaultOpen>
             <CardioProgressSection range={range} category={selected} />
           </Collapsible>
-          <Collapsible title="Active time" subtitle="Minutes per week, all cardio">
+          <Collapsible title="Active time" subtitle="Minutes per week, all cardio" defaultOpen>
             <ActiveTimeSection />
           </Collapsible>
           {selected === 'Run' && (
-            <Collapsible title="Race predictions" subtitle="Predicted times and VO₂ from your best effort">
+            <Collapsible title="Race predictions" subtitle="Predicted times and VO₂ from your best effort" defaultOpen>
               <RacePredictionSection range={range} />
             </Collapsible>
           )}
