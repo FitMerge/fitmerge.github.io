@@ -61,15 +61,22 @@ export default function RacePredictionSection({
   const days = useHealthStore((s) => s.days)
   const desc = useMemo(() => healthDaysDesc(days), [days])
 
-  // Garmin's own predictor wins when the watch has produced one: it is calibrated
-  // against on-device heart rate and training load over a very large population,
-  // where everything below is a two-parameter curve fit over one distance and one
-  // duration per run. The computed estimate is the fallback for anyone without
-  // that data — a friend on Apple Health, or a fresh account.
-  const estimate = useMemo(
-    () => garminFitness(desc, units) ?? estimateFitness(sessions, units, range, undefined, garminRecords),
-    [desc, sessions, units, range, garminRecords],
+  // Two independent predictors, and they can disagree. Garmin's is calibrated
+  // against on-device heart rate and training load, but it can lag real fitness —
+  // it will happily predict a marathon off a VO2 max you last hit months ago. The
+  // computed one (Riegel over your actual recent runs) reflects what you've truly
+  // been doing lately. Neither is definitively right, so when both exist we show a
+  // toggle and let you compare rather than hiding one behind the other.
+  const garmin = useMemo(() => garminFitness(desc, units), [desc, units])
+  const computed = useMemo(
+    () => estimateFitness(sessions, units, range, undefined, garminRecords),
+    [sessions, units, range, garminRecords],
   )
+  const bothAvailable = garmin !== null && computed !== null
+  const [predictor, setPredictor] = useState<'garmin' | 'computed'>('garmin')
+  // Fall back to whichever exists if the selected one doesn't (e.g. computed
+  // selected but no qualifying run in range yet).
+  const estimate = (predictor === 'garmin' ? garmin : computed) ?? garmin ?? computed
   const fromGarmin = estimate?.origin === 'garmin'
 
   // VO2 max leads because it is the term people already know and the one on the
@@ -79,8 +86,10 @@ export default function RacePredictionSection({
   // predicted times, which are always VDOT-derived, stayed identical. That read as
   // two predictors giving the same answer. So we show VO2 max when the watch has
   // it, and fall back to VDOT only when it doesn't.
+  // Each view shows its own native score: VO2 max (the watch metric) alongside the
+  // Garmin predictor, VDOT (the computed metric) alongside the runs-based one.
   const vo2 = useMemo(() => latestVo2max(desc), [desc])
-  const showingVo2 = vo2 !== null
+  const showingVo2 = fromGarmin && vo2 !== null
 
   const trend = useMemo(() => {
     if (showingVo2) return vo2maxTrend(desc, range)
@@ -108,6 +117,30 @@ export default function RacePredictionSection({
   const inner = (
     <>
       {!bare && <Header />}
+
+      {/* Which predictor's numbers to show. Only offered when both exist; with one
+          source there is nothing to compare against. */}
+      {bothAvailable && (
+        <div className="flex gap-1.5">
+          {(
+            [
+              ['garmin', 'Garmin watch'],
+              ['computed', 'From your runs'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPredictor(key)}
+              className={`flex-1 rounded-full py-1.5 text-[11px] font-medium ${
+                predictor === key ? 'bg-slate-700 text-slate-100' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Your single strongest effort, which sets the VDOT the training paces are
           prescribed from. It is deliberately NOT described as what the predictions
