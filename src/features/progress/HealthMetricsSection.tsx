@@ -140,8 +140,9 @@ function Tile({
   const trendColor = !showTrend ? '' : improving ? 'text-emerald-400' : 'text-rose-400'
   const sparkStroke = showTrend ? (improving ? '#34d399' : '#f43f5e') : '#64748b'
   // Shade the metric's own typical range behind the tile spark so the latest
-  // point reads as in / out of normal at a glance.
-  const tband = typicalRangeOf(spark)
+  // point reads as in / out of normal at a glance — but not for slow metrics,
+  // where the value barely varies and a "range" is just noise.
+  const tband = meta.slow ? null : typicalRangeOf(spark)
 
   const siblings = entry.kind === 'family' ? entry.resolved.members : [headlineKey]
 

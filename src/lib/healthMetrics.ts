@@ -16,6 +16,13 @@ export type MetricMeta = {
   group: MetricGroup
   /** When true, a downward trend is an improvement (resting HR, stress, race times…). */
   lowerIsBetter?: boolean
+  /**
+   * Changes rarely and in whole steps (VO₂ max, Fitness age) rather than
+   * fluctuating daily. Charted as a stepped line with a dot at each change and no
+   * 7-day-average or typical-range overlay — a smoothed curve and an auto-zoomed
+   * axis turn its occasional ±1 moves into dramatic-looking spikes.
+   */
+  slow?: boolean
 }
 
 const round = (v: number) => String(Math.round(v))
@@ -81,13 +88,13 @@ const CATALOG: Record<string, CatalogEntry> = {
 
   // ── Training & performance ─────────────────────────────────────────────────
   // Garmin reports VO₂ max as a whole number; showing a decimal invents precision.
-  vo2max: { label: 'VO₂ Max', group: 'training', order: 30, format: round },
-  vo2maxCycling: { label: 'VO₂ Max (cycling)', group: 'training', order: 31, format: round },
+  vo2max: { label: 'VO₂ Max', group: 'training', order: 30, format: round, slow: true },
+  vo2maxCycling: { label: 'VO₂ Max (cycling)', group: 'training', order: 31, format: round, slow: true },
   trainingReadiness: { label: 'Training readiness', group: 'training', order: 32, format: round },
   acuteLoad: { label: 'Acute load (7d)', group: 'training', order: 33, format: round },
   enduranceScore: { label: 'Endurance score', group: 'training', order: 34, format: round },
   hillScore: { label: 'Hill score', group: 'training', order: 35, format: round },
-  fitnessAge: { label: 'Fitness age', unit: 'yr', group: 'training', order: 36, format: half, lowerIsBetter: true },
+  fitnessAge: { label: 'Fitness age', unit: 'yr', group: 'training', order: 36, format: half, lowerIsBetter: true, slow: true },
   raceTime5k: { label: 'Race predictor · 5K', group: 'training', order: 37, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
   raceTime10k: { label: 'Race predictor · 10K', group: 'training', order: 38, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },
   raceTimeHalf: { label: 'Race predictor · Half', group: 'training', order: 39, format: raceTime, axisFormat: raceTime, lowerIsBetter: true },

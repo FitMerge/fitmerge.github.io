@@ -44,16 +44,34 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
   useEffect(() => setActive(metricKey), [metricKey])
 
   const charted = active ?? metricKey
-  const samples = useMemo(() => (charted ? metricSamples(days, charted) : []), [days, charted])
-  const series = useMemo(() => withMovingAverage(metricSeries(samples, range)), [samples, range])
-  const stats = useMemo(() => metricStats(samples, range), [samples, range])
-  const band = useMemo(() => typicalRange(samples, range), [samples, range])
-
   const meta = charted ? metricMeta(charted) : null
+  const slow = !!meta?.slow
+  const samples = useMemo(() => (charted ? metricSamples(days, charted) : []), [days, charted])
+  const series = useMemo(() => {
+    const base = metricSeries(samples, range)
+    // Slow metrics (VO₂ max, Fitness age) get no moving average — a smoothed curve
+    // over a value that only steps occasionally reads as noise.
+    const withAvg = slow ? base.map((p) => ({ ...p, avg: null })) : withMovingAverage(base)
+    // Flag each point where the value actually changed, so a stepped line can mark
+    // the changes with a dot instead of dotting every identical day.
+    let prev: number | null = null
+    return withAvg.map((p) => {
+      let changed = false
+      if (p.value !== null) {
+        changed = prev === null || p.value !== prev
+        prev = p.value
+      }
+      return { ...p, changed }
+    })
+  }, [samples, range, slow])
+  const stats = useMemo(() => metricStats(samples, range), [samples, range])
+  // A "typical range" only means something for a metric that varies day to day; for
+  // a stepped one it is noise, so skip the band entirely.
+  const band = useMemo(() => (slow ? null : typicalRange(samples, range)), [samples, range, slow])
+
   const hasPoints = series.some((p) => p.value !== null)
-  // Show the smoothing line only for noisy day-by-day ranges; long ranges are
-  // already bucketed averages.
-  const showAvg = range === '30d' || range === '90d'
+  // Show the 7-day smoothing line only for noisy day-by-day ranges, never for slow metrics.
+  const showAvg = !slow && (range === '30d' || range === '90d')
 
   const delta = stats ? stats.last - stats.first : 0
   const improving = meta?.lowerIsBetter ? delta < 0 : delta > 0
@@ -162,7 +180,9 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                       tick={{ fill: '#64748b', fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
-                      domain={['auto', 'auto']}
+                      // Pad a slow metric's axis so a ±1 step doesn't fill the whole
+                      // height and read as a spike; let others auto-fit.
+                      domain={slow ? [(min: number) => Math.floor(min - 2), (max: number) => Math.ceil(max + 2)] : ['auto', 'auto']}
                       width={48}
                       tickFormatter={(v: number) => metricAxisValue(charted, v)}
                     />
@@ -180,27 +200,46 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                     {band && (
                       <ReferenceLine y={band.mid} stroke="#64748b" strokeDasharray="4 3" ifOverflow="extendDomain" />
                     )}
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#34d399"
-                      strokeWidth={2}
-                      fill="url(#metricFill)"
-                      dot={false}
-                      connectNulls
-                      isAnimationActive={false}
-                    />
-                    {showAvg && (
+                    {slow ? (
+                      // A stepped line that holds each value until it changes, with a
+                      // dot only where it stepped — how Garmin draws VO₂ max.
                       <Line
-                        type="monotone"
-                        dataKey="avg"
-                        stroke="#38bdf8"
-                        strokeWidth={1.5}
-                        strokeDasharray="4 3"
-                        dot={false}
+                        type="stepAfter"
+                        dataKey="value"
+                        stroke="#34d399"
+                        strokeWidth={2}
+                        dot={({ key, ...props }: DotProps & { key?: string | number }) => (
+                          <ChangeDot key={key ?? props.index} {...props} />
+                        )}
+                        activeDot={{ r: 4 }}
                         connectNulls
                         isAnimationActive={false}
                       />
+                    ) : (
+                      <>
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#34d399"
+                          strokeWidth={2}
+                          fill="url(#metricFill)"
+                          dot={false}
+                          connectNulls
+                          isAnimationActive={false}
+                        />
+                        {showAvg && (
+                          <Line
+                            type="monotone"
+                            dataKey="avg"
+                            stroke="#38bdf8"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 3"
+                            dot={false}
+                            connectNulls
+                            isAnimationActive={false}
+                          />
+                        )}
+                      </>
                     )}
                 </ComposedChart>
               </ScrubChart>
@@ -208,7 +247,13 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
               <p className="text-center text-xs text-slate-500">
                 {stats.count} day{stats.count === 1 ? '' : 's'} of data
                 {band ? ' · shaded = your typical range' : ''}
-                {showAvg ? ' · dashed blue = 7-day average' : range === '1y' ? ' · weekly average' : ' · monthly average'}
+                {slow
+                  ? ' · dots mark each change'
+                  : showAvg
+                    ? ' · dashed blue = 7-day average'
+                    : range === '1y'
+                      ? ' · weekly average'
+                      : ' · monthly average'}
               </p>
             </>
           ) : (
@@ -218,6 +263,14 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
       )}
     </Sheet>
   )
+}
+
+type DotProps = { cx?: number; cy?: number; index?: number; payload?: { changed?: boolean } }
+
+/** A dot drawn only where a stepped metric actually changed value. */
+function ChangeDot({ cx, cy, payload }: DotProps) {
+  if (cx == null || cy == null || !payload?.changed) return <g />
+  return <circle cx={cx} cy={cy} r={3.5} fill="#34d399" stroke="#0f172a" strokeWidth={1} />
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
