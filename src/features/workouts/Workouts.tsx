@@ -13,6 +13,7 @@ import RoutineEditor from './RoutineEditor'
 import ActiveSession from './ActiveSession'
 import SessionHistory from './SessionHistory'
 import RecentWorkoutsCard from './RecentWorkoutsCard'
+import CardioSummaryCard from './CardioSummaryCard'
 import ProgramBuilder from './ProgramBuilder'
 import ProgramLibrary from './ProgramLibrary'
 import ProgramDetail from './ProgramDetail'
@@ -56,6 +57,14 @@ export default function Workouts() {
   )
   const [previewRoutine, setPreviewRoutine] = useState<Routine | null>(null)
   const [logActivityOpen, setLogActivityOpen] = useState(false)
+  // Which discipline the Progress view opens on. "See all" on the cardio card
+  // jumps straight to cardio instead of the lifting-first default.
+  const [progressDiscipline, setProgressDiscipline] = useState<'lifting' | 'cardio'>('lifting')
+
+  function openCardioDashboard() {
+    setProgressDiscipline('cardio')
+    setTab('progress')
+  }
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -214,7 +223,7 @@ export default function Workouts() {
             </div>
           }
         >
-          <TrainingProgress />
+          <TrainingProgress initialDiscipline={progressDiscipline} />
         </Suspense>
       </div>
     )
@@ -271,6 +280,10 @@ export default function Workouts() {
           )}
         </Card>
       )}
+
+      {/* Cardio up front, so a run/ride/hike is visible the moment you open Train
+          rather than three taps deep under Progress → Cardio. */}
+      <CardioSummaryCard onSeeAll={openCardioDashboard} onLog={() => setLogActivityOpen(true)} />
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-slate-200">My routines</h2>

@@ -19,8 +19,8 @@ const DISCIPLINE_OPTIONS = [
   { key: 'cardio' as const, label: 'Cardio' },
 ]
 
-export default function TrainingProgress() {
-  const [discipline, setDiscipline] = useState<Discipline>('lifting')
+export default function TrainingProgress({ initialDiscipline = 'lifting' }: { initialDiscipline?: Discipline }) {
+  const [discipline, setDiscipline] = useState<Discipline>(initialDiscipline)
   // The lifting view is built around one question — "how is THIS lift going" — so
   // the exercise and the metric are page-level state shared by the chart, the
   // all-lifts list and the records card.
