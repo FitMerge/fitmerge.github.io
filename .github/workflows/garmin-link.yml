@@ -36,11 +36,13 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        # google-cloud-firestore is pinned: 2.29.0 (2026-08-24) double-encodes the
-        # "(default)" database id and breaks collection_group().stream() with
-        # "Invalid database id %28default%29". 2.28.1 is the last good release.
-        # Unpin once a fixed version (>2.29.0) is out.
-        run: pip install garminconnect firebase-admin cryptography "google-cloud-firestore==2.28.1"
+        # Pinned to the last-good pre-2026-08-24 set. google-api-core 2.35.0
+        # (2026-08-24) percent-encodes the parentheses in the "(default)" database id
+        # in the x-goog-request-params routing header, so Firestore rejects it with
+        # "400 Invalid database id %28default%29" — breaking collection_group().stream().
+        # google-cloud-firestore 2.29.0 shipped the same day; pin both to their Aug-6
+        # versions. Unpin once google-api-core > 2.35.0 fixes the encoding.
+        run: pip install garminconnect firebase-admin cryptography "google-cloud-firestore==2.28.1" "google-api-core==2.34.0"
 
       - name: Finish pending Garmin connections
         env:
