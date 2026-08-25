@@ -328,6 +328,14 @@ export default function HealthMetricDetailSheet({ metricKey, siblings = [], days
                             ? ' · monthly average'
                             : '')}
               </p>
+
+              <ValuesTable
+                metricKey={charted}
+                rows={chartData as any}
+                useBand={useBand}
+                aggregated={range === '1y' || range === 'all'}
+                periodLabel={range === '1y' ? 'week of' : range === 'all' ? 'month of' : ''}
+              />
             </>
           ) : (
             <p className="py-8 text-center text-sm text-slate-500">No data in this range.</p>
@@ -344,6 +352,104 @@ type DotProps = { cx?: number; cy?: number; index?: number; payload?: { changed?
 function ChangeDot({ cx, cy, payload }: DotProps) {
   if (cx == null || cy == null || !payload?.changed) return <g />
   return <circle cx={cx} cy={cy} r={3.5} fill="#34d399" stroke="#0f172a" strokeWidth={1} />
+}
+
+/** Readable date from an ISO 'YYYY-MM-DD' (parsed as local, not UTC). */
+function fullDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m ?? 1) - 1, d ?? 1).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+type TableRow = {
+  date: string
+  value?: number | null
+  low?: number | null
+  high?: number | null
+}
+
+/**
+ * The raw numbers behind the chart, newest-first, in a scrollable table —
+ * so a value you can only eyeball on the line can be read exactly. Collapsed by
+ * default to keep the sheet short; `aggregated` ranges (1y/all) are bucket
+ * averages, which the header calls out.
+ */
+function ValuesTable({
+  metricKey,
+  rows,
+  useBand,
+  aggregated,
+  periodLabel,
+}: {
+  metricKey: string
+  rows: TableRow[]
+  useBand: boolean
+  aggregated: boolean
+  periodLabel: string
+}) {
+  const data = useMemo(
+    () =>
+      rows
+        .filter((r) => (useBand ? r.low != null || r.high != null : r.value != null))
+        .slice()
+        .reverse(),
+    [rows, useBand],
+  )
+  if (data.length === 0) return null
+
+  return (
+    <details className="rounded-lg border border-slate-800 bg-slate-900/40">
+      <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-slate-300">
+        All values ({data.length})
+        {aggregated && <span className="font-normal text-slate-500"> · averaged per {periodLabel.replace(' of', '')}</span>}
+      </summary>
+      <div className="max-h-72 overflow-y-auto border-t border-slate-800">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-slate-900 text-slate-500">
+            <tr>
+              <th className="px-3 py-1.5 text-left font-medium">Date</th>
+              {useBand ? (
+                <>
+                  <th className="px-3 py-1.5 text-right font-medium text-emerald-400">High</th>
+                  <th className="px-3 py-1.5 text-right font-medium text-rose-400">Low</th>
+                </>
+              ) : (
+                <th className="px-3 py-1.5 text-right font-medium">Value</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((r) => (
+              <tr key={r.date} className="border-t border-slate-800/60">
+                <td className="px-3 py-1.5 text-slate-400">
+                  {periodLabel && <span className="text-slate-600">{periodLabel} </span>}
+                  {fullDate(r.date)}
+                </td>
+                {useBand ? (
+                  <>
+                    <td className="px-3 py-1.5 text-right font-medium text-slate-200">
+                      {r.high != null ? formatMetric(metricKey, r.high) : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-medium text-slate-200">
+                      {r.low != null ? formatMetric(metricKey, r.low) : '—'}
+                    </td>
+                  </>
+                ) : (
+                  <td className="px-3 py-1.5 text-right font-medium text-slate-200">
+                    {formatMetric(metricKey, r.value as number)}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  )
 }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
